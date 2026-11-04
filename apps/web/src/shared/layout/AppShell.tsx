@@ -12,6 +12,8 @@ import {
   FileClock,
   Home,
   UserRound,
+  Inbox,
+  Send,
   FileCheck2,
   LogOut,
   Menu,
@@ -34,6 +36,11 @@ export function AppShell() {
   const { calendar, setCalendar } = usePrefs();
   const nav = useNavigate();
   const [open, setOpen] = useState(false);
+  const inbox = useQuery({
+    queryKey: ['hr-requests', 'inbox', 'count'],
+    queryFn: () => get<{ total: number }>('/hr/requests?view=inbox&limit=1'),
+    refetchInterval: 60_000,
+  });
   const unread = useQuery({
     queryKey: ['notifications', 'unread'],
     queryFn: () => get<{ unread: number }>('/notifications?limit=1'),
@@ -43,6 +50,8 @@ export function AppShell() {
   const items = [
     { to: '/', label: t('nav.dashboard'), icon: Home, show: true },
     { to: '/me/profile', label: t('nav.profile'), icon: UserRound, show: true },
+    { to: '/me/requests', label: t('nav.myRequests'), icon: Send, show: can('hr.requests', 'create') },
+    { to: '/manager/requests', label: t('nav.teamRequests'), icon: Inbox, show: !!inbox.data?.total },
     { to: '/tasks', label: t('nav.tasks'), icon: ClipboardList, show: can('tasks', 'view') },
     { to: '/calendar', label: t('nav.calendar'), icon: CalendarDays, show: can('calendar', 'view') },
     { to: '/notifications', label: t('nav.notifications'), icon: Bell, show: true },
@@ -58,6 +67,12 @@ export function AppShell() {
         (can('hr.employees', 'create') ||
           can('hr.employees', 'export') ||
           user?.roles.some((r) => r.role === 'department_manager' || r.role === 'executive')),
+    },
+    {
+      to: '/hr/requests',
+      label: t('nav.hrRequests'),
+      icon: Inbox,
+      show: can('hr.requests', 'approve'),
     },
     {
       to: '/hr/secondments',

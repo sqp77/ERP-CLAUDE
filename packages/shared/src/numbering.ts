@@ -13,6 +13,7 @@ export const NUMBER_PREFIXES = {
   export: 'EXP',
   contract: 'CNT',
   profileChange: 'PCR',
+  certificate: 'CRT',
 } as const;
 export type NumberPrefixKey = keyof typeof NUMBER_PREFIXES;
 export const NUMBER_PATTERN = /^[A-Z]{2,5}-\d{4}-\d{5,}$/;

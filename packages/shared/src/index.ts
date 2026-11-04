@@ -14,3 +14,4 @@ export * from './schemas/calendar';
 export * from './schemas/misc';
 export * from './schemas/hr';
 export * from './schemas/portal';
+export * from './schemas/hrRequests';

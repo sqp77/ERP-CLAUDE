@@ -26,6 +26,8 @@ import { EmployeePage } from './pages/hr/EmployeePage';
 import { ProfilePage } from './pages/me/ProfilePage';
 import { ProfileChangesPage } from './pages/hr/ProfileChangesPage';
 import { SecondmentsPage } from './pages/hr/SecondmentsPage';
+import { RequestsListPage } from './pages/requests/RequestsListPage';
+import { RequestDetailPage } from './pages/requests/RequestDetailPage';
 
 export const router = createBrowserRouter([
   {
@@ -48,6 +50,11 @@ export const router = createBrowserRouter([
           { path: '/notifications', element: <NotificationsPage /> },
           { path: '/me/security', element: <SecurityPage /> },
           { path: '/me/profile', element: <ProfilePage /> },
+          { path: '/me/requests', element: <RequestsListPage view="mine" /> },
+          { path: '/me/requests/:id', element: <RequestDetailPage /> },
+          { path: '/hr/requests/:id', element: <RequestDetailPage /> },
+          { path: '/manager/requests', element: <RequestsListPage view="inbox" /> },
+          { path: '/hr/requests', element: <RequestsListPage view="queue" /> },
           {
             element: <RequirePermission resource="tasks" action="view" />,
             children: [{ path: '/tasks', element: <TasksPage /> }],

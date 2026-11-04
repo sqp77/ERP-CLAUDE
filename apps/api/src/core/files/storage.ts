@@ -1,4 +1,12 @@
-import { createReadStream, createWriteStream, existsSync, mkdirSync, statSync, unlinkSync } from 'node:fs';
+import {
+  createReadStream,
+  createWriteStream,
+  existsSync,
+  mkdirSync,
+  statSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import type { Readable } from 'node:stream';
@@ -25,6 +33,8 @@ export interface StorageAdapter {
     mimeType: string,
   ): Promise<{ url: string; expiresAt: string }>;
   delete(key: string): Promise<void>;
+  /** Server-side write (generated documents such as certificates). */
+  putObject(key: string, body: Buffer, mimeType: string): Promise<void>;
 }
 
 const TTL_MS = 15 * 60_000;
@@ -77,6 +87,11 @@ export class LocalStorageAdapter implements StorageAdapter {
     const p = this.pathFor(key);
     if (existsSync(p)) unlinkSync(p);
   }
+  async putObject(key: string, body: Buffer): Promise<void> {
+    const p = this.pathFor(key);
+    mkdirSync(dirname(p), { recursive: true });
+    writeFileSync(p, body);
+  }
 }
 
 export class S3StorageAdapter implements StorageAdapter {
@@ -121,6 +136,12 @@ export class S3StorageAdapter implements StorageAdapter {
   async delete(key: string): Promise<void> {
     const { DeleteObjectCommand } = await import('@aws-sdk/client-s3');
     await (await this.s3()).send(new DeleteObjectCommand({ Bucket: env().S3_BUCKET, Key: key }));
+  }
+  async putObject(key: string, body: Buffer, mimeType: string): Promise<void> {
+    const { PutObjectCommand } = await import('@aws-sdk/client-s3');
+    await (
+      await this.s3()
+    ).send(new PutObjectCommand({ Bucket: env().S3_BUCKET, Key: key, Body: body, ContentType: mimeType }));
   }
 }
 

@@ -43,7 +43,10 @@
     "positions": "المسميات الوظيفية",
     "profile": "ملفي الشخصي",
     "profileChanges": "طلبات تغيير البيانات",
-    "secondments": "الانتدابات"
+    "secondments": "الانتدابات",
+    "myRequests": "طلباتي",
+    "teamRequests": "طلبات فريقي",
+    "hrRequests": "طلبات الموظفين"
   },
   "auth": {
     "email": "البريد الإلكتروني الوظيفي",
@@ -97,7 +100,8 @@
       "reports": "التقارير",
       "news": "الأخبار والتعاميم",
       "notifications": "الإشعارات"
-    }
+    },
+    "openRequests": "طلبات مفتوحة"
   },
   "common": {
     "loading": "جارٍ التحميل…",
@@ -499,5 +503,121 @@
     "reported": "التقرير",
     "reminders": "التذكيرات",
     "noReport": "لم يُرفع"
+  },
+  "requests": {
+    "mine": "طلباتي",
+    "inbox": "طلبات فريقي",
+    "queue": "طلبات الموظفين",
+    "all": "كل الطلبات",
+    "new": "رفع طلب",
+    "submit": "إرسال الطلب",
+    "submitted": "تم إرسال الطلب",
+    "inboxHint": "الطلبات التي تنتظر موافقتك كمدير مباشر",
+    "queueHint": "طلبات بانتظار مراجعة الموارد البشرية أو اعتماد المالية",
+    "type": "نوع الطلب",
+    "empty": "لا توجد طلبات",
+    "dueAt": "المهلة",
+    "withFinance": "لدى المالية",
+    "details": "تفاصيل الطلب",
+    "actions": "الإجراءات المتاحة",
+    "log": "سجل الإجراءات",
+    "approve": "موافقة",
+    "reject": "رفض",
+    "return": "إعادة للاستكمال",
+    "resubmit": "إعادة الإرسال",
+    "close": "إغلاق",
+    "reasonRequired": "السبب (مطلوب)",
+    "decisionReason": "السبب",
+    "resubmitHint": "عدّل البيانات من \"رفع طلب\" إن لزم ثم أعد الإرسال؛ يُعاد الطلب إلى المسار نفسه.",
+    "certificateIssued": "صدرت الشهادة رقم {{number}}",
+    "openCertificate": "فتح الشهادة",
+    "hadOverdueStage": "تجاوزت إحدى المراحل مهلتها",
+    "routeViaManager": "المسار: المدير المباشر ← الموارد البشرية",
+    "routeDirectHr": "المسار: الموارد البشرية مباشرة",
+    "routeThenFinance": "ثم المالية (بنفس رقم الطلب)",
+    "advanceLimitUnset": "حد السلفة لم يُحدَّد بعد؛ سيُعلَّم الطلب لعناية الموارد البشرية.",
+    "attachments": "المرفقات",
+    "attachmentsHint": "PDF أو صور عند الحاجة",
+    "types": {
+      "leave": "طلب إجازة",
+      "permission": "طلب استئذان",
+      "remote_work": "طلب عمل عن بُعد",
+      "salary_certificate": "طلب تعريف بالراتب",
+      "experience_certificate": "طلب شهادة خبرة",
+      "advance": "طلب سلفة",
+      "data_update": "طلب تحديث بيانات",
+      "official_letter": "طلب خطاب رسمي"
+    },
+    "states": {
+      "new": "جديد",
+      "under_review": "قيد المراجعة",
+      "awaiting_manager": "بانتظار موافقة المدير",
+      "awaiting_hr": "بانتظار الموارد البشرية",
+      "awaiting_final": "بانتظار الاعتماد النهائي",
+      "needs_completion": "يحتاج استكمال",
+      "approved": "معتمد",
+      "rejected": "مرفوض",
+      "closed": "مغلق"
+    },
+    "leaveTypes": {
+      "annual": "سنوية",
+      "sick": "مرضية",
+      "emergency": "اضطرارية",
+      "unpaid": "بدون راتب",
+      "maternity": "وضع",
+      "hajj": "حج",
+      "other": "أخرى"
+    },
+    "fields": {
+      "leaveType": "نوع الإجازة",
+      "startDate": "تاريخ البداية",
+      "endDate": "تاريخ النهاية",
+      "reason": "السبب",
+      "date": "التاريخ",
+      "startTime": "وقت البداية",
+      "endTime": "وقت النهاية",
+      "days": "المدة (أيام)",
+      "addressedTo": "جهة التوجيه",
+      "purpose": "الغرض",
+      "detailed": "تعريف تفصيلي (بالبدلات)",
+      "chamberAttestation": "يحتاج تصديق الغرفة التجارية",
+      "amount": "المبلغ المطلوب (ر.س)",
+      "amountHalalas": "المبلغ المطلوب",
+      "notes": "ملاحظات إضافية",
+      "field": "البيان المطلوب تعديله",
+      "currentValue": "القيمة الحالية",
+      "newValue": "القيمة الجديدة",
+      "changes": "التعديلات المطلوبة",
+      "letterType": "نوع الخطاب"
+    },
+    "flags": {
+      "advance_limit_unset": "حد السلفة غير محدد بعد (للموارد البشرية)",
+      "over_limit": "المبلغ يتجاوز حد السلفة",
+      "no_direct_manager": "لا يوجد مدير مباشر مسجّل؛ وُجّه الطلب إلى الموارد البشرية"
+    },
+    "actionsLog": {
+      "created": "إنشاء الطلب",
+      "submit_to_manager": "إرسال للمدير المباشر",
+      "submit_to_hr": "إرسال للموارد البشرية",
+      "manager_approve": "موافقة المدير",
+      "manager_reject": "رفض المدير",
+      "hr_return": "إعادة للاستكمال",
+      "hr_approve": "اعتماد الموارد البشرية",
+      "hr_forward_final": "اعتماد الموارد البشرية وتحويل للاعتماد النهائي",
+      "hr_reject": "رفض الموارد البشرية",
+      "final_approve": "الاعتماد النهائي",
+      "final_reject": "رفض نهائي",
+      "close": "إغلاق",
+      "reassigned_manager": "نُقل إلى المدير الجديد"
+    },
+    "roles": {
+      "requester": "مقدّم الطلب",
+      "direct_manager": "المدير المباشر",
+      "hr_officer": "الموارد البشرية",
+      "hr_manager": "مدير الموارد البشرية",
+      "finance_manager": "مدير المالية",
+      "finance_staff": "المالية",
+      "executive": "الإدارة التنفيذية"
+    }
   }
 }

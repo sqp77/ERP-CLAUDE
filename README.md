@@ -26,7 +26,9 @@ TOTP: scan the QR code with an authenticator app on first login, then change the
 ### Sample accounts (local seed only)
 
 `npm run seed` also creates 25 sample employees with a real manager chain (CEO → department managers → staff),
-contracts (some close to expiry), identity documents close to expiry, and custody items. All sample accounts
+contracts (some close to expiry), identity documents close to expiry, custody items, a pending bank-change request, and eight
+HR requests in different states (awaiting manager, awaiting HR, returned for completion, approved with an issued certificate,
+rejected, and an advance waiting for Finance). All sample accounts
 use the password `Sample12345!` (override with `SEED_SAMPLE_PASSWORD`). Useful logins:
 
 | Email | Role |

@@ -5,6 +5,7 @@ import { registerDocumentAccess } from '../../core/documents/access';
 import { registerExportResource } from '../../core/export/service';
 import { Employee } from './model';
 import { employeeScopeFilter, hrUserIds, teamUserIdsOf } from './service';
+import { registerRequestHandlers, runRequestOverdueReminders } from './requests.service';
 import {
   runAccountDeactivation,
   runBirthdayGreetings,
@@ -21,6 +22,8 @@ export function registerHrModule(): void {
   registered = true;
 
   registerTeamResolver(teamUserIdsOf);
+  registerRequestHandlers();
+  registerJob('hr.requests.overdue', (now) => runRequestOverdueReminders(now));
 
   // Employee documents: expiry recipients and who may read them [HR §3.9, EP §5.2].
   registerExpiryRecipients('employee', async (ownerId) => {

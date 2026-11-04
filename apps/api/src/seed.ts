@@ -9,6 +9,7 @@ import { Branch, Department, Position, Site } from './core/org/model';
 import { Holiday } from './core/dates/model';
 import { startDevMongo } from './devMongo';
 import { seedHr } from './seedHr';
+import { seedRequests } from './seedRequests';
 
 /**
  * The seed carries a default admin password and sample data. It may only ever run against the local
@@ -100,6 +101,8 @@ export async function seed(): Promise<{
   }
   const samplePassword = process.env.SEED_SAMPLE_PASSWORD ?? 'Sample12345!';
   const hr = await seedHr(samplePassword);
+  const requests = await seedRequests();
+  logger.info({ requests }, 'sample HR requests');
   return { adminEmail, adminPassword, sampleEmployees: hr.created, sampleLogins: hr.logins, samplePassword };
 }
 

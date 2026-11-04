@@ -65,6 +65,7 @@ export const CORE_ROLES: RoleDefinition[] = [
       { resource: 'hr.contracts', actions: ['view'], scope: 'own' },
       { resource: 'hr.custody', actions: ['view'], scope: 'own' },
       { resource: 'hr.profile_changes', actions: ['view', 'create'], scope: 'own' },
+      { resource: 'hr.requests', actions: ['view', 'create'], scope: 'own' },
     ],
     fieldRules: [],
   },
@@ -80,6 +81,7 @@ export const CORE_ROLES: RoleDefinition[] = [
       { resource: 'comments', actions: ['view', 'create'], scope: 'department' },
       { resource: 'exports', actions: ['view', 'create'], scope: 'department' },
       { resource: 'hr.employees', actions: ['view'], scope: 'department' },
+      { resource: 'hr.requests', actions: ['view'], scope: 'department' },
     ],
     fieldRules: [HIDE_SENSITIVE],
   },
@@ -106,6 +108,7 @@ export const CORE_ROLES: RoleDefinition[] = [
       { resource: 'hr.contracts', actions: ['view', 'create', 'edit'], scope: 'all' },
       { resource: 'hr.custody', actions: ['view', 'create', 'edit'], scope: 'all' },
       { resource: 'hr.profile_changes', actions: ['view'], scope: 'all' },
+      { resource: 'hr.requests', actions: ['view', 'approve', 'export'], scope: 'all' },
     ],
     fieldRules: [],
   },
@@ -133,6 +136,7 @@ export const CORE_ROLES: RoleDefinition[] = [
       { resource: 'hr.contracts', actions: ALL_ACTIONS, scope: 'all' },
       { resource: 'hr.custody', actions: ALL_ACTIONS, scope: 'all' },
       { resource: 'hr.profile_changes', actions: ['view'], scope: 'all' },
+      { resource: 'hr.requests', actions: ['view', 'approve', 'export'], scope: 'all' },
     ],
     fieldRules: [],
   },
@@ -147,6 +151,7 @@ export const CORE_ROLES: RoleDefinition[] = [
       { resource: 'comments', actions: ['view', 'create'], scope: 'all' },
       { resource: 'hr.employees', actions: ['view'], scope: 'all' },
       { resource: 'hr.profile_changes', actions: ['view', 'approve'], scope: 'all' },
+      { resource: 'hr.requests', actions: ['view'], scope: 'all' },
     ],
     fieldRules: [
       {
@@ -169,6 +174,7 @@ export const CORE_ROLES: RoleDefinition[] = [
       { resource: 'exports', actions: ['view', 'create'], scope: 'department' },
       { resource: 'hr.employees', actions: ['view', 'export'], scope: 'all' },
       { resource: 'hr.profile_changes', actions: ['view', 'approve'], scope: 'all' },
+      { resource: 'hr.requests', actions: ['view', 'approve'], scope: 'all' },
     ],
     fieldRules: [
       {
@@ -192,6 +198,7 @@ export const CORE_ROLES: RoleDefinition[] = [
       { resource: 'exports', actions: ['view', 'create'], scope: 'all' },
       { resource: 'audit', actions: ['view'], scope: 'all' },
       { resource: 'hr.employees', actions: ['view'], scope: 'all' },
+      { resource: 'hr.requests', actions: ['view', 'approve'], scope: 'all' },
     ],
     fieldRules: [HIDE_SENSITIVE],
   },

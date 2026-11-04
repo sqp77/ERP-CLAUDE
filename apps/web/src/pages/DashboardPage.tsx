@@ -44,6 +44,11 @@ export function DashboardPage() {
     queryFn: () => get<Paged<unknown>>('/tasks?mine=true&limit=1'),
     enabled: can('tasks', 'view'),
   });
+  const myReq = useQuery({
+    queryKey: ['hr-requests', 'mine', 'open'],
+    queryFn: () => get<Paged<unknown>>('/hr/requests?view=mine&open=true&limit=1'),
+    enabled: can('hr.requests', 'create'),
+  });
   const notif = useQuery({
     queryKey: ['notifications', 'unread'],
     queryFn: () => get<{ unread: number }>('/notifications?limit=1'),
@@ -121,7 +126,12 @@ export function DashboardPage() {
             ? `${t('hr.basicSalary')}: ${sar(p.basicSalaryHalalas)}${p.pendingChanges.length ? ` · ${t('profile.pendingChange')}` : ''}`
             : '—',
         )}
-        {tile('/', Ticket, t('dashboard.sections.requests'), t('dashboard.phaseNote'), true)}
+        {tile(
+          '/me/requests',
+          Ticket,
+          t('dashboard.sections.requests'),
+          `${myReq.data?.total ?? 0} ${t('dashboard.openRequests')}`,
+        )}
         {tile(
           '/tasks',
           ClipboardList,
