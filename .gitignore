@@ -17,3 +17,9 @@ coverage/
 # logs
 *.log
 npm-debug.log*
+# local data (dev Mongo, uploaded files)
+.data/
+# vite
+apps/web/dist/
+# test artifacts
+apps/api/.vitest/

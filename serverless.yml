@@ -1,0 +1,75 @@
+# Deployment pipeline (written, NOT run yet — docs/DECISIONS.md §1 "Pending before staging").
+# Requires: AWS account + region decision, MongoDB Atlas URI and secrets in SSM Parameter Store.
+service: eayni-erp
+frameworkVersion: '4'
+
+provider:
+  name: aws
+  runtime: nodejs22.x
+  region: ${opt:region, 'me-south-1'}
+  stage: ${opt:stage, 'staging'}
+  memorySize: 1024
+  timeout: 29
+  architecture: arm64
+  environment:
+    NODE_ENV: production
+    STAGE: ${self:provider.stage}
+    MONGODB_URI: ${ssm:/eayni/${self:provider.stage}/mongodb-uri}
+    APP_SECRET: ${ssm:/eayni/${self:provider.stage}/app-secret}
+    FILE_STORAGE: s3
+    S3_BUCKET: ${self:service}-${self:provider.stage}-files
+    APP_URL: ${ssm:/eayni/${self:provider.stage}/app-url}
+    COOKIE_SECURE: 'true'
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action: [s3:PutObject, s3:GetObject, s3:DeleteObject]
+          Resource: arn:aws:s3:::${self:service}-${self:provider.stage}-files/*
+        - Effect: Allow
+          Action: [ses:SendEmail, ses:SendRawEmail]
+          Resource: '*'
+
+package:
+  individually: true
+
+functions:
+  api:
+    handler: apps/api/src/handlers/api.handler
+    events:
+      - httpApi: '*'
+  outbox:
+    handler: apps/api/src/handlers/outbox.handler
+    timeout: 120
+    events:
+      - schedule: rate(1 minute)
+  jobs:
+    handler: apps/api/src/handlers/jobs.handler
+    timeout: 300
+    events:
+      - schedule: cron(0 3 * * ? *) # 06:00 Asia/Riyadh daily: reminders, document expiry, ticket timers
+
+resources:
+  Resources:
+    FilesBucket:
+      Type: AWS::S3::Bucket
+      Properties:
+        BucketName: ${self:service}-${self:provider.stage}-files
+        PublicAccessBlockConfiguration:
+          BlockPublicAcls: true
+          BlockPublicPolicy: true
+          IgnorePublicAcls: true
+          RestrictPublicBuckets: true
+        CorsConfiguration:
+          CorsRules:
+            - AllowedMethods: [PUT, GET]
+              AllowedOrigins: ['*']
+              AllowedHeaders: ['*']
+
+build:
+  esbuild:
+    bundle: true
+    minify: false
+    sourcemap: true
+    target: node22
+    format: esm

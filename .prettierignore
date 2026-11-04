@@ -1,0 +1,8 @@
+node_modules
+dist
+.serverless
+coverage
+.data
+docs/SPECS.md
+docs/specs
+package-lock.json

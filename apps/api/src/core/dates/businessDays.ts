@@ -1,0 +1,62 @@
+import { HIJRI_LOCALE, TIMEZONE, WEEKEND_DAYS } from '@eayni/shared';
+import { Holiday } from './model';
+
+const dayFmt = new Intl.DateTimeFormat('en-CA', { timeZone: TIMEZONE, year: 'numeric', month: '2-digit', day: '2-digit' });
+const weekdayFmt = new Intl.DateTimeFormat('en-US', { timeZone: TIMEZONE, weekday: 'short' });
+const WEEKDAY_INDEX: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+
+/** Calendar date (YYYY-MM-DD) of an instant in Asia/Riyadh. */
+export function riyadhDate(d: Date): string {
+  return dayFmt.format(d);
+}
+
+export function riyadhWeekday(d: Date): number {
+  return WEEKDAY_INDEX[weekdayFmt.format(d)];
+}
+
+export function isWeekend(d: Date): boolean {
+  return WEEKEND_DAYS.includes(riyadhWeekday(d));
+}
+
+export async function loadHolidaySet(): Promise<Set<string>> {
+  const docs = await Holiday.find().select('date').lean();
+  return new Set(docs.map((h) => h.date));
+}
+
+export function isBusinessDay(d: Date, holidays: Set<string>): boolean {
+  return !isWeekend(d) && !holidays.has(riyadhDate(d));
+}
+
+const DAY_MS = 86_400_000;
+
+/**
+ * Add N business days (Fri–Sat weekend + holidays skipped). The time of day is preserved.
+ * N = 0 returns the same instant.
+ */
+export function addBusinessDays(start: Date, n: number, holidays: Set<string>): Date {
+  let d = new Date(start);
+  let remaining = n;
+  while (remaining > 0) {
+    d = new Date(d.getTime() + DAY_MS);
+    if (isBusinessDay(d, holidays)) remaining -= 1;
+  }
+  return d;
+}
+
+/** Whole business days strictly between two instants' Riyadh dates (from excluded, to included). */
+export function businessDaysBetween(from: Date, to: Date, holidays: Set<string>): number {
+  if (to <= from) return 0;
+  let count = 0;
+  let d = new Date(from);
+  const toDate = riyadhDate(to);
+  while (riyadhDate(d) < toDate) {
+    d = new Date(d.getTime() + DAY_MS);
+    if (isBusinessDay(d, holidays)) count += 1;
+  }
+  return count;
+}
+
+/** Hijri rendering for display (Umm al-Qura). Dates are stored Gregorian UTC. */
+export function formatHijri(d: Date): string {
+  return new Intl.DateTimeFormat(HIJRI_LOCALE, { timeZone: TIMEZONE, year: 'numeric', month: 'long', day: 'numeric' }).format(d);
+}
