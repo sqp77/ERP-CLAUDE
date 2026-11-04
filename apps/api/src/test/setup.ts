@@ -13,7 +13,8 @@ process.env.LOCAL_STORAGE_DIR = '.data/test-files';
 process.env.LOG_LEVEL = 'silent';
 
 beforeAll(async () => {
-  const uri = `${process.env.MONGODB_URI_TEST}eayni_test_${process.pid}`;
+  // Base URI looks like mongodb://127.0.0.1:PORT/?replicaSet=testset — insert a per-worker database name before the query.
+  const uri = String(process.env.MONGODB_URI_TEST).replace('/?', `/eayni_test_${process.pid}?`);
   await connectDb(uri);
   await ensureBaseline();
 });

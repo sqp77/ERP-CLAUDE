@@ -14,7 +14,7 @@ describe('org structure [HR §3.1] + audit [golden rule 4]', () => {
     const t = await loginAs('hrm@eayni.local');
     const created = await request(app()).post('/api/v1/org/departments').set(auth(t)).send({ code: 'sales', nameAr: 'المبيعات' });
     expect(created.status).toBe(201);
-    const dup = await request(app()).post('/api/v1/org/departments').set(auth(t)).send({ code: 'sales', nameAr: 'x' });
+    const dup = await request(app()).post('/api/v1/org/departments').set(auth(t)).send({ code: 'sales', nameAr: 'مكرر' });
     expect(dup.status).toBe(409);
     const upd = await request(app()).patch(`/api/v1/org/departments/${created.body._id}`).set(auth(t)).send({ nameAr: 'إدارة المبيعات' });
     expect(upd.body.nameAr).toBe('إدارة المبيعات');
