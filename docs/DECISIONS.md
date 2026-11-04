@@ -22,6 +22,8 @@ Last updated: 2026-11-04.
 | 8 | Employee import from ERPNext: yes/no and source file | HR phase 1 data load |
 | 9 | Advance limit and approver | HR request matrix (§5 below) |
 | 10 | Secrets moved to SSM Parameter Store (no `.env` on servers) | all |
+| 11 | PDF renderer function (headless Chromium in its own Lambda) | certificates, letters, PDF exports — HTML output works meanwhile [HR §3.5, EP §14.3] |
+| 12 | Serverless Framework v4 license/account for `npx serverless deploy` | deploy pipeline |
 
 ## 2. Login and identity [EP §3, HR §6]
 - **Username = work email.** The employee number is shown in the profile but is not a login identifier. [EP §3.2, EP §7]

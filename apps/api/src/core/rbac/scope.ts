@@ -19,7 +19,11 @@ export interface ScopeFields {
 }
 
 /** Translate the effective scope into a Mongo filter fragment. */
-export async function scopeFilter<T>(authz: Authz, userId: string, fields: ScopeFields): Promise<FilterQuery<T>> {
+export async function scopeFilter<T>(
+  authz: Authz,
+  userId: string,
+  fields: ScopeFields,
+): Promise<FilterQuery<T>> {
   if (authz.scope === 'all') return {};
   if (authz.scope === 'department' && fields.departmentField) {
     const own = fields.ownerFields.map((f) => ({ [f]: userId }));

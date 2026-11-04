@@ -16,16 +16,56 @@ describe('workflow engine [EP §9.4, HR §3.5]', () => {
   it('refuses transitions from the wrong state, by the wrong actor, or with missing fields', async () => {
     const def = await getWorkflow('ticket');
     const record = { _id: new Types.ObjectId(), number: 'TKT-2026-00001', ...(await initWorkflow(def)) };
-    await expect(applyTransition({ def, record, recordType: 'ticket', transition: 'close', actor, actorRelations: ['requester'] })).rejects.toMatchObject({ status: 400 });
-    await expect(applyTransition({ def, record, recordType: 'ticket', transition: 'assign', actor, actorRelations: ['requester'] })).rejects.toMatchObject({ status: 403 });
-    await expect(applyTransition({ def, record, recordType: 'ticket', transition: 'assign', actor, actorRelations: ['department_manager'] })).rejects.toMatchObject({ status: 400, details: { missing: ['assigneeId'] } });
+    await expect(
+      applyTransition({
+        def,
+        record,
+        recordType: 'ticket',
+        transition: 'close',
+        actor,
+        actorRelations: ['requester'],
+      }),
+    ).rejects.toMatchObject({ status: 400 });
+    await expect(
+      applyTransition({
+        def,
+        record,
+        recordType: 'ticket',
+        transition: 'assign',
+        actor,
+        actorRelations: ['requester'],
+      }),
+    ).rejects.toMatchObject({ status: 403 });
+    await expect(
+      applyTransition({
+        def,
+        record,
+        recordType: 'ticket',
+        transition: 'assign',
+        actor,
+        actorRelations: ['department_manager'],
+      }),
+    ).rejects.toMatchObject({ status: 400, details: { missing: ['assigneeId'] } });
   });
 
   it('runs the full ticket path: only the requester closes, reopening needs a reason, stage log is appended', async () => {
     const def = await getWorkflow('ticket');
-    let record: Record<string, unknown> & { state: string; stateEnteredAt: Date; dueAt?: Date | null } = { _id: new Types.ObjectId(), number: 'TKT-2026-00002', ...(await initWorkflow(def)) };
+    let record: Record<string, unknown> & { state: string; stateEnteredAt: Date; dueAt?: Date | null } = {
+      _id: new Types.ObjectId(),
+      number: 'TKT-2026-00002',
+      ...(await initWorkflow(def)),
+    };
     const step = async (transition: string, rel: string[], extra: Record<string, unknown> = {}) => {
-      const r = await applyTransition({ def, record, recordType: 'ticket', transition, actor, actorRelations: rel, payload: extra, reason: extra.reason as string | undefined });
+      const r = await applyTransition({
+        def,
+        record,
+        recordType: 'ticket',
+        transition,
+        actor,
+        actorRelations: rel,
+        payload: extra,
+        reason: extra.reason as string | undefined,
+      });
       record = { ...record, ...extra, ...r.fields };
       return r;
     };
@@ -43,14 +83,32 @@ describe('workflow engine [EP §9.4, HR §3.5]', () => {
     expect(record.closedAt).toBeTruthy();
     expect(record.dueAt).toBeNull();
     const history = await stageHistory('ticket', String(record._id));
-    expect(history.map((h) => h.toState)).toEqual(['in_progress', 'resolved', 'reopened', 'resolved', 'closed']);
+    expect(history.map((h) => h.toState)).toEqual([
+      'in_progress',
+      'resolved',
+      'reopened',
+      'resolved',
+      'closed',
+    ]);
     expect(availableTransitions(def, 'closed', ['requester']).map((t) => t.code)).toEqual(['reopen']);
   });
 
   it('marks a stage as overdue when its SLA passed', async () => {
     const def = await getWorkflow('ticket');
-    const record = { _id: new Types.ObjectId(), ...(await initWorkflow(def, new Date('2026-10-01T06:00:00Z'))) };
-    await applyTransition({ def, record, recordType: 'ticket', transition: 'review', actor, actorRelations: ['department_staff'], now: new Date('2026-10-20T06:00:00Z'), delayReason: 'ضغط عمل' });
+    const record = {
+      _id: new Types.ObjectId(),
+      ...(await initWorkflow(def, new Date('2026-10-01T06:00:00Z'))),
+    };
+    await applyTransition({
+      def,
+      record,
+      recordType: 'ticket',
+      transition: 'review',
+      actor,
+      actorRelations: ['department_staff'],
+      now: new Date('2026-10-20T06:00:00Z'),
+      delayReason: 'ضغط عمل',
+    });
     const [log] = await stageHistory('ticket', String(record._id));
     expect(log.overdue).toBe(true);
     expect(log.delayReason).toBe('ضغط عمل');

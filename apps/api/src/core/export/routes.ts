@@ -32,23 +32,43 @@ exportRouter.post(
     const body = req.body as z.infer<typeof exportRequestSchema>;
     const resource = getExportResource(body.resource);
     const user = req.auth.user;
-    const eff = await effectivePermission(user.roles as RoleAssignment[], user.departmentId ? String(user.departmentId) : undefined, resource.permissionResource, 'export');
+    const eff = await effectivePermission(
+      user.roles as RoleAssignment[],
+      user.departmentId ? String(user.departmentId) : undefined,
+      resource.permissionResource,
+      'export',
+    );
     if (!eff) throw forbidden('ليست لديك صلاحية تصدير هذا المصدر');
     const { hidden } = await fieldRestrictions(user.roles as RoleAssignment[], resource.permissionResource);
-    const rows = await resource.query({ filters: body.filters, authz: { resource: resource.permissionResource, action: 'export', ...eff }, userId: String(user._id), limit: body.limit });
+    const rows = await resource.query({
+      filters: body.filters,
+      authz: { resource: resource.permissionResource, action: 'export', ...eff },
+      userId: String(user._id),
+      limit: body.limit,
+    });
     const { header, data } = await buildRows(resource, body.fields, rows, hidden);
-    await recordAudit(actorFrom(req), { action: 'export', resource: resource.permissionResource, meta: { fields: body.fields, filters: body.filters, rows: data.length, format: body.format } });
+    await recordAudit(actorFrom(req), {
+      action: 'export',
+      resource: resource.permissionResource,
+      meta: { fields: body.fields, filters: body.filters, rows: data.length, format: body.format },
+    });
 
     if (body.format === 'preview') return res.json({ header, rows: data.slice(0, 50), total: data.length });
     if (body.format === 'xlsx') {
       const buf = await toXlsx(resource.labelAr, header, data);
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-      res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(resource.resource)}.xlsx`);
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename*=UTF-8''${encodeURIComponent(resource.resource)}.xlsx`,
+      );
       return res.send(buf);
     }
     // PDF: until the Chromium renderer is configured we return printable HTML (the browser prints it).
     const table = `<h2>${resource.labelAr}</h2><table><thead><tr>${header.map((h) => `<th>${h}</th>`).join('')}</tr></thead><tbody>${data
-      .map((r) => `<tr>${r.map((v) => `<td>${v instanceof Date ? v.toISOString().slice(0, 10) : String(v ?? '')}</td>`).join('')}</tr>`)
+      .map(
+        (r) =>
+          `<tr>${r.map((v) => `<td>${v instanceof Date ? v.toISOString().slice(0, 10) : String(v ?? '')}</td>`).join('')}</tr>`,
+      )
       .join('')}</tbody></table>`;
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.send(htmlDocument(table, resource.labelAr));

@@ -40,7 +40,8 @@ function crud(
     const includeInactive = req.query.all === 'true';
     const filter: Record<string, unknown> = { deletedAt: null };
     if (!includeInactive) filter.active = true;
-    for (const k of ['departmentId', 'branchId']) if (typeof req.query[k] === 'string') filter[k] = req.query[k];
+    for (const k of ['departmentId', 'branchId'])
+      if (typeof req.query[k] === 'string') filter[k] = req.query[k];
     res.json({ items: await Model.find(filter).sort(sort).lean() });
   });
   const getOne: RequestHandler = asyncHandler(async (req, res) => {
@@ -50,14 +51,29 @@ function crud(
   });
   const create: RequestHandler = asyncHandler(async (req: AuthedRequest, res) => {
     const doc = await Model.create(transform(req.body));
-    await recordAudit(actorFrom(req), { action: 'create', resource, resourceId: String(doc._id), after: doc });
+    await recordAudit(actorFrom(req), {
+      action: 'create',
+      resource,
+      resourceId: String(doc._id),
+      after: doc,
+    });
     res.status(201).json(doc);
   });
   const update: RequestHandler = asyncHandler(async (req: AuthedRequest, res) => {
     const before = await Model.findOne({ _id: req.params.id, deletedAt: null }).lean();
     if (!before) throw notFound();
-    const doc = await Model.findByIdAndUpdate(req.params.id, { $set: transform(req.body) }, { new: true }).lean();
-    await recordAudit(actorFrom(req), { action: 'update', resource, resourceId: req.params.id, before, after: doc });
+    const doc = await Model.findByIdAndUpdate(
+      req.params.id,
+      { $set: transform(req.body) },
+      { new: true },
+    ).lean();
+    await recordAudit(actorFrom(req), {
+      action: 'update',
+      resource,
+      resourceId: req.params.id,
+      before,
+      after: doc,
+    });
     res.json(doc);
   });
   const remove: RequestHandler = asyncHandler(async (req: AuthedRequest, res) => {
@@ -84,8 +100,19 @@ const siteTransform = (b: Record<string, unknown>) => {
 };
 
 export const orgRouter = Router();
-crud(orgRouter, '/departments', 'org.departments', Department, departmentSchema, departmentUpdateSchema, (b) => b, { code: 1 });
+crud(
+  orgRouter,
+  '/departments',
+  'org.departments',
+  Department,
+  departmentSchema,
+  departmentUpdateSchema,
+  (b) => b,
+  { code: 1 },
+);
 crud(orgRouter, '/units', 'org.units', Unit, unitSchema, unitUpdateSchema);
 crud(orgRouter, '/branches', 'org.branches', Branch, branchSchema, branchUpdateSchema, (b) => b, { code: 1 });
 crud(orgRouter, '/sites', 'org.sites', Site, siteSchema, siteUpdateSchema, siteTransform);
-crud(orgRouter, '/positions', 'org.positions', Position, positionSchema, positionUpdateSchema, (b) => b, { code: 1 });
+crud(orgRouter, '/positions', 'org.positions', Position, positionSchema, positionUpdateSchema, (b) => b, {
+  code: 1,
+});

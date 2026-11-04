@@ -1,14 +1,27 @@
-import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes, scrypt as scryptCb, timingSafeEqual, type ScryptOptions } from 'node:crypto';
+import {
+  createCipheriv,
+  createDecipheriv,
+  createHash,
+  createHmac,
+  randomBytes,
+  scrypt as scryptCb,
+  timingSafeEqual,
+  type ScryptOptions,
+} from 'node:crypto';
 import { env } from '../../config';
 
 function scrypt(password: string, salt: Buffer, keylen: number, options: ScryptOptions): Promise<Buffer> {
-  return new Promise((resolve, reject) => scryptCb(password, salt, keylen, options, (err, key) => (err ? reject(err) : resolve(key))));
+  return new Promise((resolve, reject) =>
+    scryptCb(password, salt, keylen, options, (err, key) => (err ? reject(err) : resolve(key))),
+  );
 }
 
 /** Password hashing with scrypt (Node built-in; no native dependency). Format: scrypt$N$r$p$salt$hash */
 export async function hashPassword(password: string): Promise<string> {
   const salt = randomBytes(16);
-  const N = 16384, r = 8, p = 1;
+  const N = 16384,
+    r = 8,
+    p = 1;
   const hash = await scrypt(password.normalize('NFKC'), salt, 64, { N, r, p });
   return `scrypt$${N}$${r}$${p}$${salt.toString('base64')}$${hash.toString('base64')}`;
 }

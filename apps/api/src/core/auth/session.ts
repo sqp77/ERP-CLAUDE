@@ -6,7 +6,10 @@ import { Session, type SessionDoc, type UserDoc } from './model';
 
 export const SESSION_COOKIE = 'eayni_sid';
 
-export async function createSession(user: UserDoc, meta: { ip?: string; userAgent?: string; mfaVerified: boolean }) {
+export async function createSession(
+  user: UserDoc,
+  meta: { ip?: string; userAgent?: string; mfaVerified: boolean },
+) {
   const maxHours = await getSetting('auth.sessionMaxHours');
   const token = randomToken(32);
   const session = await Session.create({
@@ -24,7 +27,13 @@ export async function createSession(user: UserDoc, meta: { ip?: string; userAgen
  * Resolve a token to a live session. Enforces idle timeout and absolute expiry (DECISIONS §2)
  * and bumps lastSeenAt at most once a minute to keep writes cheap.
  */
-export async function loadSession(token: string, now = new Date()): Promise<{ session: SessionDoc; reason?: never } | { session?: never; reason: 'invalid' | 'revoked' | 'expired' | 'idle' }> {
+export async function loadSession(
+  token: string,
+  now = new Date(),
+): Promise<
+  | { session: SessionDoc; reason?: never }
+  | { session?: never; reason: 'invalid' | 'revoked' | 'expired' | 'idle' }
+> {
   const session = await Session.findOne({ tokenHash: sha256(token) });
   if (!session) return { reason: 'invalid' };
   if (session.revokedAt) return { reason: 'revoked' };
@@ -51,7 +60,11 @@ export async function revokeSession(session: SessionDoc, reason: string): Promis
   await session.save();
 }
 
-export async function revokeAllSessions(userId: string, reason: string, exceptSessionId?: string): Promise<number> {
+export async function revokeAllSessions(
+  userId: string,
+  reason: string,
+  exceptSessionId?: string,
+): Promise<number> {
   const filter: Record<string, unknown> = { userId, revokedAt: null };
   if (exceptSessionId) filter._id = { $ne: exceptSessionId };
   const r = await Session.updateMany(filter, { $set: { revokedAt: new Date(), revokedReason: reason } });

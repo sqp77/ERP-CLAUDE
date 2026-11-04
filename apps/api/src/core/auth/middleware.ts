@@ -32,16 +32,24 @@ export function requireAuth(opts: RequireAuthOptions = {}): RequestHandler {
     (async () => {
       const loaded = await loadSession(token);
       if (!loaded.session) {
-        const map = { invalid: 'invalid_session', revoked: 'session_revoked', expired: 'session_expired', idle: 'session_idle' } as const;
+        const map = {
+          invalid: 'invalid_session',
+          revoked: 'session_revoked',
+          expired: 'session_expired',
+          idle: 'session_idle',
+        } as const;
         throw unauthorized('انتهت الجلسة، يرجى تسجيل الدخول مجددًا', map[loaded.reason]);
       }
       const user = await User.findById(loaded.session.userId);
-      if (!user || user.status !== 'active' || user.deletedAt) throw unauthorized('الحساب غير نشط', 'account_disabled');
+      if (!user || user.status !== 'active' || user.deletedAt)
+        throw unauthorized('الحساب غير نشط', 'account_disabled');
       const roleCodes = [...new Set(user.roles.map((x) => x.role))];
       if (!opts.allowMfaPending) {
         const required = await mfaRequiredFor(roleCodes);
-        if (required && !user.totpEnabled) throw unauthorized('يلزم تفعيل التحقق الثنائي', 'mfa_enrollment_required');
-        if (user.totpEnabled && !loaded.session.mfaVerified) throw unauthorized('يلزم إدخال رمز التحقق', 'mfa_required');
+        if (required && !user.totpEnabled)
+          throw unauthorized('يلزم تفعيل التحقق الثنائي', 'mfa_enrollment_required');
+        if (user.totpEnabled && !loaded.session.mfaVerified)
+          throw unauthorized('يلزم إدخال رمز التحقق', 'mfa_required');
       }
       r.auth = {
         user,

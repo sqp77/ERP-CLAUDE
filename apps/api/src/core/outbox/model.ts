@@ -8,7 +8,12 @@ const outboxSchema = new Schema(
     aggregateId: { type: String },
     payload: { type: Schema.Types.Mixed, default: {} },
     idempotencyKey: { type: String, unique: true, sparse: true },
-    status: { type: String, enum: ['pending', 'processing', 'delivered', 'failed'], default: 'pending', index: true },
+    status: {
+      type: String,
+      enum: ['pending', 'processing', 'delivered', 'failed'],
+      default: 'pending',
+      index: true,
+    },
     attempts: { type: Number, default: 0 },
     availableAt: { type: Date, default: () => new Date(), index: true },
     lastError: { type: String },

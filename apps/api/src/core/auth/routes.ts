@@ -1,6 +1,12 @@
 import { Router, type Request } from 'express';
 import rateLimit from 'express-rate-limit';
-import { changePasswordSchema, forgotPasswordSchema, loginSchema, mfaCodeSchema, resetPasswordSchema } from '@eayni/shared';
+import {
+  changePasswordSchema,
+  forgotPasswordSchema,
+  loginSchema,
+  mfaCodeSchema,
+  resetPasswordSchema,
+} from '@eayni/shared';
 import { asyncHandler } from '../http/async';
 import { validate } from '../http/validate';
 import { actorFrom, type AuthedRequest } from '../http/context';
@@ -50,7 +56,12 @@ authRouter.get(
   requireAuth({ allowMfaPending: true }),
   asyncHandler(async (req: AuthedRequest, res) => {
     const user = await auth.toCurrentUser(req.auth.user);
-    const pending = user.mfaEnabled && !req.auth.session.mfaVerified ? 'required' : user.mfaRequired && !user.mfaEnabled ? 'enroll_required' : 'none';
+    const pending =
+      user.mfaEnabled && !req.auth.session.mfaVerified
+        ? 'required'
+        : user.mfaRequired && !user.mfaEnabled
+          ? 'enroll_required'
+          : 'none';
     res.json({ user, mfa: pending, mustChangePassword: req.auth.user.mustChangePassword });
   }),
 );
@@ -78,7 +89,12 @@ authRouter.post(
   requireAuth({ allowMfaPending: true }),
   validate(mfaCodeSchema),
   asyncHandler(async (req: AuthedRequest, res) => {
-    await auth.confirmMfaEnrollment(req.auth.user, req.auth.session, (req.body as { code: string }).code, actorFrom(req));
+    await auth.confirmMfaEnrollment(
+      req.auth.user,
+      req.auth.session,
+      (req.body as { code: string }).code,
+      actorFrom(req),
+    );
     res.json({ ok: true });
   }),
 );
@@ -130,7 +146,9 @@ authRouter.get(
   requireAuth(),
   asyncHandler(async (req: AuthedRequest, res) => {
     const items = await auth.listSessions(String(req.auth.user._id));
-    res.json({ items: items.map((s) => ({ ...s, current: String(s._id) === String(req.auth.session._id) })) });
+    res.json({
+      items: items.map((s) => ({ ...s, current: String(s._id) === String(req.auth.session._id) })),
+    });
   }),
 );
 

@@ -38,7 +38,9 @@ export function env(): Env {
   if (!cached) {
     const parsed = envSchema.safeParse(process.env);
     if (!parsed.success) {
-      throw new Error(`Invalid environment: ${parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')}`);
+      throw new Error(
+        `Invalid environment: ${parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')}`,
+      );
     }
     cached = parsed.data;
     if (cached.NODE_ENV === 'production' && cached.APP_SECRET.startsWith('dev-only')) {

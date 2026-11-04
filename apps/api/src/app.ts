@@ -36,10 +36,15 @@ export function createApp(): Express {
   app.use(cors({ origin: env().APP_URL, credentials: true }));
   app.use(cookieParser());
   // Local file PUT streams raw bodies; everything else is JSON.
-  app.use((req, res, next) => (req.path.startsWith('/api/v1/files/local/') ? next() : express.json({ limit: '2mb' })(req, res, next)));
-  if (env().NODE_ENV !== 'test') app.use(pinoHttp({ logger, autoLogging: { ignore: (req) => req.url === '/api/health' } }));
+  app.use((req, res, next) =>
+    req.path.startsWith('/api/v1/files/local/') ? next() : express.json({ limit: '2mb' })(req, res, next),
+  );
+  if (env().NODE_ENV !== 'test')
+    app.use(pinoHttp({ logger, autoLogging: { ignore: (req) => req.url === '/api/health' } }));
 
-  app.get('/api/health', (_req, res) => res.json({ ok: true, service: 'eayni-erp-api', time: new Date().toISOString() }));
+  app.get('/api/health', (_req, res) =>
+    res.json({ ok: true, service: 'eayni-erp-api', time: new Date().toISOString() }),
+  );
 
   const v1 = express.Router();
   v1.use('/auth', authRouter);

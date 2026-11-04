@@ -29,7 +29,12 @@ holidaysRouter.post(
   validate(holidaySchema),
   asyncHandler(async (req: AuthedRequest, res) => {
     const doc = await Holiday.create(req.body);
-    await recordAudit(actorFrom(req), { action: 'create', resource: 'holidays', resourceId: String(doc._id), after: doc });
+    await recordAudit(actorFrom(req), {
+      action: 'create',
+      resource: 'holidays',
+      resourceId: String(doc._id),
+      after: doc,
+    });
     res.status(201).json(doc);
   }),
 );
@@ -42,7 +47,12 @@ holidaysRouter.delete(
     const doc = await Holiday.findById(req.params.id).lean();
     if (!doc) throw notFound();
     await Holiday.deleteOne({ _id: doc._id });
-    await recordAudit(actorFrom(req), { action: 'delete', resource: 'holidays', resourceId: req.params.id, before: doc });
+    await recordAudit(actorFrom(req), {
+      action: 'delete',
+      resource: 'holidays',
+      resourceId: req.params.id,
+      before: doc,
+    });
     res.status(204).end();
   }),
 );

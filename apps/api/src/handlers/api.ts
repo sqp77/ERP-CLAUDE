@@ -4,7 +4,14 @@ import { createApp } from '../app';
 import { ensureBaseline } from '../bootstrap';
 
 const app = createApp();
-const wrapped = serverless(app, { binary: ['application/octet-stream', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/pdf', 'image/*'] });
+const wrapped = serverless(app, {
+  binary: [
+    'application/octet-stream',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'application/pdf',
+    'image/*',
+  ],
+});
 let baseline: Promise<void> | undefined;
 
 export const handler = async (event: unknown, context: { callbackWaitsForEmptyEventLoop?: boolean }) => {

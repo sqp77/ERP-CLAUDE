@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { addBusinessDays, businessDaysBetween, formatHijri, isWeekend, loadHolidaySet, riyadhDate } from './businessDays';
+import {
+  addBusinessDays,
+  businessDaysBetween,
+  formatHijri,
+  isWeekend,
+  loadHolidaySet,
+  riyadhDate,
+} from './businessDays';
 import { Holiday } from './model';
 
 describe('business days [CLAUDE.md Business days, SAL §6.1]', () => {

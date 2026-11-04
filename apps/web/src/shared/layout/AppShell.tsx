@@ -1,0 +1,174 @@
+import { useState } from 'react';
+import { NavLink, Outlet, useNavigate } from 'react-router';
+import { useTranslation } from 'react-i18next';
+import { useQuery } from '@tanstack/react-query';
+import {
+  Bell,
+  Building2,
+  CalendarDays,
+  ClipboardList,
+  FileClock,
+  Home,
+  LogOut,
+  Menu,
+  Settings,
+  Shield,
+  ShieldCheck,
+  Users,
+  Workflow,
+  X,
+} from 'lucide-react';
+import { useAuth } from '@/lib/auth';
+import { usePrefs } from '@/lib/preferences';
+import { get } from '@/lib/api';
+import { cx } from '@/shared/ui';
+
+/** RTL application shell: sidebar on the start side, phone-first collapsible (EP §17, golden rule 9). */
+export function AppShell() {
+  const { t } = useTranslation();
+  const { user, logout, can } = useAuth();
+  const { calendar, setCalendar } = usePrefs();
+  const nav = useNavigate();
+  const [open, setOpen] = useState(false);
+  const unread = useQuery({
+    queryKey: ['notifications', 'unread'],
+    queryFn: () => get<{ unread: number }>('/notifications?limit=1'),
+    refetchInterval: 30_000,
+  });
+
+  const items = [
+    { to: '/', label: t('nav.dashboard'), icon: Home, show: true },
+    { to: '/tasks', label: t('nav.tasks'), icon: ClipboardList, show: can('tasks', 'view') },
+    { to: '/calendar', label: t('nav.calendar'), icon: CalendarDays, show: can('calendar', 'view') },
+    { to: '/notifications', label: t('nav.notifications'), icon: Bell, show: true },
+    { to: '/me/security', label: t('nav.security'), icon: ShieldCheck, show: true },
+  ];
+  const admin = [
+    { to: '/admin/users', label: t('nav.users'), icon: Users, show: can('users', 'view') },
+    { to: '/admin/roles', label: t('nav.roles'), icon: Shield, show: can('roles', 'view') },
+    {
+      to: '/admin/departments',
+      label: t('nav.departments'),
+      icon: Building2,
+      show: can('org.departments', 'edit'),
+    },
+    { to: '/admin/branches', label: t('nav.branches'), icon: Building2, show: can('org.branches', 'edit') },
+    { to: '/admin/holidays', label: t('nav.holidays'), icon: CalendarDays, show: can('holidays', 'edit') },
+    { to: '/admin/workflows', label: t('nav.workflows'), icon: Workflow, show: can('workflows', 'view') },
+    { to: '/admin/settings', label: t('nav.settings'), icon: Settings, show: can('settings', 'view') },
+    { to: '/admin/audit', label: t('nav.audit'), icon: FileClock, show: can('audit', 'view') },
+  ];
+
+  const link = (to: string, label: string, Icon: typeof Home) => (
+    <NavLink
+      key={to}
+      to={to}
+      end={to === '/'}
+      onClick={() => setOpen(false)}
+      className={({ isActive }) =>
+        cx(
+          'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition',
+          isActive ? 'bg-brand-50 text-brand-800' : 'text-slate-700 hover:bg-slate-100',
+        )
+      }
+    >
+      <Icon className="size-5 shrink-0" aria-hidden />
+      <span>{label}</span>
+    </NavLink>
+  );
+
+  const sidebar = (
+    <nav className="flex h-full flex-col gap-1 p-3" aria-label="القائمة الرئيسية">
+      <div className="mb-3 flex items-center justify-between px-2 py-1">
+        <div className="text-lg font-bold text-brand-800">{t('app.name')}</div>
+        <button
+          className="rounded-md p-1 text-slate-500 lg:hidden"
+          onClick={() => setOpen(false)}
+          aria-label={t('actions.close')}
+        >
+          <X className="size-5" />
+        </button>
+      </div>
+      {items.filter((i) => i.show).map((i) => link(i.to, i.label, i.icon))}
+      {admin.some((a) => a.show) && (
+        <>
+          <div className="mt-4 mb-1 px-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
+            {t('nav.admin')}
+          </div>
+          {admin.filter((i) => i.show).map((i) => link(i.to, i.label, i.icon))}
+        </>
+      )}
+      <div className="mt-auto border-t border-slate-200 pt-3">
+        <div className="truncate px-3 text-sm font-medium text-slate-800">{user?.displayNameAr}</div>
+        <div className="truncate px-3 text-xs text-slate-500">{user?.email}</div>
+        <button
+          onClick={() => logout().then(() => nav('/login'))}
+          className="mt-2 flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-slate-700 hover:bg-slate-100"
+        >
+          <LogOut className="size-5" aria-hidden />
+          {t('actions.logout')}
+        </button>
+      </div>
+    </nav>
+  );
+
+  return (
+    <div className="min-h-dvh lg:grid lg:grid-cols-[260px_1fr]">
+      <aside className="hidden border-e border-slate-200 bg-white lg:block">{sidebar}</aside>
+      {open && (
+        <div className="fixed inset-0 z-40 bg-slate-900/40 lg:hidden" onClick={() => setOpen(false)}>
+          <aside className="h-full w-72 max-w-[85vw] bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
+            {sidebar}
+          </aside>
+        </div>
+      )}
+      <div className="flex min-h-dvh flex-col">
+        <header className="sticky top-0 z-30 flex items-center gap-2 border-b border-slate-200 bg-white/90 px-3 py-2 backdrop-blur sm:px-5">
+          <button
+            className="rounded-md p-2 text-slate-600 lg:hidden"
+            onClick={() => setOpen(true)}
+            aria-label="فتح القائمة"
+          >
+            <Menu className="size-5" />
+          </button>
+          <div className="text-sm font-semibold text-slate-700 lg:hidden">{t('app.name')}</div>
+          <div className="ms-auto flex items-center gap-1 sm:gap-2">
+            <div
+              className="flex rounded-lg border border-slate-200 p-0.5 text-xs"
+              role="group"
+              aria-label="نوع التقويم"
+            >
+              {(['gregorian', 'hijri'] as const).map((c) => (
+                <button
+                  key={c}
+                  onClick={() => setCalendar(c)}
+                  className={cx(
+                    'rounded-md px-2.5 py-1.5',
+                    calendar === c ? 'bg-brand-700 text-white' : 'text-slate-600',
+                  )}
+                >
+                  {c === 'gregorian' ? t('common.calendarG') : t('common.calendarH')}
+                </button>
+              ))}
+            </div>
+            <NavLink
+              to="/notifications"
+              className="relative rounded-md p-2 text-slate-600 hover:bg-slate-100"
+              aria-label={t('nav.notifications')}
+            >
+              <Bell className="size-5" />
+              {!!unread.data?.unread && (
+                <span className="absolute -top-0.5 -end-0.5 min-w-5 rounded-full bg-red-600 px-1 text-center text-[10px] font-bold leading-5 text-white">
+                  {unread.data.unread > 99 ? '99+' : unread.data.unread}
+                </span>
+              )}
+            </NavLink>
+          </div>
+        </header>
+        <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-5 sm:px-6">
+          <Outlet />
+        </main>
+      </div>
+    </div>
+  );
+}

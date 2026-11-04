@@ -19,7 +19,11 @@ export interface UploadTarget {
  */
 export interface StorageAdapter {
   createUploadUrl(key: string, mimeType: string, size: number): Promise<UploadTarget>;
-  createDownloadUrl(key: string, fileName: string, mimeType: string): Promise<{ url: string; expiresAt: string }>;
+  createDownloadUrl(
+    key: string,
+    fileName: string,
+    mimeType: string,
+  ): Promise<{ url: string; expiresAt: string }>;
   delete(key: string): Promise<void>;
 }
 
@@ -44,7 +48,12 @@ export class LocalStorageAdapter implements StorageAdapter {
     const expiresAt = Date.now() + TTL_MS;
     const sig = signLocal('put', key, expiresAt, `${mimeType}|${size}`);
     const url = `${env().API_URL}/api/v1/files/local/${encodeURIComponent(key)}?exp=${expiresAt}&sig=${sig}&size=${size}&mime=${encodeURIComponent(mimeType)}`;
-    return { url, method: 'PUT', headers: { 'Content-Type': mimeType }, expiresAt: new Date(expiresAt).toISOString() };
+    return {
+      url,
+      method: 'PUT',
+      headers: { 'Content-Type': mimeType },
+      expiresAt: new Date(expiresAt).toISOString(),
+    };
   }
   async createDownloadUrl(key: string, fileName: string): Promise<{ url: string; expiresAt: string }> {
     const expiresAt = Date.now() + TTL_MS;
@@ -87,7 +96,12 @@ export class S3StorageAdapter implements StorageAdapter {
       new PutObjectCommand({ Bucket: env().S3_BUCKET, Key: key, ContentType: mimeType, ContentLength: size }),
       { expiresIn: TTL_MS / 1000 },
     );
-    return { url, method: 'PUT', headers: { 'Content-Type': mimeType }, expiresAt: new Date(Date.now() + TTL_MS).toISOString() };
+    return {
+      url,
+      method: 'PUT',
+      headers: { 'Content-Type': mimeType },
+      expiresAt: new Date(Date.now() + TTL_MS).toISOString(),
+    };
   }
   async createDownloadUrl(key: string, fileName: string, mimeType: string) {
     const { GetObjectCommand } = await import('@aws-sdk/client-s3');

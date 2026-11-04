@@ -22,7 +22,11 @@ export async function getSetting<K extends SettingKey>(key: K): Promise<SettingV
   return value;
 }
 
-export async function setSetting<K extends SettingKey>(key: K, raw: unknown, actor: Actor): Promise<SettingValue<K>> {
+export async function setSetting<K extends SettingKey>(
+  key: K,
+  raw: unknown,
+  actor: Actor,
+): Promise<SettingValue<K>> {
   const def = SETTING_DEFINITIONS[key];
   if (!def) throw badRequest(`إعداد غير معروف: ${key}`);
   const parsed = def.schema.safeParse(raw);

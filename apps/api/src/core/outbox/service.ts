@@ -21,7 +21,10 @@ export function subscribe(type: string, handler: EventHandler): () => void {
   list.push(handler);
   handlers.set(type, list);
   return () => {
-    handlers.set(type, (handlers.get(type) ?? []).filter((h) => h !== handler));
+    handlers.set(
+      type,
+      (handlers.get(type) ?? []).filter((h) => h !== handler),
+    );
   };
 }
 
@@ -44,7 +47,10 @@ const MAX_ATTEMPTS = 5;
 const backoffMs = (attempt: number) => Math.min(60_000 * 2 ** (attempt - 1), 3_600_000);
 
 /** Deliver pending events. Safe to run concurrently: each event is claimed atomically. */
-export async function processOutbox(limit = 50, now = new Date()): Promise<{ delivered: number; failed: number }> {
+export async function processOutbox(
+  limit = 50,
+  now = new Date(),
+): Promise<{ delivered: number; failed: number }> {
   let delivered = 0;
   let failed = 0;
   for (let i = 0; i < limit; i++) {
@@ -64,7 +70,10 @@ export async function processOutbox(limit = 50, now = new Date()): Promise<{ del
       delivered++;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      logger.warn({ eventId: ev._id, type: ev.type, attempt: ev.attempts, err: message }, 'outbox handler failed');
+      logger.warn(
+        { eventId: ev._id, type: ev.type, attempt: ev.attempts, err: message },
+        'outbox handler failed',
+      );
       ev.lastError = message;
       if (ev.attempts >= MAX_ATTEMPTS) ev.status = 'failed';
       else {

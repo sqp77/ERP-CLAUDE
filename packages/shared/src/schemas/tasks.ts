@@ -11,7 +11,9 @@ export const createTaskSchema = z.object({
   startAt: z.coerce.date().optional(),
   dueAt: z.coerce.date().optional(),
   departmentId: objectIdSchema.optional(),
-  source: z.object({ type: z.string().min(1), id: z.string().min(1), label: z.string().optional() }).optional(),
+  source: z
+    .object({ type: z.string().min(1), id: z.string().min(1), label: z.string().optional() })
+    .optional(),
   attachmentIds: z.array(objectIdSchema).default([]),
 });
 export const updateTaskSchema = createTaskSchema.partial().extend({

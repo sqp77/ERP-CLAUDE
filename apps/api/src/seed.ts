@@ -1,4 +1,3 @@
-import { mkdirSync } from 'node:fs';
 import { DEPARTMENT_CODES, DEPARTMENT_NAMES_AR } from '@eayni/shared';
 import { env } from './config';
 import { logger } from './logger';
@@ -8,6 +7,7 @@ import { User } from './core/auth/model';
 import { hashPassword } from './core/auth/crypto';
 import { Branch, Department, Position, Site } from './core/org/model';
 import { Holiday } from './core/dates/model';
+import { startDevMongo } from './devMongo';
 
 /**
  * Local seed: departments (DECISIONS §3), sample branch/site/positions (sample data only — real
@@ -17,16 +17,36 @@ import { Holiday } from './core/dates/model';
 export async function seed(): Promise<{ adminEmail: string; adminPassword: string | undefined }> {
   await ensureBaseline();
   for (const code of DEPARTMENT_CODES) {
-    await Department.updateOne({ code }, { $setOnInsert: { code, nameAr: DEPARTMENT_NAMES_AR[code], active: true } }, { upsert: true });
+    await Department.updateOne(
+      { code },
+      { $setOnInsert: { code, nameAr: DEPARTMENT_NAMES_AR[code], active: true } },
+      { upsert: true },
+    );
   }
   const hq = await Branch.findOneAndUpdate(
     { code: 'hq' },
-    { $setOnInsert: { code: 'hq', nameAr: 'المقر الرئيسي (بيانات تجريبية)', region: 'المنطقة الشرقية', city: 'الدمام', active: true } },
+    {
+      $setOnInsert: {
+        code: 'hq',
+        nameAr: 'المقر الرئيسي (بيانات تجريبية)',
+        region: 'المنطقة الشرقية',
+        city: 'الدمام',
+        active: true,
+      },
+    },
     { upsert: true, new: true },
   );
   await Site.updateOne(
     { branchId: hq!._id, nameAr: 'موقع التشغيل الرئيسي (تجريبي)' },
-    { $setOnInsert: { branchId: hq!._id, nameAr: 'موقع التشغيل الرئيسي (تجريبي)', location: { type: 'Point', coordinates: [50.1, 26.43] }, geofenceRadiusM: 200, active: true } },
+    {
+      $setOnInsert: {
+        branchId: hq!._id,
+        nameAr: 'موقع التشغيل الرئيسي (تجريبي)',
+        location: { type: 'Point', coordinates: [50.1, 26.43] },
+        geofenceRadiusM: 200,
+        active: true,
+      },
+    },
     { upsert: true },
   );
   const itDept = await Department.findOne({ code: 'it' });
@@ -64,21 +84,12 @@ const isMain = process.argv[1]?.endsWith('seed.ts') || process.argv[1]?.endsWith
 if (isMain) {
   (async () => {
     let uri = env().MONGODB_URI;
-    if (!uri && env().DEV_AUTO_MONGO) {
-      const { MongoMemoryReplSet } = await import('mongodb-memory-server');
-      mkdirSync('.data/mongo', { recursive: true });
-      const repl = await MongoMemoryReplSet.create({ replSet: { count: 1, storageEngine: 'wiredTiger', dbName: 'eayni' }, instanceOpts: [{ dbPath: '.data/mongo', storageEngine: 'wiredTiger' }] });
-      uri = repl.getUri('eayni');
-      await connectDb(uri);
-      const r = await seed();
-      await disconnectDb();
-      await repl.stop();
-      logger.info(r, 'seed done');
-      return;
-    }
+    let stop = async () => {};
+    if (!uri && env().DEV_AUTO_MONGO) ({ uri, stop } = await startDevMongo());
     await connectDb(uri);
     const r = await seed();
     await disconnectDb();
+    await stop();
     logger.info(r, 'seed done');
   })().catch((err) => {
     logger.error({ err }, 'seed failed');

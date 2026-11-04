@@ -25,10 +25,15 @@ export function registerCoreJobs(): void {
       { key: 'displayNameAr', labelAr: 'الاسم' },
       { key: 'email', labelAr: 'البريد الإلكتروني' },
       { key: 'status', labelAr: 'الحالة' },
-      { key: 'roles', labelAr: 'الأدوار', format: (v) => (Array.isArray(v) ? v.map((r: { role: string }) => r.role).join(', ') : '') },
+      {
+        key: 'roles',
+        labelAr: 'الأدوار',
+        format: (v) => (Array.isArray(v) ? v.map((r: { role: string }) => r.role).join(', ') : ''),
+      },
       { key: 'lastLoginAt', labelAr: 'آخر دخول' },
     ],
-    query: async ({ limit }) => User.find({ deletedAt: null }).limit(limit).lean() as unknown as Promise<Record<string, unknown>[]>,
+    query: async ({ limit }) =>
+      User.find({ deletedAt: null }).limit(limit).lean() as unknown as Promise<Record<string, unknown>[]>,
   });
 }
 

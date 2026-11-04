@@ -31,9 +31,20 @@ commentsRouter.post(
   asyncHandler(async (req: AuthedRequest, res) => {
     const body = req.body as Z.infer<typeof createCommentSchema>;
     const c = await Comment.create({ ...body, authorId: req.auth.user._id });
-    await recordAudit(actorFrom(req), { action: 'create', resource: 'comments', resourceId: String(c._id), after: c });
+    await recordAudit(actorFrom(req), {
+      action: 'create',
+      resource: 'comments',
+      resourceId: String(c._id),
+      after: c,
+    });
     const mentions = body.mentionUserIds.filter((id) => id !== String(req.auth.user._id));
-    if (mentions.length) await notify({ userIds: mentions, type: 'comment.mention', bodyAr: body.body.slice(0, 140), data: { recordType: body.recordType, recordId: body.recordId } });
+    if (mentions.length)
+      await notify({
+        userIds: mentions,
+        type: 'comment.mention',
+        bodyAr: body.body.slice(0, 140),
+        data: { recordType: body.recordType, recordId: body.recordId },
+      });
     res.status(201).json(c);
   }),
 );

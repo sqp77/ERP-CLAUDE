@@ -13,7 +13,10 @@ describe('users admin [HR §6, EP §3.10]', () => {
     const { SYSTEM_ACTOR } = await import('../http/context');
     await setSetting('auth.mfaRequiredRoles', [], SYSTEM_ACTOR);
     const hr = await loginAs('hr@eayni.local');
-    const created = await request(app()).post('/api/v1/users').set(auth(hr)).send({ email: 'new@eayni.local', displayNameAr: 'موظف جديد', roles: [{ role: 'employee' }] });
+    const created = await request(app())
+      .post('/api/v1/users')
+      .set(auth(hr))
+      .send({ email: 'new@eayni.local', displayNameAr: 'موظف جديد', roles: [{ role: 'employee' }] });
     expect(created.status).toBe(201);
     expect(created.body.temporaryPassword).toBeTruthy();
     expect(created.body.mustChangePassword).toBe(true);
@@ -21,7 +24,10 @@ describe('users admin [HR §6, EP §3.10]', () => {
 
     await makeUser('emp@eayni.local');
     const emp = await loginAs('emp@eayni.local');
-    const denied = await request(app()).post('/api/v1/users').set(auth(emp)).send({ email: 'x@eayni.local', displayNameAr: 'س' });
+    const denied = await request(app())
+      .post('/api/v1/users')
+      .set(auth(emp))
+      .send({ email: 'x@eayni.local', displayNameAr: 'س' });
     expect(denied.status).toBe(403);
     expect((await request(app()).get('/api/v1/users').set(auth(emp))).status).toBe(403);
   });
@@ -34,10 +40,18 @@ describe('users admin [HR §6, EP §3.10]', () => {
     const victim = await makeUser('victim@eayni.local');
     const admin = await loginAs('admin2@eayni.local');
     const vt = await loginAs('victim@eayni.local');
-    const r = await request(app()).patch(`/api/v1/users/${victim._id}`).set(auth(admin)).send({ status: 'disabled' });
+    const r = await request(app())
+      .patch(`/api/v1/users/${victim._id}`)
+      .set(auth(admin))
+      .send({ status: 'disabled' });
     expect(r.status).toBe(200);
     expect((await request(app()).get('/api/v1/auth/me').set(auth(vt))).status).toBe(401);
-    const self = await request(app()).patch(`/api/v1/users/${(await import('./model')).User.findOne({ email: 'admin2@eayni.local' }).then((u) => u!._id)}`).set(auth(admin)).send({ status: 'disabled' });
+    const self = await request(app())
+      .patch(
+        `/api/v1/users/${(await import('./model')).User.findOne({ email: 'admin2@eayni.local' }).then((u) => u!._id)}`,
+      )
+      .set(auth(admin))
+      .send({ status: 'disabled' });
     expect(self.status).toBe(400);
   });
 });

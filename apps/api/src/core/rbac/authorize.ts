@@ -29,7 +29,11 @@ export function authorize(resource: string, action: Action): RequestHandler {
 }
 
 /** Quick check for use inside services (no middleware). */
-export async function can(user: AuthedRequest['auth']['user'], resource: string, action: Action): Promise<boolean> {
+export async function can(
+  user: AuthedRequest['auth']['user'],
+  resource: string,
+  action: Action,
+): Promise<boolean> {
   const eff = await effectivePermission(
     user.roles as RoleAssignment[],
     user.departmentId ? String(user.departmentId) : undefined,

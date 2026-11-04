@@ -4,11 +4,17 @@ import { formatHijri } from '../dates/businessDays';
 
 const hb = Handlebars.create();
 hb.registerHelper('date', (d: Date | string | undefined) =>
-  d ? new Intl.DateTimeFormat('ar-SA-u-nu-latn', { timeZone: TIMEZONE, dateStyle: 'medium' }).format(new Date(d)) : '',
+  d
+    ? new Intl.DateTimeFormat('ar-SA-u-nu-latn', { timeZone: TIMEZONE, dateStyle: 'medium' }).format(
+        new Date(d),
+      )
+    : '',
 );
 hb.registerHelper('hijri', (d: Date | string | undefined) => (d ? formatHijri(new Date(d)) : ''));
 hb.registerHelper('money', (halalas: number | undefined) =>
-  typeof halalas === 'number' ? `${(halalas / 100).toLocaleString('ar-SA-u-nu-latn', { minimumFractionDigits: 2 })} ر.س` : '',
+  typeof halalas === 'number'
+    ? `${(halalas / 100).toLocaleString('ar-SA-u-nu-latn', { minimumFractionDigits: 2 })} ر.س`
+    : '',
 );
 
 /** Render an HTML template (certificates, letters, invoices) from data. Output is RTL-ready HTML. */

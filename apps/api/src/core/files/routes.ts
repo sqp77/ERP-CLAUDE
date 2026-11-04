@@ -53,7 +53,12 @@ filesRouter.post(
       att.status = 'uploaded';
       att.uploadedAt = new Date();
       await att.save();
-      await recordAudit(actorFrom(req), { action: 'create', resource: 'files', resourceId: String(att._id), after: att });
+      await recordAudit(actorFrom(req), {
+        action: 'create',
+        resource: 'files',
+        resourceId: String(att._id),
+        after: att,
+      });
     }
     res.json(att);
   }),
@@ -80,7 +85,13 @@ filesRouter.get(
     if (!att) throw notFound();
     const out = await storage().createDownloadUrl(att.key, att.originalName, att.mimeType);
     if (att.sensitive) {
-      await recordAudit(actorFrom(req), { action: 'download', resource: 'files', resourceId: String(att._id), sensitive: true, meta: { ownerType: att.ownerType, ownerId: att.ownerId } });
+      await recordAudit(actorFrom(req), {
+        action: 'download',
+        resource: 'files',
+        resourceId: String(att._id),
+        sensitive: true,
+        meta: { ownerType: att.ownerType, ownerId: att.ownerId },
+      });
     }
     res.json(out);
   }),
@@ -95,7 +106,12 @@ filesRouter.delete(
     if (!att) throw notFound();
     att.deletedAt = new Date();
     await att.save();
-    await recordAudit(actorFrom(req), { action: 'delete', resource: 'files', resourceId: String(att._id), before: att });
+    await recordAudit(actorFrom(req), {
+      action: 'delete',
+      resource: 'files',
+      resourceId: String(att._id),
+      before: att,
+    });
     res.status(204).end();
   }),
 );
@@ -117,7 +133,10 @@ filesRouter.put(
       await local.delete(key);
       throw badRequest('حجم الملف أكبر من المصرّح به');
     }
-    await Attachment.updateOne({ key, status: 'pending' }, { $set: { status: 'uploaded', uploadedAt: new Date(), size: written } });
+    await Attachment.updateOne(
+      { key, status: 'pending' },
+      { $set: { status: 'uploaded', uploadedAt: new Date(), size: written } },
+    );
     res.status(200).json({ ok: true, size: written });
   }),
 );

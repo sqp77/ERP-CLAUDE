@@ -22,14 +22,22 @@ export const SETTING_DEFINITIONS = {
     key: 'auth.sessionIdleMinutes',
     labelAr: 'مهلة الخمول للجلسة (دقائق)',
     group: 'auth',
-    schema: z.number().int().min(5).max(24 * 60),
+    schema: z
+      .number()
+      .int()
+      .min(5)
+      .max(24 * 60),
     default: 30, // DECISIONS §2
   }),
   'auth.sessionMaxHours': def({
     key: 'auth.sessionMaxHours',
     labelAr: 'الحد الأقصى لعمر الجلسة (ساعات)',
     group: 'auth',
-    schema: z.number().int().min(1).max(24 * 7),
+    schema: z
+      .number()
+      .int()
+      .min(1)
+      .max(24 * 7),
     default: 12, // DECISIONS §2
   }),
   'auth.mfaRequiredRoles': def({
@@ -50,7 +58,11 @@ export const SETTING_DEFINITIONS = {
     key: 'auth.lockoutMinutes',
     labelAr: 'مدة القفل المؤقت (دقائق)',
     group: 'auth',
-    schema: z.number().int().min(1).max(24 * 60),
+    schema: z
+      .number()
+      .int()
+      .min(1)
+      .max(24 * 60),
     default: 15,
   }),
   'auth.passwordMinLength': def({

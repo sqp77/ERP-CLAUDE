@@ -13,8 +13,17 @@ import { clearRoleCache } from './service';
 
 export const rolesRouter = Router();
 
-const grantSchema = z.object({ resource: z.string().min(1), actions: z.array(z.enum(ACTIONS)).min(1), scope: z.enum(SCOPES) });
-const fieldRuleSchema = z.object({ resource: z.string().min(1), fields: z.array(z.string().min(1)).min(1), view: z.boolean(), edit: z.boolean() });
+const grantSchema = z.object({
+  resource: z.string().min(1),
+  actions: z.array(z.enum(ACTIONS)).min(1),
+  scope: z.enum(SCOPES),
+});
+const fieldRuleSchema = z.object({
+  resource: z.string().min(1),
+  fields: z.array(z.string().min(1)).min(1),
+  view: z.boolean(),
+  edit: z.boolean(),
+});
 const roleBody = z.object({
   code: z.string().regex(/^[a-z0-9_]{2,40}$/),
   nameAr: z.string().trim().min(2),
@@ -40,7 +49,12 @@ rolesRouter.post(
   asyncHandler(async (req: AuthedRequest, res) => {
     const role = await Role.create({ ...req.body, system: false });
     clearRoleCache();
-    await recordAudit(actorFrom(req), { action: 'create', resource: 'roles', resourceId: role.code, after: role });
+    await recordAudit(actorFrom(req), {
+      action: 'create',
+      resource: 'roles',
+      resourceId: role.code,
+      after: role,
+    });
     res.status(201).json(role);
   }),
 );
@@ -53,9 +67,19 @@ rolesRouter.put(
   asyncHandler(async (req: AuthedRequest, res) => {
     const before = await Role.findOne({ code: req.params.code }).lean();
     if (!before) throw notFound();
-    const role = await Role.findOneAndUpdate({ code: req.params.code }, { $set: req.body }, { new: true }).lean();
+    const role = await Role.findOneAndUpdate(
+      { code: req.params.code },
+      { $set: req.body },
+      { new: true },
+    ).lean();
     clearRoleCache();
-    await recordAudit(actorFrom(req), { action: 'update', resource: 'roles', resourceId: req.params.code, before, after: role });
+    await recordAudit(actorFrom(req), {
+      action: 'update',
+      resource: 'roles',
+      resourceId: req.params.code,
+      before,
+      after: role,
+    });
     res.json(role);
   }),
 );
@@ -70,7 +94,12 @@ rolesRouter.delete(
     if (role.system) throw badRequest('لا يمكن حذف دور نظامي');
     await Role.deleteOne({ code: req.params.code });
     clearRoleCache();
-    await recordAudit(actorFrom(req), { action: 'delete', resource: 'roles', resourceId: req.params.code, before: role });
+    await recordAudit(actorFrom(req), {
+      action: 'delete',
+      resource: 'roles',
+      resourceId: req.params.code,
+      before: role,
+    });
     res.status(204).end();
   }),
 );

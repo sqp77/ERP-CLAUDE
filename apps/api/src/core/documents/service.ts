@@ -13,7 +13,10 @@ export function registerExpiryRecipients(ownerType: string, fn: ExpiryRecipientR
 export async function runDocumentExpiryAlerts(now = new Date()): Promise<number> {
   const defaults = await getSetting('documents.expiryAlertOffsetsDays');
   const maxOffset = Math.max(...defaults, 0);
-  const docs = await DocumentRecord.find({ deletedAt: null, expiryDate: { $ne: null, $lte: new Date(now.getTime() + (maxOffset + 1) * 86_400_000) } });
+  const docs = await DocumentRecord.find({
+    deletedAt: null,
+    expiryDate: { $ne: null, $lte: new Date(now.getTime() + (maxOffset + 1) * 86_400_000) },
+  });
   let sent = 0;
   for (const d of docs) {
     const offsets = d.alertOffsetsDays?.length ? d.alertOffsetsDays : defaults;
@@ -23,7 +26,12 @@ export async function runDocumentExpiryAlerts(now = new Date()): Promise<number>
         const resolve = resolvers.get(d.ownerType);
         const userIds = resolve ? await resolve(d.ownerId) : [];
         if (userIds.length) {
-          await notify({ userIds, type: 'document.expiring', bodyAr: `${d.titleAr} — متبقٍ ${Math.max(daysLeft, 0)} يومًا`, data: { documentId: String(d._id), ownerType: d.ownerType, ownerId: d.ownerId } });
+          await notify({
+            userIds,
+            type: 'document.expiring',
+            bodyAr: `${d.titleAr} — متبقٍ ${Math.max(daysLeft, 0)} يومًا`,
+            data: { documentId: String(d._id), ownerType: d.ownerType, ownerId: d.ownerId },
+          });
           sent++;
         }
         d.alertsSent.push(o);

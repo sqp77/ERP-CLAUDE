@@ -1,7 +1,12 @@
 import { HIJRI_LOCALE, TIMEZONE, WEEKEND_DAYS } from '@eayni/shared';
 import { Holiday } from './model';
 
-const dayFmt = new Intl.DateTimeFormat('en-CA', { timeZone: TIMEZONE, year: 'numeric', month: '2-digit', day: '2-digit' });
+const dayFmt = new Intl.DateTimeFormat('en-CA', {
+  timeZone: TIMEZONE,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+});
 const weekdayFmt = new Intl.DateTimeFormat('en-US', { timeZone: TIMEZONE, weekday: 'short' });
 const WEEKDAY_INDEX: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
 
@@ -58,5 +63,10 @@ export function businessDaysBetween(from: Date, to: Date, holidays: Set<string>)
 
 /** Hijri rendering for display (Umm al-Qura). Dates are stored Gregorian UTC. */
 export function formatHijri(d: Date): string {
-  return new Intl.DateTimeFormat(HIJRI_LOCALE, { timeZone: TIMEZONE, year: 'numeric', month: 'long', day: 'numeric' }).format(d);
+  return new Intl.DateTimeFormat(HIJRI_LOCALE, {
+    timeZone: TIMEZONE,
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  }).format(d);
 }

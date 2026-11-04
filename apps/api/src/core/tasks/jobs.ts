@@ -10,13 +10,23 @@ export async function runTaskReminders(now = new Date()): Promise<{ dueSoon: num
 
   const dueSoon = await Task.find({ ...open, remindedDueSoon: false, dueAt: { $gt: now, $lte: horizon } });
   for (const t of dueSoon) {
-    await notify({ userIds: [String(t.assigneeId)], type: 'task.due_soon', bodyAr: `${t.number}: ${t.title}`, link: `/tasks/${t._id}` });
+    await notify({
+      userIds: [String(t.assigneeId)],
+      type: 'task.due_soon',
+      bodyAr: `${t.number}: ${t.title}`,
+      link: `/tasks/${t._id}`,
+    });
     t.remindedDueSoon = true;
     await t.save();
   }
   const overdue = await Task.find({ ...open, remindedOverdue: false, dueAt: { $lt: now } });
   for (const t of overdue) {
-    await notify({ userIds: [String(t.assigneeId), String(t.assignerId)], type: 'task.overdue', bodyAr: `${t.number}: ${t.title}`, link: `/tasks/${t._id}` });
+    await notify({
+      userIds: [String(t.assigneeId), String(t.assignerId)],
+      type: 'task.overdue',
+      bodyAr: `${t.number}: ${t.title}`,
+      link: `/tasks/${t._id}`,
+    });
     t.remindedOverdue = true;
     if (t.status !== 'waiting_review') t.status = 'late';
     await t.save();

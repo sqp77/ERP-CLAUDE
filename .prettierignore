@@ -6,3 +6,4 @@ coverage
 docs/SPECS.md
 docs/specs
 package-lock.json
+*.md

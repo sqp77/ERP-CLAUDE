@@ -8,7 +8,10 @@ export const loginSchema = z.object({
 export type LoginInput = z.infer<typeof loginSchema>;
 
 export const mfaCodeSchema = z.object({
-  code: z.string().trim().regex(/^\d{6}$/, 'رمز التحقق مكوّن من 6 أرقام'),
+  code: z
+    .string()
+    .trim()
+    .regex(/^\d{6}$/, 'رمز التحقق مكوّن من 6 أرقام'),
 });
 
 export const changePasswordSchema = z.object({

@@ -9,10 +9,16 @@ describe('files: presigned upload/download with the local adapter [CLAUDE.md Fil
   it('presigns, uploads bytes directly, then serves a signed download; sensitive downloads are audited', async () => {
     await makeUser('u@eayni.local');
     const t = await loginAs('u@eayni.local');
-    const pre = await request(app()).post('/api/v1/files/presign').set(auth(t)).send({ fileName: 'contract.pdf', mimeType: 'application/pdf', size: 11, sensitive: true });
+    const pre = await request(app())
+      .post('/api/v1/files/presign')
+      .set(auth(t))
+      .send({ fileName: 'contract.pdf', mimeType: 'application/pdf', size: 11, sensitive: true });
     expect(pre.status).toBe(201);
     const uploadUrl = new URL(pre.body.upload.url);
-    const put = await request(app()).put(uploadUrl.pathname + uploadUrl.search).set('Content-Type', 'application/pdf').send(Buffer.from('%PDF-1.4 ok'));
+    const put = await request(app())
+      .put(uploadUrl.pathname + uploadUrl.search)
+      .set('Content-Type', 'application/pdf')
+      .send(Buffer.from('%PDF-1.4 ok'));
     expect(put.status).toBe(200);
     const done = await request(app()).post(`/api/v1/files/${pre.body.attachmentId}/complete`).set(auth(t));
     expect(done.body.status).toBe('uploaded');
@@ -28,11 +34,23 @@ describe('files: presigned upload/download with the local adapter [CLAUDE.md Fil
   it('rejects disallowed types and tampered signatures', async () => {
     await makeUser('v@eayni.local');
     const t = await loginAs('v@eayni.local');
-    const bad = await request(app()).post('/api/v1/files/presign').set(auth(t)).send({ fileName: 'x.exe', mimeType: 'application/x-msdownload', size: 10 });
+    const bad = await request(app())
+      .post('/api/v1/files/presign')
+      .set(auth(t))
+      .send({ fileName: 'x.exe', mimeType: 'application/x-msdownload', size: 10 });
     expect(bad.status).toBe(400);
-    const pre = await request(app()).post('/api/v1/files/presign').set(auth(t)).send({ fileName: 'a.png', mimeType: 'image/png', size: 3 });
+    const pre = await request(app())
+      .post('/api/v1/files/presign')
+      .set(auth(t))
+      .send({ fileName: 'a.png', mimeType: 'image/png', size: 3 });
     const u = new URL(pre.body.upload.url);
     u.searchParams.set('sig', 'forged');
-    expect((await request(app()).put(u.pathname + u.search).send(Buffer.from('abc'))).status).toBe(403);
+    expect(
+      (
+        await request(app())
+          .put(u.pathname + u.search)
+          .send(Buffer.from('abc'))
+      ).status,
+    ).toBe(403);
   });
 });

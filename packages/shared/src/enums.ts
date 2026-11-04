@@ -67,7 +67,16 @@ export const TASK_STATUS_AR: Record<TaskStatus, string> = {
 };
 
 /** Calendar event types and statuses [EP §13, SAL §9]. */
-export const EVENT_TYPES = ['meeting', 'visit', 'training', 'secondment', 'follow_up', 'event', 'task', 'other'] as const;
+export const EVENT_TYPES = [
+  'meeting',
+  'visit',
+  'training',
+  'secondment',
+  'follow_up',
+  'event',
+  'task',
+  'other',
+] as const;
 export type EventType = (typeof EVENT_TYPES)[number];
 export const EVENT_STATUSES = ['scheduled', 'done', 'not_done', 'rescheduled', 'cancelled'] as const;
 export type EventStatus = (typeof EVENT_STATUSES)[number];

@@ -3,7 +3,12 @@ import { objectIdSchema } from './common';
 
 /** Org structure [HR §3.1]. */
 export const departmentSchema = z.object({
-  code: z.string().trim().min(2).max(30).regex(/^[a-z0-9_]+$/, 'أحرف إنجليزية صغيرة وأرقام فقط'),
+  code: z
+    .string()
+    .trim()
+    .min(2)
+    .max(30)
+    .regex(/^[a-z0-9_]+$/, 'أحرف إنجليزية صغيرة وأرقام فقط'),
   nameAr: z.string().trim().min(2),
   nameEn: z.string().trim().optional(),
   parentId: objectIdSchema.nullable().optional(),
@@ -33,7 +38,10 @@ export const branchUpdateSchema = branchSchema.partial();
 export const siteSchema = z.object({
   branchId: objectIdSchema,
   nameAr: z.string().trim().min(2),
-  location: z.object({ lat: z.number().min(-90).max(90), lng: z.number().min(-180).max(180) }).nullable().optional(),
+  location: z
+    .object({ lat: z.number().min(-90).max(90), lng: z.number().min(-180).max(180) })
+    .nullable()
+    .optional(),
   geofenceRadiusM: z.number().int().positive().nullable().optional(),
   active: z.boolean().default(true),
 });

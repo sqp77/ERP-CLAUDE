@@ -12,7 +12,12 @@ describe('notifications [EP §15, DECISIONS §9]', () => {
     const u = await makeUser('n@eayni.local');
     const log = new LogEmailAdapter();
     setEmailAdapter(log);
-    await notify({ userIds: [String(u._id)], type: 'task.assigned', bodyAr: 'مهمة', email: { subject: 's', text: 't' } });
+    await notify({
+      userIds: [String(u._id)],
+      type: 'task.assigned',
+      bodyAr: 'مهمة',
+      email: { subject: 's', text: 't' },
+    });
     expect(log.sent).toHaveLength(0);
     const n = await Notification.findOne({ userId: u._id }).lean();
     expect(n?.titleAr).toBe('تم إسناد مهمة جديدة إليك');

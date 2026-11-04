@@ -34,8 +34,9 @@ export async function disconnectDb(): Promise<void> {
 
 /** True when the server supports multi-document transactions (replica set / Atlas). */
 export function supportsTransactions(): boolean {
-  const topology = (mongoose.connection.getClient() as unknown as { topology?: { description?: { type?: string } } })
-    .topology;
+  const topology = (
+    mongoose.connection.getClient() as unknown as { topology?: { description?: { type?: string } } }
+  ).topology;
   const type = topology?.description?.type ?? '';
   return type.includes('ReplicaSet') || type === 'Sharded' || type === 'LoadBalanced';
 }
@@ -44,7 +45,9 @@ export function supportsTransactions(): boolean {
  * Run `fn` inside a transaction when the deployment supports it, otherwise plainly.
  * Used so the outbox write and the business write commit together (CLAUDE.md "Domain events").
  */
-export async function withTransaction<T>(fn: (session: mongoose.ClientSession | undefined) => Promise<T>): Promise<T> {
+export async function withTransaction<T>(
+  fn: (session: mongoose.ClientSession | undefined) => Promise<T>,
+): Promise<T> {
   if (!supportsTransactions()) return fn(undefined);
   const session = await mongoose.startSession();
   try {

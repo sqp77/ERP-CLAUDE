@@ -22,11 +22,15 @@ describe('rbac [HR §6, EP §16, DECISIONS §4]', () => {
     expect(eff?.scope).toBe('department');
     expect(eff?.departmentIds.sort()).toEqual([String(d1._id), String(d2._id)].sort());
     expect(await effectivePermission([{ role: 'employee' }], undefined, 'users', 'create')).toBeNull();
-    expect((await effectivePermission([{ role: 'system_admin' }], undefined, 'users', 'delete'))?.scope).toBe('all');
+    expect((await effectivePermission([{ role: 'system_admin' }], undefined, 'users', 'delete'))?.scope).toBe(
+      'all',
+    );
   });
 
   it('the system admin has no financial approval right [FIN §12]', async () => {
-    expect(await effectivePermission([{ role: 'system_admin' }], undefined, 'finance.requests', 'approve')).toBeNull();
+    expect(
+      await effectivePermission([{ role: 'system_admin' }], undefined, 'finance.requests', 'approve'),
+    ).toBeNull();
   });
 
   it('applies field-level rules: hidden fields are redacted', async () => {
@@ -36,7 +40,12 @@ describe('rbac [HR §6, EP §16, DECISIONS §4]', () => {
       grants: [{ resource: 'employees', actions: ['view'], scope: 'all' }],
       fieldRules: [{ resource: 'employees', fields: ['basicSalary', 'iban'], view: true, edit: false }],
     });
-    await Role.create({ code: 'plain', nameAr: 'عادي', grants: [{ resource: 'employees', actions: ['view'], scope: 'all' }], fieldRules: [{ resource: 'employees', fields: ['basicSalary', 'iban'], view: false, edit: false }] });
+    await Role.create({
+      code: 'plain',
+      nameAr: 'عادي',
+      grants: [{ resource: 'employees', actions: ['view'], scope: 'all' }],
+      fieldRules: [{ resource: 'employees', fields: ['basicSalary', 'iban'], view: false, edit: false }],
+    });
     const { clearRoleCache } = await import('./service');
     clearRoleCache();
     const r1 = await fieldRestrictions([{ role: 'plain' }], 'employees');
@@ -48,11 +57,23 @@ describe('rbac [HR §6, EP §16, DECISIONS §4]', () => {
   });
 
   it('turns scope into a query filter (own / department / all)', async () => {
-    const own = await scopeFilter({ resource: 'tasks', action: 'view', scope: 'own', departmentIds: [] }, 'u1', { ownerFields: ['assigneeId'] });
+    const own = await scopeFilter(
+      { resource: 'tasks', action: 'view', scope: 'own', departmentIds: [] },
+      'u1',
+      { ownerFields: ['assigneeId'] },
+    );
     expect(own).toEqual({ $or: [{ assigneeId: 'u1' }] });
-    const dept = await scopeFilter({ resource: 'tasks', action: 'view', scope: 'department', departmentIds: ['d1'] }, 'u1', { ownerFields: ['assigneeId'], departmentField: 'departmentId' });
+    const dept = await scopeFilter(
+      { resource: 'tasks', action: 'view', scope: 'department', departmentIds: ['d1'] },
+      'u1',
+      { ownerFields: ['assigneeId'], departmentField: 'departmentId' },
+    );
     expect(dept).toEqual({ $or: [{ departmentId: { $in: ['d1'] } }, { assigneeId: 'u1' }] });
-    expect(await scopeFilter({ resource: 'tasks', action: 'view', scope: 'all', departmentIds: [] }, 'u1', { ownerFields: ['assigneeId'] })).toEqual({});
+    expect(
+      await scopeFilter({ resource: 'tasks', action: 'view', scope: 'all', departmentIds: [] }, 'u1', {
+        ownerFields: ['assigneeId'],
+      }),
+    ).toEqual({});
   });
 
   it('enforces on the server: forbidden action returns 403, allowed returns data', async () => {

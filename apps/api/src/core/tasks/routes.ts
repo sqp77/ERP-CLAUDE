@@ -31,7 +31,11 @@ tasksRouter.get(
     if (q.assigneeId) filter.assigneeId = q.assigneeId;
     if (q.mine) filter.assigneeId = userId;
     const [items, total] = await Promise.all([
-      Task.find(filter).sort({ dueAt: 1, createdAt: -1 }).skip((q.page - 1) * q.limit).limit(q.limit).lean(),
+      Task.find(filter)
+        .sort({ dueAt: 1, createdAt: -1 })
+        .skip((q.page - 1) * q.limit)
+        .limit(q.limit)
+        .lean(),
       Task.countDocuments(filter),
     ]);
     res.json({ items, total, page: q.page, limit: q.limit });
@@ -46,10 +50,32 @@ tasksRouter.post(
   asyncHandler(async (req: AuthedRequest, res) => {
     const body = req.body as z.infer<typeof createTaskSchema>;
     const number = await nextNumber('task');
-    const task = await Task.create({ ...body, number, assignerId: req.auth.user._id, departmentId: body.departmentId ?? req.auth.user.departmentId });
-    await recordAudit(actorFrom(req), { action: 'create', resource: 'tasks', resourceId: String(task._id), after: task });
-    await publish({ type: 'core.task.assigned', aggregateType: 'task', aggregateId: String(task._id), payload: { assigneeId: body.assigneeId }, actorUserId: String(req.auth.user._id) });
-    await notify({ userIds: [body.assigneeId], type: 'task.assigned', bodyAr: `${task.number}: ${task.title}`, link: `/tasks/${task._id}`, data: { taskId: String(task._id) } });
+    const task = await Task.create({
+      ...body,
+      number,
+      assignerId: req.auth.user._id,
+      departmentId: body.departmentId ?? req.auth.user.departmentId,
+    });
+    await recordAudit(actorFrom(req), {
+      action: 'create',
+      resource: 'tasks',
+      resourceId: String(task._id),
+      after: task,
+    });
+    await publish({
+      type: 'core.task.assigned',
+      aggregateType: 'task',
+      aggregateId: String(task._id),
+      payload: { assigneeId: body.assigneeId },
+      actorUserId: String(req.auth.user._id),
+    });
+    await notify({
+      userIds: [body.assigneeId],
+      type: 'task.assigned',
+      bodyAr: `${task.number}: ${task.title}`,
+      link: `/tasks/${task._id}`,
+      data: { taskId: String(task._id) },
+    });
     res.status(201).json(task);
   }),
 );
@@ -78,7 +104,8 @@ tasksRouter.patch(
     if (!task) throw notFound();
     const isAssignee = String(task.assigneeId) === String(req.auth.user._id);
     // An assignee with 'own' scope may only move status/progress; reassigning needs wider scope.
-    if (req.authz!.scope === 'own' && isAssignee && (body.assigneeId || body.title || body.dueAt)) throw forbidden('يمكنك تحديث الحالة ونسبة الإنجاز فقط');
+    if (req.authz!.scope === 'own' && isAssignee && (body.assigneeId || body.title || body.dueAt))
+      throw forbidden('يمكنك تحديث الحالة ونسبة الإنجاز فقط');
     const before = task.toObject();
     Object.assign(task, body);
     if (body.status === 'done') {
@@ -86,9 +113,20 @@ tasksRouter.patch(
       task.progressPercent = 100;
     }
     await task.save();
-    await recordAudit(actorFrom(req), { action: 'update', resource: 'tasks', resourceId: String(task._id), before, after: task });
+    await recordAudit(actorFrom(req), {
+      action: 'update',
+      resource: 'tasks',
+      resourceId: String(task._id),
+      before,
+      after: task,
+    });
     if (body.assigneeId && String(before.assigneeId) !== body.assigneeId) {
-      await notify({ userIds: [body.assigneeId], type: 'task.assigned', bodyAr: `${task.number}: ${task.title}`, link: `/tasks/${task._id}` });
+      await notify({
+        userIds: [body.assigneeId],
+        type: 'task.assigned',
+        bodyAr: `${task.number}: ${task.title}`,
+        link: `/tasks/${task._id}`,
+      });
     }
     res.json(task);
   }),

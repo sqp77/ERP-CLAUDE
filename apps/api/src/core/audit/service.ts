@@ -17,9 +17,10 @@ const STRIP = new Set(['passwordHash', 'totpSecret', 'totpPendingSecret', 'token
 
 function clean(value: unknown): unknown {
   if (!value || typeof value !== 'object') return value;
-  const src = typeof (value as { toObject?: () => unknown }).toObject === 'function'
-    ? ((value as { toObject: () => Record<string, unknown> }).toObject() as Record<string, unknown>)
-    : (value as Record<string, unknown>);
+  const src =
+    typeof (value as { toObject?: () => unknown }).toObject === 'function'
+      ? ((value as { toObject: () => Record<string, unknown> }).toObject() as Record<string, unknown>)
+      : (value as Record<string, unknown>);
   const out: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(src)) {
     if (STRIP.has(k)) continue;

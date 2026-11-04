@@ -43,7 +43,8 @@ export class SesEmailAdapter implements EmailAdapter {
 
 let emailAdapter: EmailAdapter | undefined;
 export function email(): EmailAdapter {
-  if (!emailAdapter) emailAdapter = env().NODE_ENV === 'production' ? new SesEmailAdapter() : new LogEmailAdapter();
+  if (!emailAdapter)
+    emailAdapter = env().NODE_ENV === 'production' ? new SesEmailAdapter() : new LogEmailAdapter();
   return emailAdapter;
 }
 export function setEmailAdapter(a: EmailAdapter | undefined): void {

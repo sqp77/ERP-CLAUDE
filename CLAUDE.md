@@ -331,7 +331,7 @@ Each one sits behind an adapter interface. Manual entry must work first; the int
 | Maps and geocoding | OPS §7, HR §3.4 |
 
 ## Build order (confirmed 2026-11-04 — see DECISIONS §7)
-- [ ] Phase 0: platform core, local dev setup, CI; deploy pipeline written but not run (DECISIONS §1)
+- [x] Phase 0 (done 2026-11-04): platform core, local dev setup, CI; deploy pipeline written but not run (DECISIONS §1)
 - [ ] Phase 1: HR foundation (org chart, employees, users, roles, contracts and documents, salary data entry) + Employee Portal (login, dashboard, profile, HR requests, tickets, tasks, calendar, reports, news, notifications)
 - [ ] Phase 2: HR attendance (shifts, GPS check-in/out with geofence, corrections, lateness/overtime per settings, reports) — HR §8 "التشغيل اليومي"
 - [ ] Phase 3: CRM core + Customer Service (conversations entered manually, transfers, leads) + Sales phase 1

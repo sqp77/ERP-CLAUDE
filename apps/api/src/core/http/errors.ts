@@ -14,11 +14,15 @@ export class AppError extends Error {
   }
 }
 
-export const badRequest = (message: string, details?: unknown) => new AppError(400, 'bad_request', message, details);
-export const unauthorized = (message = 'غير مصرّح', code = 'unauthorized') => new AppError(401, code, message);
-export const forbidden = (message = 'ليست لديك صلاحية لهذا الإجراء', code = 'forbidden') => new AppError(403, code, message);
+export const badRequest = (message: string, details?: unknown) =>
+  new AppError(400, 'bad_request', message, details);
+export const unauthorized = (message = 'غير مصرّح', code = 'unauthorized') =>
+  new AppError(401, code, message);
+export const forbidden = (message = 'ليست لديك صلاحية لهذا الإجراء', code = 'forbidden') =>
+  new AppError(403, code, message);
 export const notFound = (message = 'السجل غير موجود') => new AppError(404, 'not_found', message);
-export const conflict = (message: string, details?: unknown) => new AppError(409, 'conflict', message, details);
+export const conflict = (message: string, details?: unknown) =>
+  new AppError(409, 'conflict', message, details);
 
 export const notFoundHandler: RequestHandler = (_req, _res, next) => next(notFound('المسار غير موجود'));
 
@@ -39,7 +43,9 @@ export const errorHandler: ErrorRequestHandler = (err, req, res, _next) => {
   }
   const e = err as { name?: string; code?: number; keyValue?: unknown; message?: string };
   if (e?.name === 'MongoServerError' && e.code === 11000) {
-    res.status(409).json({ error: { code: 'duplicate', message: 'القيمة مستخدمة مسبقًا', details: e.keyValue } });
+    res
+      .status(409)
+      .json({ error: { code: 'duplicate', message: 'القيمة مستخدمة مسبقًا', details: e.keyValue } });
     return;
   }
   if (e?.name === 'CastError') {

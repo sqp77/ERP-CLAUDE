@@ -1,4 +1,11 @@
-import { maxScope, type Action, type FieldRule, type PermissionGrant, type RoleAssignment, type Scope } from '@eayni/shared';
+import {
+  maxScope,
+  type Action,
+  type FieldRule,
+  type PermissionGrant,
+  type RoleAssignment,
+  type Scope,
+} from '@eayni/shared';
 import { Role, type RoleDoc } from './model';
 import { CORE_ROLES } from './defaults';
 
@@ -82,7 +89,10 @@ export async function flattenPermissions(assignments: RoleAssignment[]): Promise
 }
 
 /** Field-level rules: fields the user may NOT view / edit for a resource, from all roles. */
-export async function fieldRestrictions(assignments: RoleAssignment[], resource: string): Promise<{ hidden: Set<string>; readOnly: Set<string> }> {
+export async function fieldRestrictions(
+  assignments: RoleAssignment[],
+  resource: string,
+): Promise<{ hidden: Set<string>; readOnly: Set<string> }> {
   const roles = await loadRoles();
   const hidden = new Set<string>();
   const readOnly = new Set<string>();

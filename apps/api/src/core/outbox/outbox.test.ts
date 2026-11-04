@@ -8,7 +8,12 @@ describe('outbox [CLAUDE.md Domain events]', () => {
     subscribe('ops.visit.completed', async (e) => {
       seen.push(String(e.aggregateId));
     });
-    await publish({ type: 'ops.visit.completed', aggregateType: 'visit', aggregateId: 'v1', payload: { kg: 120 } });
+    await publish({
+      type: 'ops.visit.completed',
+      aggregateType: 'visit',
+      aggregateId: 'v1',
+      payload: { kg: 120 },
+    });
     await publish({ type: 'other', payload: {} });
     const r = await processOutbox();
     expect(r).toEqual({ delivered: 2, failed: 0 });

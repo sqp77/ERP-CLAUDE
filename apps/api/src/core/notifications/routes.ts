@@ -24,7 +24,11 @@ notificationsRouter.get(
     const filter: Record<string, unknown> = { userId: req.auth.user._id };
     if (q.unread) filter.readAt = null;
     const [items, total, unread] = await Promise.all([
-      Notification.find(filter).sort({ createdAt: -1 }).skip((q.page - 1) * q.limit).limit(q.limit).lean(),
+      Notification.find(filter)
+        .sort({ createdAt: -1 })
+        .skip((q.page - 1) * q.limit)
+        .limit(q.limit)
+        .lean(),
       Notification.countDocuments(filter),
       unreadCount(String(req.auth.user._id)),
     ]);
@@ -36,7 +40,10 @@ notificationsRouter.post(
   '/read-all',
   requireAuth(),
   asyncHandler(async (req: AuthedRequest, res) => {
-    const r = await Notification.updateMany({ userId: req.auth.user._id, readAt: null }, { $set: { readAt: new Date() } });
+    const r = await Notification.updateMany(
+      { userId: req.auth.user._id, readAt: null },
+      { $set: { readAt: new Date() } },
+    );
     res.json({ updated: r.modifiedCount });
   }),
 );
@@ -45,7 +52,10 @@ notificationsRouter.post(
   '/:id/read',
   requireAuth(),
   asyncHandler(async (req: AuthedRequest, res) => {
-    await Notification.updateOne({ _id: req.params.id, userId: req.auth.user._id, readAt: null }, { $set: { readAt: new Date() } });
+    await Notification.updateOne(
+      { _id: req.params.id, userId: req.auth.user._id, readAt: null },
+      { $set: { readAt: new Date() } },
+    );
     res.json({ ok: true });
   }),
 );

@@ -14,8 +14,18 @@ export function testApp(): Express {
 
 export const PASSWORD = 'Passw0rd!2026';
 
-export async function makeUser(email: string, roles: RoleAssignment[] = [{ role: 'employee' }], extra: Record<string, unknown> = {}) {
-  return User.create({ email, displayNameAr: email.split('@')[0], passwordHash: await hashPassword(PASSWORD), roles, ...extra });
+export async function makeUser(
+  email: string,
+  roles: RoleAssignment[] = [{ role: 'employee' }],
+  extra: Record<string, unknown> = {},
+) {
+  return User.create({
+    email,
+    displayNameAr: email.split('@')[0],
+    passwordHash: await hashPassword(PASSWORD),
+    roles,
+    ...extra,
+  });
 }
 
 export async function makeDepartment(code: string, nameAr = code) {

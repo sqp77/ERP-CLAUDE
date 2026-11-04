@@ -1,5 +1,10 @@
 import type { ClientSession } from 'mongoose';
-import { workflowDefinitionSchema, type WorkflowDefinition, type WorkflowDefinitionInput, type WorkflowFields } from '@eayni/shared';
+import {
+  workflowDefinitionSchema,
+  type WorkflowDefinition,
+  type WorkflowDefinitionInput,
+  type WorkflowFields,
+} from '@eayni/shared';
 import { badRequest, forbidden } from '../http/errors';
 import type { Actor } from '../http/context';
 import { addBusinessDays, loadHolidaySet } from '../dates/businessDays';
@@ -44,7 +49,12 @@ async function dueFor(def: WorkflowDefinition, state: string, from: Date): Promi
 
 /** Fields for a freshly created record. */
 export async function initWorkflow(def: WorkflowDefinition, now = new Date()): Promise<WorkflowFields> {
-  return { state: def.initialState, stateEnteredAt: now, dueAt: await dueFor(def, def.initialState, now), closedAt: null };
+  return {
+    state: def.initialState,
+    stateEnteredAt: now,
+    dueAt: await dueFor(def, def.initialState, now),
+    closedAt: null,
+  };
 }
 
 export interface TransitionArgs {
@@ -72,7 +82,9 @@ export interface TransitionResult {
 
 export function availableTransitions(def: WorkflowDefinition, state: string, actorRelations: string[]) {
   const rel = new Set(actorRelations);
-  return def.transitions.filter((t) => t.from.includes(state) && (t.allow.includes('*') || t.allow.some((a) => rel.has(a))));
+  return def.transitions.filter(
+    (t) => t.from.includes(state) && (t.allow.includes('*') || t.allow.some((a) => rel.has(a))),
+  );
 }
 
 /**
@@ -84,12 +96,16 @@ export async function applyTransition(args: TransitionArgs): Promise<TransitionR
   const now = args.now ?? new Date();
   const t = def.transitions.find((x) => x.code === transition);
   if (!t) throw badRequest(`إجراء غير معروف: ${transition}`);
-  if (!t.from.includes(record.state)) throw badRequest(`لا يمكن تنفيذ "${t.labelAr}" من الحالة الحالية`, { state: record.state });
+  if (!t.from.includes(record.state))
+    throw badRequest(`لا يمكن تنفيذ "${t.labelAr}" من الحالة الحالية`, { state: record.state });
   const rel = new Set(actorRelations);
-  if (!(t.allow.includes('*') || t.allow.some((a) => rel.has(a)))) throw forbidden(`ليست لديك صلاحية تنفيذ "${t.labelAr}"`);
+  if (!(t.allow.includes('*') || t.allow.some((a) => rel.has(a))))
+    throw forbidden(`ليست لديك صلاحية تنفيذ "${t.labelAr}"`);
   if (t.requireReason && !args.reason?.trim()) throw badRequest('السبب مطلوب لهذا الإجراء');
   const merged = { ...record, ...(args.payload ?? {}) } as Record<string, unknown>;
-  const missing = t.requiredFields.filter((f) => merged[f] === undefined || merged[f] === null || merged[f] === '');
+  const missing = t.requiredFields.filter(
+    (f) => merged[f] === undefined || merged[f] === null || merged[f] === '',
+  );
   if (missing.length) throw badRequest('حقول مطلوبة ناقصة', { missing });
 
   const toState = def.states[t.to];

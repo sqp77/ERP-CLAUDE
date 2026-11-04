@@ -1,31 +1,35 @@
-import { mkdirSync } from 'node:fs';
 import { env } from './config';
 import { logger } from './logger';
-import { connectDb } from './db';
+import { connectDb, disconnectDb } from './db';
 import { createApp } from './app';
 import { ensureBaseline } from './bootstrap';
 import { processOutbox } from './core/outbox/service';
+import { startDevMongo } from './devMongo';
 
 /** Local development server. Deployed stages use the Lambda handlers instead. */
 async function main() {
   let uri = env().MONGODB_URI;
-  if (!uri && env().DEV_AUTO_MONGO) {
-    // Zero-setup local database: an in-process MongoDB replica set persisted under .data/mongo (transactions supported).
-    const { MongoMemoryReplSet } = await import('mongodb-memory-server');
-    mkdirSync('.data/mongo', { recursive: true });
-    const repl = await MongoMemoryReplSet.create({
-      replSet: { count: 1, storageEngine: 'wiredTiger', dbName: 'eayni' },
-      instanceOpts: [{ dbPath: '.data/mongo', storageEngine: 'wiredTiger' }],
-    });
-    uri = repl.getUri('eayni');
-    logger.info({ uri }, 'local MongoDB started (data persisted in .data/mongo)');
-  }
+  let stopMongo = async () => {};
+  if (!uri && env().DEV_AUTO_MONGO) ({ uri, stop: stopMongo } = await startDevMongo());
   await connectDb(uri);
   await ensureBaseline();
   const app = createApp();
   app.listen(env().PORT, () => logger.info(`API listening on http://localhost:${env().PORT}`));
   // Outbox worker loop (a scheduled Lambda in deployed stages).
-  setInterval(() => processOutbox().catch((err) => logger.error({ err }, 'outbox tick failed')), 2_000).unref();
+  setInterval(
+    () => processOutbox().catch((err) => logger.error({ err }, 'outbox tick failed')),
+    2_000,
+  ).unref();
+
+  // Graceful shutdown: stop the in-process MongoDB so no orphan mongod keeps the port.
+  const shutdown = async (signal: string) => {
+    logger.info({ signal }, 'shutting down');
+    await disconnectDb().catch(() => {});
+    await stopMongo().catch(() => {});
+    process.exit(0);
+  };
+  process.once('SIGINT', () => void shutdown('SIGINT'));
+  process.once('SIGTERM', () => void shutdown('SIGTERM'));
 }
 
 main().catch((err) => {

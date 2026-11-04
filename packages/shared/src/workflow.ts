@@ -12,7 +12,9 @@ export const stateDefSchema = z.object({
   /** Business days allowed in this state before it counts as late. */
   slaBusinessDays: z.number().int().positive().optional(),
   /** Who is expected to act while the record is in this state (for queues and reminders). */
-  owner: z.enum(['requester', 'assignee', 'department', 'direct_manager', 'approver', 'none']).default('none'),
+  owner: z
+    .enum(['requester', 'assignee', 'department', 'direct_manager', 'approver', 'none'])
+    .default('none'),
 });
 export type StateDef = z.infer<typeof stateDefSchema>;
 
@@ -44,18 +46,37 @@ export const workflowDefinitionSchema = z
     transitions: z.array(transitionDefSchema),
     /** Reopen rule, e.g. tickets reopened by the requester within N days of resolution [EP §9.4]. */
     reopen: z
-      .object({ from: z.array(z.string()), to: z.string(), allow: z.array(z.string()), withinDays: z.number().int().positive().optional() })
+      .object({
+        from: z.array(z.string()),
+        to: z.string(),
+        allow: z.array(z.string()),
+        withinDays: z.number().int().positive().optional(),
+      })
       .optional(),
   })
   .superRefine((def, ctx) => {
     if (!def.states[def.initialState]) {
-      ctx.addIssue({ code: 'custom', message: `initialState "${def.initialState}" is not a state`, path: ['initialState'] });
+      ctx.addIssue({
+        code: 'custom',
+        message: `initialState "${def.initialState}" is not a state`,
+        path: ['initialState'],
+      });
     }
     for (const t of def.transitions) {
       for (const f of t.from) {
-        if (!def.states[f]) ctx.addIssue({ code: 'custom', message: `transition ${t.code}: unknown from-state ${f}`, path: ['transitions'] });
+        if (!def.states[f])
+          ctx.addIssue({
+            code: 'custom',
+            message: `transition ${t.code}: unknown from-state ${f}`,
+            path: ['transitions'],
+          });
       }
-      if (!def.states[t.to]) ctx.addIssue({ code: 'custom', message: `transition ${t.code}: unknown to-state ${t.to}`, path: ['transitions'] });
+      if (!def.states[t.to])
+        ctx.addIssue({
+          code: 'custom',
+          message: `transition ${t.code}: unknown to-state ${t.to}`,
+          path: ['transitions'],
+        });
     }
   });
 export type WorkflowDefinition = z.infer<typeof workflowDefinitionSchema>;

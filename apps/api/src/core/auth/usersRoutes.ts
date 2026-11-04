@@ -1,5 +1,11 @@
 import { Router } from 'express';
-import { createUserSchema, listUsersQuerySchema, updateUserSchema, type CreateUserInput, type UpdateUserInput } from '@eayni/shared';
+import {
+  createUserSchema,
+  listUsersQuerySchema,
+  updateUserSchema,
+  type CreateUserInput,
+  type UpdateUserInput,
+} from '@eayni/shared';
 import { z } from 'zod';
 import { asyncHandler } from '../http/async';
 import { validate } from '../http/validate';
@@ -16,7 +22,8 @@ import { validatePasswordPolicy } from './service';
 
 export const usersRouter = Router();
 
-const PUBLIC = 'email displayNameAr status roles departmentId employeeId totpEnabled lastLoginAt mustChangePassword createdAt updatedAt';
+const PUBLIC =
+  'email displayNameAr status roles departmentId employeeId totpEnabled lastLoginAt mustChangePassword createdAt updatedAt';
 
 async function assertRolesExist(roles: { role: string }[]) {
   const known = await loadRoles();
@@ -36,7 +43,12 @@ usersRouter.get(
     if (q.role) filter['roles.role'] = q.role;
     if (q.q) filter.$or = [{ email: new RegExp(q.q, 'i') }, { displayNameAr: new RegExp(q.q, 'i') }];
     const [items, total] = await Promise.all([
-      User.find(filter).select(PUBLIC).sort({ createdAt: -1 }).skip((q.page - 1) * q.limit).limit(q.limit).lean(),
+      User.find(filter)
+        .select(PUBLIC)
+        .sort({ createdAt: -1 })
+        .skip((q.page - 1) * q.limit)
+        .limit(q.limit)
+        .lean(),
       User.countDocuments(filter),
     ]);
     res.json({ items, total, page: q.page, limit: q.limit });
@@ -62,7 +74,12 @@ usersRouter.post(
       departmentId: body.departmentId,
       mustChangePassword: !body.password,
     });
-    await recordAudit(actorFrom(req), { action: 'create', resource: 'users', resourceId: String(user._id), after: user });
+    await recordAudit(actorFrom(req), {
+      action: 'create',
+      resource: 'users',
+      resourceId: String(user._id),
+      after: user,
+    });
     const out = await User.findById(user._id).select(PUBLIC).lean();
     // The temporary password is returned once so the admin can hand it over; it is never stored or logged.
     res.status(201).json({ ...out, temporaryPassword: body.password ? undefined : password });
@@ -90,14 +107,21 @@ usersRouter.patch(
     const before = await User.findOne({ _id: req.params.id, deletedAt: null });
     if (!before) throw notFound();
     if (body.roles) await assertRolesExist(body.roles);
-    if (body.status === 'disabled' && String(before._id) === String(req.auth.user._id)) throw badRequest('لا يمكنك تعطيل حسابك');
+    if (body.status === 'disabled' && String(before._id) === String(req.auth.user._id))
+      throw badRequest('لا يمكنك تعطيل حسابك');
     const snapshot = before.toObject();
     Object.assign(before, body);
     if (body.status === 'disabled' && snapshot.status !== 'disabled') before.disabledAt = new Date();
     if (body.status === 'active') before.disabledAt = undefined;
     await before.save();
     if (body.status === 'disabled') await revokeAllSessions(String(before._id), 'account_disabled');
-    await recordAudit(actorFrom(req), { action: 'update', resource: 'users', resourceId: String(before._id), before: snapshot, after: before });
+    await recordAudit(actorFrom(req), {
+      action: 'update',
+      resource: 'users',
+      resourceId: String(before._id),
+      before: snapshot,
+      after: before,
+    });
     res.json(await User.findById(before._id).select(PUBLIC).lean());
   }),
 );
@@ -115,7 +139,12 @@ usersRouter.post(
     user.passwordChangedAt = new Date();
     await user.save();
     await revokeAllSessions(String(user._id), 'admin_reset');
-    await recordAudit(actorFrom(req), { action: 'update', resource: 'users', resourceId: String(user._id), meta: { adminPasswordReset: true } });
+    await recordAudit(actorFrom(req), {
+      action: 'update',
+      resource: 'users',
+      resourceId: String(user._id),
+      meta: { adminPasswordReset: true },
+    });
     res.json({ temporaryPassword: password });
   }),
 );

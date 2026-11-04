@@ -17,7 +17,10 @@ export interface ClientMeta {
   userAgent?: string;
 }
 
-async function log(event: string, data: { userId?: unknown; email?: string; sessionId?: unknown } & ClientMeta) {
+async function log(
+  event: string,
+  data: { userId?: unknown; email?: string; sessionId?: unknown } & ClientMeta,
+) {
   await LoginLog.create({ event, ...data });
 }
 
@@ -56,7 +59,11 @@ export async function login(email: string, password: string, meta: ClientMeta) {
 
   const roleCodes = user.roles.map((r) => r.role);
   const required = await mfaRequiredFor(roleCodes);
-  const mfa: 'none' | 'required' | 'enroll_required' = user.totpEnabled ? 'required' : required ? 'enroll_required' : 'none';
+  const mfa: 'none' | 'required' | 'enroll_required' = user.totpEnabled
+    ? 'required'
+    : required
+      ? 'enroll_required'
+      : 'none';
   const { token, session } = await createSession(user, { ...meta, mfaVerified: mfa === 'none' });
   await log('login_success', { userId: user._id, email, sessionId: session._id, ...meta });
   const maxHours = await getSetting('auth.sessionMaxHours');
@@ -68,7 +75,12 @@ export async function logout(session: SessionDoc, user: UserDoc, meta: ClientMet
   await log('logout', { userId: user._id, email: user.email, sessionId: session._id, ...meta });
 }
 
-export async function verifyMfa(user: UserDoc, session: SessionDoc, code: string, meta: ClientMeta): Promise<void> {
+export async function verifyMfa(
+  user: UserDoc,
+  session: SessionDoc,
+  code: string,
+  meta: ClientMeta,
+): Promise<void> {
   if (!user.totpEnabled || !user.totpSecret) throw badRequest('التحقق الثنائي غير مفعّل');
   if (!verifyTotp(code, decrypt(user.totpSecret))) {
     await log('mfa_failed', { userId: user._id, email: user.email, sessionId: session._id, ...meta });
@@ -87,7 +99,12 @@ export async function startMfaEnrollment(user: UserDoc) {
   return { otpauthUrl: uri, qrDataUrl: await totpQrDataUrl(uri), manualKey: secret };
 }
 
-export async function confirmMfaEnrollment(user: UserDoc, session: SessionDoc, code: string, actor: Actor): Promise<void> {
+export async function confirmMfaEnrollment(
+  user: UserDoc,
+  session: SessionDoc,
+  code: string,
+  actor: Actor,
+): Promise<void> {
   if (!user.totpPendingSecret) throw badRequest('ابدأ التفعيل أولًا');
   const secret = decrypt(user.totpPendingSecret);
   if (!verifyTotp(code, secret)) throw unauthorized('رمز التحقق غير صحيح', 'mfa_invalid');
@@ -98,27 +115,46 @@ export async function confirmMfaEnrollment(user: UserDoc, session: SessionDoc, c
   await user.save();
   session.mfaVerified = true;
   await session.save();
-  await recordAudit(actor, { action: 'update', resource: 'users', resourceId: String(user._id), meta: { mfa: 'enabled' } });
+  await recordAudit(actor, {
+    action: 'update',
+    resource: 'users',
+    resourceId: String(user._id),
+    meta: { mfa: 'enabled' },
+  });
 }
 
 export async function disableMfa(user: UserDoc, code: string, actor: Actor): Promise<void> {
-  if (await mfaRequiredFor(user.roles.map((r) => r.role))) throw forbidden('التحقق الثنائي إلزامي لدورك ولا يمكن تعطيله');
+  if (await mfaRequiredFor(user.roles.map((r) => r.role)))
+    throw forbidden('التحقق الثنائي إلزامي لدورك ولا يمكن تعطيله');
   if (!user.totpEnabled || !user.totpSecret) throw badRequest('التحقق الثنائي غير مفعّل');
   if (!verifyTotp(code, decrypt(user.totpSecret))) throw unauthorized('رمز التحقق غير صحيح', 'mfa_invalid');
   user.totpEnabled = false;
   user.totpSecret = undefined;
   await user.save();
-  await recordAudit(actor, { action: 'update', resource: 'users', resourceId: String(user._id), meta: { mfa: 'disabled' } });
+  await recordAudit(actor, {
+    action: 'update',
+    resource: 'users',
+    resourceId: String(user._id),
+    meta: { mfa: 'disabled' },
+  });
 }
 
 export async function validatePasswordPolicy(password: string): Promise<void> {
   const min = await getSetting('auth.passwordMinLength');
   if (password.length < min) throw badRequest(`كلمة المرور يجب ألا تقل عن ${min} أحرف`);
-  if (!/[A-Za-z]/.test(password) || !/\d/.test(password)) throw badRequest('كلمة المرور يجب أن تحتوي على أحرف وأرقام');
+  if (!/[A-Za-z]/.test(password) || !/\d/.test(password))
+    throw badRequest('كلمة المرور يجب أن تحتوي على أحرف وأرقام');
 }
 
-export async function changePassword(user: UserDoc, session: SessionDoc, current: string, next: string, meta: ClientMeta): Promise<void> {
-  if (!(await verifyPassword(current, user.passwordHash))) throw unauthorized('كلمة المرور الحالية غير صحيحة', 'invalid_credentials');
+export async function changePassword(
+  user: UserDoc,
+  session: SessionDoc,
+  current: string,
+  next: string,
+  meta: ClientMeta,
+): Promise<void> {
+  if (!(await verifyPassword(current, user.passwordHash)))
+    throw unauthorized('كلمة المرور الحالية غير صحيحة', 'invalid_credentials');
   await validatePasswordPolicy(next);
   user.passwordHash = await hashPassword(next);
   user.passwordChangedAt = new Date();
@@ -129,11 +165,18 @@ export async function changePassword(user: UserDoc, session: SessionDoc, current
 }
 
 /** Always responds the same way whether or not the email exists. Returns the token only outside production (dev/test). */
-export async function requestPasswordReset(email: string, meta: ClientMeta): Promise<{ debugToken?: string }> {
+export async function requestPasswordReset(
+  email: string,
+  meta: ClientMeta,
+): Promise<{ debugToken?: string }> {
   const user = await User.findOne({ email: email.toLowerCase(), status: 'active', deletedAt: null });
   if (!user) return {};
   const token = randomToken(32);
-  await PasswordReset.create({ userId: user._id, tokenHash: sha256(token), expiresAt: new Date(Date.now() + 60 * 60_000) });
+  await PasswordReset.create({
+    userId: user._id,
+    tokenHash: sha256(token),
+    expiresAt: new Date(Date.now() + 60 * 60_000),
+  });
   await log('password_reset_requested', { userId: user._id, email, ...meta });
   const link = `${env().APP_URL}/reset-password?token=${token}`;
   await notify({
@@ -141,14 +184,21 @@ export async function requestPasswordReset(email: string, meta: ClientMeta): Pro
     type: 'auth.password_reset',
     bodyAr: 'تم طلب إعادة تعيين كلمة المرور لحسابك. إن لم تكن أنت، تجاهل هذه الرسالة.',
     link,
-    email: { subject: 'إعادة تعيين كلمة المرور', text: `لإعادة تعيين كلمة المرور افتح الرابط التالي خلال ساعة:\n${link}` },
+    email: {
+      subject: 'إعادة تعيين كلمة المرور',
+      text: `لإعادة تعيين كلمة المرور افتح الرابط التالي خلال ساعة:\n${link}`,
+    },
     inApp: false,
   });
   return isProd() ? {} : { debugToken: token };
 }
 
 export async function resetPassword(token: string, newPassword: string, meta: ClientMeta): Promise<void> {
-  const pr = await PasswordReset.findOne({ tokenHash: sha256(token), usedAt: null, expiresAt: { $gt: new Date() } });
+  const pr = await PasswordReset.findOne({
+    tokenHash: sha256(token),
+    usedAt: null,
+    expiresAt: { $gt: new Date() },
+  });
   if (!pr) throw badRequest('رابط إعادة التعيين غير صالح أو منتهي');
   const user = await User.findById(pr.userId);
   if (!user || user.status !== 'active') throw badRequest('الحساب غير متاح');
@@ -173,7 +223,10 @@ export async function listSessions(userId: string) {
 }
 
 export async function toCurrentUser(user: UserDoc): Promise<CurrentUser> {
-  const roles = user.roles.map((r) => ({ role: r.role, departmentId: r.departmentId ? String(r.departmentId) : undefined }));
+  const roles = user.roles.map((r) => ({
+    role: r.role,
+    departmentId: r.departmentId ? String(r.departmentId) : undefined,
+  }));
   return {
     id: String(user._id),
     email: user.email,

@@ -27,7 +27,11 @@ export async function notify(args: NotifyArgs): Promise<void> {
   if (!ids.length) return;
   const titleAr = args.titleAr ?? NOTIFICATION_TITLES_AR[args.type];
   const emailEnabled = args.email ? await getSetting('notifications.emailEnabled') : false;
-  const users = emailEnabled ? await User.find({ _id: { $in: ids }, status: 'active' }).select('email').lean() : [];
+  const users = emailEnabled
+    ? await User.find({ _id: { $in: ids }, status: 'active' })
+        .select('email')
+        .lean()
+    : [];
   const emailByUser = new Map(users.map((u) => [String(u._id), u.email]));
 
   for (const userId of ids) {
@@ -36,7 +40,12 @@ export async function notify(args: NotifyArgs): Promise<void> {
       const to = emailByUser.get(userId);
       if (to) {
         try {
-          await email().send({ to, subject: args.email.subject, text: args.email.text, html: args.email.html });
+          await email().send({
+            to,
+            subject: args.email.subject,
+            text: args.email.text,
+            html: args.email.html,
+          });
           emailStatus = 'sent';
         } catch (err) {
           emailStatus = 'failed';
@@ -45,7 +54,15 @@ export async function notify(args: NotifyArgs): Promise<void> {
       }
     }
     if (args.inApp !== false) {
-      await Notification.create({ userId, type: args.type, titleAr, bodyAr: args.bodyAr, link: args.link, data: args.data, emailStatus });
+      await Notification.create({
+        userId,
+        type: args.type,
+        titleAr,
+        bodyAr: args.bodyAr,
+        link: args.link,
+        data: args.data,
+        emailStatus,
+      });
     }
   }
 }
