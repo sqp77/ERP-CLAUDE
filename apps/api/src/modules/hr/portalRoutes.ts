@@ -231,10 +231,12 @@ portalRouter.post(
   validate(secondmentReportSchema),
   asyncHandler(async (req: AuthedRequest, res) => {
     const e = await myEmployee(req);
+    // Allowed during and after the secondment [EP §5.3: the report follows the mission]; a new upload replaces the old one.
     if (!e.secondment?.destination) throw badRequest('لا يوجد انتداب مسجّل في ملفك');
     const body = req.body as z.infer<typeof secondmentReportSchema>;
     e.secondment.reportAttachmentId = body.attachmentId as never;
     e.secondment.reportedAt = new Date();
+    e.secondment.reportNotes = body.notes;
     await e.save();
     const { EmployeeEvent } = await import('./model');
     await EmployeeEvent.create({

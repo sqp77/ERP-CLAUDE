@@ -234,7 +234,7 @@ export function ProfilePage() {
               label={t('common.status')}
               value={<Badge tone={statusTone[e.status]}>{t(`hr.status.${e.status}`)}</Badge>}
             />
-            {e.status === 'seconded' && e.secondment && (
+            {!!e.secondment?.destination && (
               <>
                 <Row label={t('hr.secondmentDestination')} value={e.secondment.destination} />
                 <Row label={t('calendar.start')} value={formatDate(e.secondment.startDate)} />

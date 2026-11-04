@@ -60,6 +60,12 @@ export function AppShell() {
           user?.roles.some((r) => r.role === 'department_manager' || r.role === 'executive')),
     },
     {
+      to: '/hr/secondments',
+      label: t('nav.secondments'),
+      icon: Briefcase,
+      show: can('hr.employees', 'create'),
+    },
+    {
       to: '/hr/profile-changes',
       label: t('nav.profileChanges'),
       icon: FileCheck2,

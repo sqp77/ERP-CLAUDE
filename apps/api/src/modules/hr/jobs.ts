@@ -2,7 +2,7 @@ import { getSetting } from '../../core/settings/service';
 import { notify } from '../../core/notifications/service';
 import { User } from '../../core/auth/model';
 import { revokeAllSessions } from '../../core/auth/session';
-import { riyadhDate } from '../../core/dates/businessDays';
+import { addBusinessDays, loadHolidaySet, riyadhDate } from '../../core/dates/businessDays';
 import { Contract, Employee } from './model';
 import { hrUserIds } from './service';
 
@@ -163,6 +163,46 @@ export async function runBirthdayGreetings(now = new Date()): Promise<number> {
     });
     await Employee.updateOne({ _id: e._id }, { $set: { lastBirthdayYear: Number(year) } });
     sent++;
+  }
+  return sent;
+}
+
+/**
+ * Secondment report reminders [EP §5.3, EP §15.14]: the first on the day after the end date, the second
+ * N business days after the first (both settings). Stops once the report is uploaded.
+ */
+export async function runSecondmentReportReminders(now = new Date()): Promise<number> {
+  const firstDays = await getSetting('hr.secondmentReportFirstReminderDays');
+  const secondBiz = await getSetting('hr.secondmentReportSecondReminderBusinessDays');
+  const holidays = await loadHolidaySet();
+  const employees = await Employee.find({
+    deletedAt: null,
+    'secondment.endDate': { $ne: null, $lt: now },
+    'secondment.reportedAt': null,
+    userId: { $ne: null },
+  });
+  let sent = 0;
+  for (const e of employees) {
+    const sec = e.secondment!;
+    const firstDue = new Date(sec.endDate!.getTime() + firstDays * DAY);
+    const secondDue = addBusinessDays(firstDue, secondBiz, holidays);
+    const stages: [number, Date][] = [
+      [1, firstDue],
+      [2, secondDue],
+    ];
+    for (const [stage, due] of stages) {
+      if (now >= due && !sec.remindersSent.includes(stage)) {
+        await notify({
+          userIds: [String(e.userId)],
+          type: 'secondment.report_reminder',
+          bodyAr: `يرجى رفع تقرير الانتداب إلى ${sec.destination} الذي انتهى في ${riyadhDate(sec.endDate!)}`,
+          link: '/me/profile',
+        });
+        sec.remindersSent.push(stage);
+        sent++;
+      }
+    }
+    if (e.isModified()) await e.save();
   }
   return sent;
 }

@@ -25,6 +25,7 @@ import { EmployeesPage } from './pages/hr/EmployeesPage';
 import { EmployeePage } from './pages/hr/EmployeePage';
 import { ProfilePage } from './pages/me/ProfilePage';
 import { ProfileChangesPage } from './pages/hr/ProfileChangesPage';
+import { SecondmentsPage } from './pages/hr/SecondmentsPage';
 
 export const router = createBrowserRouter([
   {
@@ -88,6 +89,7 @@ export const router = createBrowserRouter([
             children: [
               { path: '/hr/employees', element: <EmployeesPage /> },
               { path: '/hr/employees/:id', element: <EmployeePage /> },
+              { path: '/hr/secondments', element: <SecondmentsPage /> },
             ],
           },
           {

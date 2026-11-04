@@ -91,14 +91,14 @@ Starting defaults. **Every route is workflow configuration that HR can change** 
 8. **Custody** is a simple HR register for now (item, asset tag, serial, issued/returned, condition); IT assets link to it in the IT module. [HR §3.3]
 9. **Employee documents** use the platform documents store with owner type `employee`; every document is marked sensitive and versions are kept. [HR §3.9]
 
-## 12. Implementation notes from phase 1 slice 2 (portal profile) — confirm or correct
+## 12. Implementation notes from phase 1 slice 2 (portal profile) — approved 2026-11-04 with one change
 - **Profile = the HR record.** The portal reads `/hr/me`, which is the employee file plus display labels; nothing is copied. [EP §20.1]
 - **Self-service edits (DECISIONS §10):** mobile, extension and national address save directly, are logged in the employee history and audit, and HR gets an in-app notification. Work email, names, identity and job data are HR-only; the portal shows a hint pointing to "رفع طلب ← تحديث بيانات" (slice 3). [EP §5.4, §5.5]
 - **Photo:** the employee uploads an image; only image types are accepted and the file must be the employee's own upload. [EP §5.1]
 - **Bank account change:** a request (`PCR-YYYY-#####`) with a mandatory proof document; the IBAN is stored encrypted in the request; one pending request at a time; the employee can cancel it. **Finance** (finance_staff / finance_manager) approves or rejects (reason mandatory); HR sees the queue read-only; the requester can never decide their own request. Approval writes the new bank data to the file and is audited as sensitive; the employee is notified either way. [EP §8.1, FIN §12]
 - **Financial details are read-only** in the portal; advances show a placeholder until HR requests (slice 3) add them. [EP §8]
 - **Contract card** shows the current contract (latest active/renewing), probation state and addenda with downloads. [EP §6]
-- **Secondment report:** available only while the status is انتداب; the upload is recorded in the history and the direct manager is notified. [EP §5.3, §15.14]
+- **Secondment report (changed in review):** the report can be uploaded during **and after** the secondment (a new upload replaces the old one); the upload is recorded in the history and the direct manager is notified. Reminders to the employee: on the day after the end date (`hr.secondmentReportFirstReminderDays`, default 1) and again N business days later (`hr.secondmentReportSecondReminderBusinessDays`, default 3), until the report exists. HR has a list of secondments showing which still have no report; previous secondments are kept in the file's history. [EP §5.3, §15.14]
 - **Birthday:** a daily job sends the greeting once per year on the Riyadh date; the dashboard shows a banner on the day. [EP §5.1, §15.12]
 - **Dashboard:** the nine EP §4 sections are cards; requests/tickets, reports and news are marked "قريبًا" until their slices.
 

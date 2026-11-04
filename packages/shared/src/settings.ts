@@ -107,6 +107,20 @@ export const SETTING_DEFINITIONS = {
     schema: z.array(z.number().int().min(0)),
     default: [30, 7], // slice 1 review: time for HR to decide on an extension
   }),
+  'hr.secondmentReportFirstReminderDays': def({
+    key: 'hr.secondmentReportFirstReminderDays',
+    labelAr: 'تذكير برفع تقرير الانتداب بعد انتهائه بـ (أيام)',
+    group: 'hr',
+    schema: z.number().int().min(0),
+    default: 1, // slice 2 review: the day after the end date
+  }),
+  'hr.secondmentReportSecondReminderBusinessDays': def({
+    key: 'hr.secondmentReportSecondReminderBusinessDays',
+    labelAr: 'التذكير الثاني بعد الأول بـ (أيام عمل)',
+    group: 'hr',
+    schema: z.number().int().min(1),
+    default: 3, // slice 2 review
+  }),
   'hr.requestStageSlaBusinessDays': def({
     key: 'hr.requestStageSlaBusinessDays',
     labelAr: 'مهلة كل مرحلة في طلبات الموظفين (أيام عمل)',

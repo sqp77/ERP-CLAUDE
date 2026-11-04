@@ -11,6 +11,7 @@ import {
   runContractAlerts,
   runIdentityAlerts,
   runProbationAlerts,
+  runSecondmentReportReminders,
 } from './jobs';
 
 let registered = false;
@@ -47,6 +48,7 @@ export function registerHrModule(): void {
   registerJob('hr.identity.alerts', (now) => runIdentityAlerts(now));
   registerJob('hr.accounts.deactivate', (now) => runAccountDeactivation(now));
   registerJob('hr.birthdays', (now) => runBirthdayGreetings(now));
+  registerJob('hr.secondments.reminders', (now) => runSecondmentReportReminders(now));
 
   // Field-picker export [HR §4]; sensitive columns need field-level permission.
   registerExportResource({

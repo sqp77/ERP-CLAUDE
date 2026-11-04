@@ -201,6 +201,37 @@ hrRouter.get(
   }),
 );
 
+// ---------- secondments [EP §5.3]: HR sees which ones still have no report ----------
+hrRouter.get(
+  '/secondments',
+  requireAuth(),
+  authorize('hr.employees', 'view'),
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const filter: Record<string, unknown> = {
+      deletedAt: null,
+      'secondment.destination': { $ne: null },
+      ...(await hr.employeeScopeFilter(req.authz!, req.auth.user)),
+    };
+    if (req.query.missingReport === 'true') filter['secondment.reportedAt'] = null;
+    const docs = await Employee.find(filter)
+      .select('employeeNumber fullNameAr departmentId status secondment secondmentHistory')
+      .sort({ 'secondment.endDate': -1 })
+      .lean();
+    res.json({
+      items: docs.map((d) => ({
+        employeeId: d._id,
+        employeeNumber: d.employeeNumber,
+        fullNameAr: d.fullNameAr,
+        departmentId: d.departmentId,
+        status: d.status,
+        ...d.secondment,
+        remindersSent: d.secondment?.remindersSent ?? [],
+        previous: d.secondmentHistory?.length ?? 0,
+      })),
+    });
+  }),
+);
+
 // ---------- custody [HR §3.3] ----------
 hrRouter.get(
   '/employees/:id/custody',

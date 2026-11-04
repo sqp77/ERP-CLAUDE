@@ -491,8 +491,11 @@ export async function changeStatus(
   if (input.status === 'seconded' && !input.secondment) throw badRequest('بيانات الانتداب مطلوبة');
   const from = { status: employee.status };
   employee.status = input.status;
-  if (input.status === 'seconded' && input.secondment)
-    employee.secondment = { ...input.secondment } as typeof employee.secondment;
+  if (input.status === 'seconded' && input.secondment) {
+    if (employee.secondment?.destination)
+      employee.secondmentHistory.push({ ...employee.secondment } as never);
+    employee.secondment = { ...input.secondment, remindersSent: [] } as typeof employee.secondment;
+  }
   if (input.status === 'terminated' || input.status === 'resigned') {
     // The effective date is the last working day; the daily job disables the portal account at the end of
     // that day (DECISIONS §11.3). Until then the employee keeps normal access.

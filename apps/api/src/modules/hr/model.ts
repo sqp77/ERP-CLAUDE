@@ -56,6 +56,23 @@ const employeeSchema = new Schema(
       endDate: Date,
       reportAttachmentId: Schema.Types.ObjectId,
       reportedAt: Date,
+      reportNotes: String,
+      /** Reminder stages already sent (1 = day after end, 2 = N business days later). */
+      remindersSent: { type: [Number], default: [] },
+    },
+    /** Previous secondments, newest last [EP §5.3 "سجل الانتدابات السابقة"]. */
+    secondmentHistory: {
+      type: [
+        {
+          destination: String,
+          startDate: Date,
+          endDate: Date,
+          reportAttachmentId: Schema.Types.ObjectId,
+          reportedAt: Date,
+          reportNotes: String,
+        },
+      ],
+      default: [],
     },
     // Financial [EP §8] — HR owns, Finance reads (DECISIONS §7)
     basicSalaryHalalas: { type: Number },

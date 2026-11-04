@@ -224,3 +224,92 @@ describe('portal profile [EP §5–8, DECISIONS §10]', () => {
     expect(PASSWORD).toBeTruthy();
   });
 });
+
+describe('secondment report after the mission [EP §5.3, EP §15.14, DECISIONS §12 review]', () => {
+  it('allows the upload after the end date, reminds on day+1 and again 3 business days later, and HR sees missing reports', async () => {
+    const { setSetting } = await import('../../core/settings/service');
+    const { SYSTEM_ACTOR } = await import('../../core/http/context');
+    const { runSecondmentReportReminders } = await import('./jobs');
+    await setSetting('auth.mfaRequiredRoles', [], SYSTEM_ACTOR);
+    const ops = await makeDepartment('ops2', 'التشغيل');
+    await makeUser('hr2@eayni.local', [{ role: 'employee' }, { role: 'hr_officer' }]);
+    const hr = await loginAs('hr2@eayni.local');
+    const created = await request(app())
+      .post('/api/v1/hr/employees')
+      .set(auth(hr))
+      .send({
+        firstNameAr: 'دانة',
+        lastNameAr: 'الراشد',
+        gender: 'female',
+        nationality: 'سعودي',
+        identity: { type: 'national_id', number: '1098765499' },
+        workEmail: 'dana@eayni.local',
+        departmentId: String(ops._id),
+        hireDate: '2025-01-10',
+      });
+    const id = created.body._id as string;
+    const me = (
+      await request(app())
+        .post('/api/v1/auth/login')
+        .send({ email: 'dana@eayni.local', password: created.body.temporaryPassword })
+    ).body.token as string;
+    // Secondment Sunday 2026-11-01 → Wednesday 2026-11-04, then back to work.
+    await request(app())
+      .post(`/api/v1/hr/employees/${id}/status`)
+      .set(auth(hr))
+      .send({
+        status: 'seconded',
+        effectiveDate: '2026-11-01',
+        reason: 'انتداب',
+        secondment: {
+          destination: 'فرع الرياض',
+          startDate: '2026-11-01T05:00:00Z',
+          endDate: '2026-11-04T14:00:00Z',
+        },
+      });
+    await request(app())
+      .post(`/api/v1/hr/employees/${id}/status`)
+      .set(auth(hr))
+      .send({ status: 'active', effectiveDate: '2026-11-05', reason: 'عودة' });
+    // Listed as missing for HR.
+    const missing = await request(app()).get('/api/v1/hr/secondments?missingReport=true').set(auth(hr));
+    expect(missing.body.items.map((i: { fullNameAr: string }) => i.fullNameAr)).toEqual(['دانة الراشد']);
+    // Reminders: none before day+1; first on Thu 2026-11-05 14:00; second 3 business days later → Tue 2026-11-10 (Fri/Sat skipped).
+    expect(await runSecondmentReportReminders(new Date('2026-11-05T10:00:00Z'))).toBe(0);
+    expect(await runSecondmentReportReminders(new Date('2026-11-05T15:00:00Z'))).toBe(1);
+    expect(await runSecondmentReportReminders(new Date('2026-11-09T15:00:00Z'))).toBe(0);
+    expect(await runSecondmentReportReminders(new Date('2026-11-10T15:00:00Z'))).toBe(1);
+    expect(await runSecondmentReportReminders(new Date('2026-11-20T15:00:00Z'))).toBe(0);
+    expect(await Notification.countDocuments({ type: 'secondment.report_reminder' })).toBe(2);
+    // Upload after the mission ended (status is back to active) is allowed and clears the "missing" list.
+    const pdf = await uploadProof(me);
+    expect(
+      (
+        await request(app())
+          .post('/api/v1/hr/me/secondment-report')
+          .set(auth(me))
+          .send({ attachmentId: pdf, notes: 'تم' })
+      ).status,
+    ).toBe(200);
+    expect(
+      (await request(app()).get('/api/v1/hr/secondments?missingReport=true').set(auth(hr))).body.items,
+    ).toHaveLength(0);
+    expect(
+      (await request(app()).get('/api/v1/hr/secondments').set(auth(hr))).body.items[0].reportedAt,
+    ).toBeTruthy();
+    expect(await runSecondmentReportReminders(new Date('2026-12-01T15:00:00Z'))).toBe(0);
+    // A second secondment keeps the first in history.
+    await request(app())
+      .post(`/api/v1/hr/employees/${id}/status`)
+      .set(auth(hr))
+      .send({
+        status: 'seconded',
+        effectiveDate: '2026-12-01',
+        reason: 'انتداب',
+        secondment: { destination: 'فرع جدة', startDate: '2026-12-01', endDate: '2026-12-10' },
+      });
+    const profile = await request(app()).get('/api/v1/hr/me').set(auth(me));
+    expect(profile.body.secondmentHistory).toHaveLength(1);
+    expect(profile.body.secondment.destination).toBe('فرع جدة');
+  });
+});
