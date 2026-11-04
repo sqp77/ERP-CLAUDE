@@ -2,6 +2,7 @@ import { createReadStream, createWriteStream, existsSync, mkdirSync, statSync, u
 import { dirname, join, resolve } from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import type { Readable } from 'node:stream';
+import type { S3Client } from '@aws-sdk/client-s3';
 import { env } from '../../config';
 import { hmac } from '../auth/crypto';
 
@@ -70,11 +71,11 @@ export class LocalStorageAdapter implements StorageAdapter {
 }
 
 export class S3StorageAdapter implements StorageAdapter {
-  private client?: import('@aws-sdk/client-s3').S3Client;
+  private client?: S3Client;
   private async s3() {
     if (!this.client) {
-      const { S3Client } = await import('@aws-sdk/client-s3');
-      this.client = new S3Client({ region: env().AWS_REGION });
+      const mod = await import('@aws-sdk/client-s3');
+      this.client = new mod.S3Client({ region: env().AWS_REGION });
     }
     return this.client;
   }
