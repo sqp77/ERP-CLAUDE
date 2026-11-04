@@ -11,7 +11,9 @@ describe('export builder [HR §4]', () => {
     await makeUser('adm@eayni.local', [{ role: 'system_admin' }]);
     const t = await loginAs('adm@eayni.local');
     const res = await request(testApp()).get('/api/v1/export/resources').set(auth(t));
-    expect(res.body.items[0].resource).toBe('users');
+    expect(res.body.items.map((r: { resource: string }) => r.resource)).toEqual(
+      expect.arrayContaining(['users', 'employees']),
+    );
     const preview = await request(testApp())
       .post('/api/v1/export')
       .set(auth(t))

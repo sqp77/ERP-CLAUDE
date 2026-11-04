@@ -42,7 +42,12 @@ async function serializeFor(req: AuthedRequest, e: InstanceType<typeof Employee>
   const hidden = await hr.viewerRestrictions(req.auth.user);
   const out = hr.serializeEmployee(e, { self, hidden });
   if (!self && hr.revealsSensitive(out)) {
-    await recordAudit(actorFrom(req), { action: 'view', resource: 'hr.employees', resourceId: String(e._id), sensitive: true });
+    await recordAudit(actorFrom(req), {
+      action: 'view',
+      resource: 'hr.employees',
+      resourceId: String(e._id),
+      sensitive: true,
+    });
   }
   return out;
 }
@@ -55,14 +60,29 @@ hrRouter.get(
   validate(listEmployeesQuerySchema, 'query'),
   asyncHandler(async (req: AuthedRequest, res) => {
     const q = req.query as unknown as z.infer<typeof listEmployeesQuerySchema>;
-    const filter: Record<string, unknown> = { deletedAt: null, ...(await hr.employeeScopeFilter(req.authz!, req.auth.user)) };
+    const filter: Record<string, unknown> = {
+      deletedAt: null,
+      ...(await hr.employeeScopeFilter(req.authz!, req.auth.user)),
+    };
     if (q.departmentId) filter.departmentId = q.departmentId;
     if (q.branchId) filter.branchId = q.branchId;
     if (q.status) filter.status = q.status;
     if (q.managerId) filter.directManagerId = q.managerId;
-    if (q.q) filter.$and = [{ $or: [{ fullNameAr: new RegExp(q.q, 'i') }, { employeeNumber: new RegExp(q.q, 'i') }, { workEmail: new RegExp(q.q, 'i') }] }];
+    if (q.q)
+      filter.$and = [
+        {
+          $or: [
+            { fullNameAr: new RegExp(q.q, 'i') },
+            { employeeNumber: new RegExp(q.q, 'i') },
+            { workEmail: new RegExp(q.q, 'i') },
+          ],
+        },
+      ];
     const [docs, total] = await Promise.all([
-      Employee.find(filter).sort({ fullNameAr: 1 }).skip((q.page - 1) * q.limit).limit(q.limit),
+      Employee.find(filter)
+        .sort({ fullNameAr: 1 })
+        .skip((q.page - 1) * q.limit)
+        .limit(q.limit),
       Employee.countDocuments(filter),
     ]);
     // Directory rows are never sensitive: list view shows public fields only.
@@ -92,7 +112,10 @@ hrRouter.post(
   authorize('hr.employees', 'create'),
   validate(createEmployeeSchema),
   asyncHandler(async (req: AuthedRequest, res) => {
-    const { employee, temporaryPassword } = await hr.createEmployee(req.body as CreateEmployeeInput, actorFrom(req));
+    const { employee, temporaryPassword } = await hr.createEmployee(
+      req.body as CreateEmployeeInput,
+      actorFrom(req),
+    );
     res.status(201).json({ ...(await serializeFor(req, employee)), temporaryPassword });
   }),
 );
@@ -130,7 +153,15 @@ hrRouter.patch(
   }),
 );
 
-const action = (path: string, schema: z.ZodTypeAny, fn: (id: string, body: never, actor: ReturnType<typeof actorFrom>) => Promise<InstanceType<typeof Employee>>) =>
+const action = (
+  path: string,
+  schema: z.ZodTypeAny,
+  fn: (
+    id: string,
+    body: never,
+    actor: ReturnType<typeof actorFrom>,
+  ) => Promise<InstanceType<typeof Employee>>,
+) =>
   hrRouter.post(
     `/employees/:id/${path}`,
     requireAuth(),
@@ -163,7 +194,9 @@ hrRouter.get(
   authorize('hr.employees', 'view'),
   asyncHandler(async (req: AuthedRequest, res) => {
     await visibleEmployee(req, req.params.id);
-    const items = await Employee.find({ directManagerId: req.params.id, deletedAt: null }).select('employeeNumber fullNameAr positionId departmentId status userId').lean();
+    const items = await Employee.find({ directManagerId: req.params.id, deletedAt: null })
+      .select('employeeNumber fullNameAr positionId departmentId status userId')
+      .lean();
     res.json({ items });
   }),
 );
@@ -174,7 +207,10 @@ hrRouter.get(
   requireAuth(),
   authorize('hr.custody', 'view'),
   asyncHandler(async (req: AuthedRequest, res) => {
-    if (!(await hr.canAccessEmployee({ ...req.authz!, resource: 'hr.employees' }, req.auth.user, req.params.id))) throw notFound();
+    if (
+      !(await hr.canAccessEmployee({ ...req.authz!, resource: 'hr.employees' }, req.auth.user, req.params.id))
+    )
+      throw notFound();
     res.json({ items: await Custody.find({ employeeId: req.params.id }).sort({ issuedAt: -1 }).lean() });
   }),
 );
@@ -187,7 +223,12 @@ hrRouter.post(
   asyncHandler(async (req: AuthedRequest, res) => {
     await hr.getEmployeeOrThrow(req.params.id);
     const c = await Custody.create({ ...req.body, employeeId: req.params.id, issuedBy: req.auth.user._id });
-    await recordAudit(actorFrom(req), { action: 'create', resource: 'hr.custody', resourceId: String(c._id), after: c });
+    await recordAudit(actorFrom(req), {
+      action: 'create',
+      resource: 'hr.custody',
+      resourceId: String(c._id),
+      after: c,
+    });
     res.status(201).json(c);
   }),
 );
@@ -203,7 +244,13 @@ hrRouter.post(
     const before = c.toObject();
     Object.assign(c, req.body);
     await c.save();
-    await recordAudit(actorFrom(req), { action: 'update', resource: 'hr.custody', resourceId: String(c._id), before, after: c });
+    await recordAudit(actorFrom(req), {
+      action: 'update',
+      resource: 'hr.custody',
+      resourceId: String(c._id),
+      before,
+      after: c,
+    });
     res.json(c);
   }),
 );
@@ -214,7 +261,10 @@ hrRouter.get(
   requireAuth(),
   authorize('hr.contracts', 'view'),
   asyncHandler(async (req: AuthedRequest, res) => {
-    if (!(await hr.canAccessEmployee({ ...req.authz!, resource: 'hr.employees' }, req.auth.user, req.params.id))) throw notFound();
+    if (
+      !(await hr.canAccessEmployee({ ...req.authz!, resource: 'hr.employees' }, req.auth.user, req.params.id))
+    )
+      throw notFound();
     res.json({ items: await Contract.find({ employeeId: req.params.id }).sort({ startDate: -1 }).lean() });
   }),
 );
@@ -227,19 +277,40 @@ hrRouter.post(
   asyncHandler(async (req: AuthedRequest, res) => {
     await hr.getEmployeeOrThrow(req.params.id);
     const body = req.body as z.infer<typeof contractSchema>;
-    if (body.endDate && body.endDate < body.startDate) throw forbidden('تاريخ النهاية قبل البداية', 'bad_request');
-    const previous = await Contract.findOne({ employeeId: req.params.id, status: { $in: ['active', 'renewing'] } }).sort({ version: -1 });
-    const c = await Contract.create({ ...body, employeeId: req.params.id, number: await nextNumber('contract'), version: (previous?.version ?? 0) + 1, previousId: previous?._id, createdBy: req.auth.user._id });
+    if (body.endDate && body.endDate < body.startDate)
+      throw forbidden('تاريخ النهاية قبل البداية', 'bad_request');
+    const previous = await Contract.findOne({
+      employeeId: req.params.id,
+      status: { $in: ['active', 'renewing'] },
+    }).sort({ version: -1 });
+    const c = await Contract.create({
+      ...body,
+      employeeId: req.params.id,
+      number: await nextNumber('contract'),
+      version: (previous?.version ?? 0) + 1,
+      previousId: previous?._id,
+      createdBy: req.auth.user._id,
+    });
     if (previous) {
       previous.status = 'expired';
       previous.statusReason = 'renewed';
       await previous.save();
     }
-    await recordAudit(actorFrom(req), { action: 'create', resource: 'hr.contracts', resourceId: String(c._id), after: c });
+    await recordAudit(actorFrom(req), {
+      action: 'create',
+      resource: 'hr.contracts',
+      resourceId: String(c._id),
+      after: c,
+    });
     const emp = await Employee.findById(req.params.id).select('userId').lean();
     if (emp?.userId) {
       const { notify } = await import('../../core/notifications/service');
-      await notify({ userIds: [String(emp.userId)], type: 'generic', titleAr: previous ? 'تم تجديد عقدك' : 'تمت إضافة عقد عمل إلى ملفك', link: '/me/profile' });
+      await notify({
+        userIds: [String(emp.userId)],
+        type: 'generic',
+        titleAr: previous ? 'تم تجديد عقدك' : 'تمت إضافة عقد عمل إلى ملفك',
+        link: '/me/profile',
+      });
     }
     res.status(201).json(c);
   }),
@@ -253,9 +324,18 @@ hrRouter.post(
   asyncHandler(async (req: AuthedRequest, res) => {
     const c = await Contract.findOne({ _id: req.params.cid, employeeId: req.params.id });
     if (!c) throw notFound();
-    c.addenda.push({ ...(req.body as z.infer<typeof contractAddendumSchema>), addedAt: new Date(), addedBy: req.auth.user._id } as never);
+    c.addenda.push({
+      ...(req.body as z.infer<typeof contractAddendumSchema>),
+      addedAt: new Date(),
+      addedBy: req.auth.user._id,
+    } as never);
     await c.save();
-    await recordAudit(actorFrom(req), { action: 'update', resource: 'hr.contracts', resourceId: String(c._id), meta: { addendum: (req.body as { titleAr: string }).titleAr } });
+    await recordAudit(actorFrom(req), {
+      action: 'update',
+      resource: 'hr.contracts',
+      resourceId: String(c._id),
+      meta: { addendum: (req.body as { titleAr: string }).titleAr },
+    });
     res.json(c);
   }),
 );
@@ -273,7 +353,13 @@ hrRouter.patch(
     c.status = body.status;
     c.statusReason = body.reason;
     await c.save();
-    await recordAudit(actorFrom(req), { action: 'update', resource: 'hr.contracts', resourceId: String(c._id), before: { status: before.status }, after: { status: c.status } });
+    await recordAudit(actorFrom(req), {
+      action: 'update',
+      resource: 'hr.contracts',
+      resourceId: String(c._id),
+      before: { status: before.status },
+      after: { status: c.status },
+    });
     res.json(c);
   }),
 );

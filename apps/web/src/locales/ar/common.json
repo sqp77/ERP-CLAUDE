@@ -1,5 +1,9 @@
 {
-  "app": { "name": "عيني ERP", "org": "جمعية عيني لإعادة التدوير التعاونية", "tagline": "بوابة الموظفين" },
+  "app": {
+    "name": "عيني ERP",
+    "org": "جمعية عيني لإعادة التدوير التعاونية",
+    "tagline": "بوابة الموظفين"
+  },
   "actions": {
     "login": "تسجيل الدخول",
     "logout": "تسجيل الخروج",
@@ -32,7 +36,11 @@
     "holidays": "العطل الرسمية",
     "settings": "الإعدادات",
     "audit": "سجل التدقيق",
-    "workflows": "مسارات العمل"
+    "workflows": "مسارات العمل",
+    "hr": "الموارد البشرية",
+    "employees": "دليل الموظفين",
+    "units": "الوحدات التنظيمية",
+    "positions": "المسميات الوظيفية"
   },
   "auth": {
     "email": "البريد الإلكتروني الوظيفي",
@@ -115,7 +123,12 @@
       "late": "متأخرة",
       "cancelled": "ملغاة"
     },
-    "priorities": { "low": "منخفضة", "medium": "متوسطة", "high": "عالية", "urgent": "عاجلة" },
+    "priorities": {
+      "low": "منخفضة",
+      "medium": "متوسطة",
+      "high": "عالية",
+      "urgent": "عاجلة"
+    },
     "mine": "المسندة إليّ",
     "startWork": "بدء التنفيذ",
     "markDone": "إكمال"
@@ -182,7 +195,11 @@
       "branch": "الفرع",
       "lat": "خط العرض",
       "lng": "خط الطول",
-      "geofence": "نطاق الجيوفنس (متر)"
+      "geofence": "نطاق الجيوفنس (متر)",
+      "units": "الوحدات التنظيمية",
+      "newUnit": "وحدة جديدة",
+      "positions": "المسميات الوظيفية",
+      "newPosition": "مسمى وظيفي جديد"
     },
     "holidays": {
       "title": "العطل الرسمية",
@@ -214,7 +231,12 @@
       "title": "الأدوار والصلاحيات",
       "grants": "الصلاحيات",
       "scope": "النطاق",
-      "scopes": { "own": "الخاص به", "team": "فريقه", "department": "قسمه", "all": "الكل" },
+      "scopes": {
+        "own": "الخاص به",
+        "team": "فريقه",
+        "department": "قسمه",
+        "all": "الكل"
+      },
       "system": "دور نظامي"
     },
     "workflows": {
@@ -235,5 +257,176 @@
     "forbidden": "ليست لديك صلاحية لهذا الإجراء",
     "validation_error": "بيانات غير صالحة",
     "network": "تعذر الاتصال بالخادم"
+  },
+  "files": {
+    "choose": "اختر ملفًا…",
+    "attachment": "المرفق",
+    "download": "تنزيل",
+    "required": "المرفق مطلوب"
+  },
+  "hr": {
+    "directory": "دليل الموظفين",
+    "newEmployee": "موظف جديد",
+    "searchHint": "بحث بالاسم أو الرقم الوظيفي أو البريد",
+    "count": "إجمالي: {{count}}",
+    "employeeNumber": "الرقم الوظيفي",
+    "firstName": "الاسم الأول",
+    "lastName": "الاسم الأخير",
+    "gender": "الجنس",
+    "nationality": "الجنسية",
+    "religion": "الديانة",
+    "birthDate": "تاريخ الميلاد",
+    "identityType": "نوع الهوية",
+    "identityNumber": "رقم الهوية",
+    "identityExpiry": "انتهاء الهوية",
+    "mobile": "رقم الجوال",
+    "extension": "التحويلة الداخلية",
+    "address": "العنوان الوطني",
+    "addressFields": {
+      "buildingNo": "رقم المبنى",
+      "street": "الشارع",
+      "district": "الحي",
+      "city": "المدينة",
+      "postalCode": "الرمز البريدي"
+    },
+    "position": "المسمى الوظيفي",
+    "jobDescription": "الوصف الوظيفي",
+    "grade": "الدرجة",
+    "unit": "الوحدة التنظيمية",
+    "directManager": "المدير المباشر",
+    "employmentType": "نوع الدوام",
+    "hireDate": "تاريخ المباشرة",
+    "endDate": "تاريخ انتهاء الخدمة",
+    "basicSalary": "الراتب الأساسي (ر.س)",
+    "allowances": "البدلات",
+    "bank": "البنك",
+    "medicalInsurance": "تأمين طبي",
+    "restricted": "غير متاح لصلاحيتك",
+    "createAccount": "إنشاء حساب في البوابة الآن",
+    "genders": {
+      "male": "ذكر",
+      "female": "أنثى"
+    },
+    "identityTypes": {
+      "national_id": "هوية وطنية",
+      "iqama": "إقامة",
+      "passport": "جواز سفر",
+      "other": "أخرى"
+    },
+    "employmentTypes": {
+      "full_time": "دوام كامل",
+      "part_time": "دوام جزئي",
+      "contractor": "متعاقد",
+      "intern": "متدرب",
+      "other": "أخرى"
+    },
+    "status": {
+      "active": "على رأس العمل",
+      "on_leave": "إجازة",
+      "field_work": "عمل ميداني",
+      "seconded": "انتداب",
+      "suspended": "موقوف",
+      "resigned": "مستقيل",
+      "terminated": "منتهي الخدمة"
+    },
+    "tabs": {
+      "data": "البيانات",
+      "job": "الوظيفة والسجل",
+      "contracts": "العقود",
+      "documents": "الوثائق",
+      "custody": "العهد"
+    },
+    "sections": {
+      "personal": "المعلومات الشخصية",
+      "identity": "تفاصيل الهوية",
+      "contact": "التواصل والعنوان",
+      "financial": "التفاصيل المالية",
+      "job": "المعلومات الوظيفية"
+    },
+    "actions": {
+      "transfer": "نقل",
+      "promote": "ترقية / تغيير وظيفي",
+      "manager": "تغيير المدير المباشر",
+      "status": "تغيير الحالة"
+    },
+    "history": "السجل التاريخي",
+    "reason": "السبب",
+    "effectiveDate": "تاريخ السريان",
+    "secondment": "الانتداب",
+    "secondmentDestination": "جهة الانتداب",
+    "endOfServiceWarning": "سيُعطَّل حساب الموظف في البوابة فورًا. إجراءات إنهاء الخدمة الكاملة (المخالصة، العهد، مقابلة الخروج) تأتي في مرحلة لاحقة.",
+    "events": {
+      "created": "إنشاء الملف",
+      "updated": "تحديث بيانات",
+      "transfer": "نقل",
+      "promotion": "ترقية / تغيير وظيفي",
+      "manager_change": "تغيير المدير المباشر",
+      "status_change": "تغيير الحالة",
+      "secondment_report": "تقرير انتداب"
+    },
+    "fields": {
+      "departmentId": "القسم",
+      "positionId": "المسمى",
+      "directManagerId": "المدير المباشر",
+      "status": "الحالة",
+      "grade": "الدرجة",
+      "basicSalaryHalalas": "الراتب",
+      "firstNameAr": "الاسم الأول",
+      "lastNameAr": "الاسم الأخير",
+      "identity": "الهوية",
+      "workEmail": "البريد",
+      "mobile": "الجوال",
+      "address": "العنوان",
+      "bank": "الحساب البنكي",
+      "nationality": "الجنسية",
+      "religion": "الديانة",
+      "birthDate": "تاريخ الميلاد",
+      "extension": "التحويلة",
+      "fullNameEn": "الاسم بالإنجليزية",
+      "allowances": "البدلات",
+      "medicalInsurance": "التأمين الطبي"
+    },
+    "newContract": "عقد جديد / تجديد",
+    "contractType": "نوع العقد",
+    "probationEnd": "نهاية فترة التجربة",
+    "durationMonths": "المدة (أشهر)",
+    "addenda": "ملاحق",
+    "addAddendum": "إضافة ملحق",
+    "addendumTitle": "عنوان الملحق",
+    "notes": "ملاحظات",
+    "contractTypes": {
+      "fixed_term": "محدد المدة",
+      "open_ended": "غير محدد المدة",
+      "seasonal": "موسمي",
+      "other": "أخرى"
+    },
+    "contractStatuses": {
+      "active": "ساري",
+      "expired": "منتهي",
+      "renewing": "قيد التجديد",
+      "terminated": "منتهٍ بإنهاء الخدمة"
+    },
+    "uploadDocument": "رفع وثيقة",
+    "documentType": "نوع الوثيقة",
+    "issueDate": "تاريخ الإصدار",
+    "expiryDate": "تاريخ الانتهاء",
+    "showOldVersions": "إظهار الإصدارات السابقة",
+    "documentTypes": {
+      "contract": "عقد العمل",
+      "identity": "الهوية أو الإقامة",
+      "qualification": "مؤهل علمي",
+      "professional_certificate": "شهادة مهنية",
+      "job_description": "الوصف الوظيفي",
+      "bank_proof": "إثبات الحساب البنكي",
+      "other": "مستند رسمي آخر"
+    },
+    "newCustody": "تسليم عهدة",
+    "custodyItem": "العهدة",
+    "assetTag": "رقم الأصل",
+    "serialNumber": "الرقم التسلسلي",
+    "issuedAt": "تاريخ التسليم",
+    "returnedAt": "تاريخ الاسترداد",
+    "inCustody": "بعهدة الموظف",
+    "returnItem": "استرداد"
   }
 }

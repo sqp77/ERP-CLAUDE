@@ -7,7 +7,12 @@ import {
   type UpdateEmployeeInput,
 } from '@eayni/shared';
 import type { z } from 'zod';
-import type { changeManagerSchema, changeStatusSchema, promoteEmployeeSchema, transferEmployeeSchema } from '@eayni/shared';
+import type {
+  changeManagerSchema,
+  changeStatusSchema,
+  promoteEmployeeSchema,
+  transferEmployeeSchema,
+} from '@eayni/shared';
 import { badRequest, conflict, notFound } from '../../core/http/errors';
 import type { Actor, Authz } from '../../core/http/context';
 import { recordAudit } from '../../core/audit/service';
@@ -24,7 +29,9 @@ export const HR_ROLE_CODES = ['hr_officer', 'hr_manager'];
 
 /** User ids of HR staff — recipients of HR alerts. */
 export async function hrUserIds(): Promise<string[]> {
-  const users = await User.find({ 'roles.role': { $in: HR_ROLE_CODES }, status: 'active' }).select('_id').lean();
+  const users = await User.find({ 'roles.role': { $in: HR_ROLE_CODES }, status: 'active' })
+    .select('_id')
+    .lean();
   return users.map((u) => String(u._id));
 }
 
@@ -36,7 +43,9 @@ export async function employeeOfUser(userId: string): Promise<EmployeeDoc | null
 export async function teamUserIdsOf(userId: string): Promise<string[]> {
   const me = await employeeOfUser(userId);
   if (!me) return [];
-  const reports = await Employee.find({ directManagerId: me._id, deletedAt: null, userId: { $ne: null } }).select('userId').lean();
+  const reports = await Employee.find({ directManagerId: me._id, deletedAt: null, userId: { $ne: null } })
+    .select('userId')
+    .lean();
   return reports.map((r) => String(r.userId));
 }
 
@@ -78,10 +87,17 @@ export function serializeEmployee(doc: EmployeeDoc, opts: SerializeOptions): Rec
     numberMasked: identity.last4 ? `••••••${identity.last4}` : undefined,
   };
   if (bank) {
-    o.bank = { bankName: bank.bankName, iban: canSee('bank') && bank.ibanEnc ? decrypt(bank.ibanEnc) : undefined, ibanMasked: bank.ibanLast4 ? `SA••••••••••••••••••${bank.ibanLast4}` : undefined };
+    o.bank = {
+      bankName: bank.bankName,
+      iban: canSee('bank') && bank.ibanEnc ? decrypt(bank.ibanEnc) : undefined,
+      ibanMasked: bank.ibanLast4 ? `SA••••••••••••••••••${bank.ibanLast4}` : undefined,
+    };
   }
-  const out = showAll ? o : redact(o, new Set([...opts.hidden].filter((f) => f !== 'bank' && f !== 'identity.number')));
-  if (!showAll && opts.hidden.has('bank') && out.bank) out.bank = { bankName: bank?.bankName, ibanMasked: (out.bank as { ibanMasked?: string }).ibanMasked };
+  const out = showAll
+    ? o
+    : redact(o, new Set([...opts.hidden].filter((f) => f !== 'bank' && f !== 'identity.number')));
+  if (!showAll && opts.hidden.has('bank') && out.bank)
+    out.bank = { bankName: bank?.bankName, ibanMasked: (out.bank as { ibanMasked?: string }).ibanMasked };
   out.statusAr = EMPLOYEE_STATUS_AR[doc.status];
   return out;
 }
@@ -95,18 +111,41 @@ export async function viewerRestrictions(user: UserDoc): Promise<Set<string>> {
 export function revealsSensitive(serialized: Record<string, unknown>): boolean {
   const identity = serialized.identity as { number?: string } | undefined;
   const bank = serialized.bank as { iban?: string } | undefined;
-  return !!(identity?.number || bank?.iban || serialized.basicSalaryHalalas !== undefined || serialized.religion !== undefined);
+  return !!(
+    identity?.number ||
+    bank?.iban ||
+    serialized.basicSalaryHalalas !== undefined ||
+    serialized.religion !== undefined
+  );
 }
 
-async function logEvent(employeeId: unknown, type: string, actor: Actor, data: { from?: unknown; to?: unknown; changedFields?: string[]; effectiveDate?: Date; reason?: string }) {
-  await EmployeeEvent.create({ employeeId, type, actorUserId: actor.userId, actorEmail: actor.email, ...data });
+async function logEvent(
+  employeeId: unknown,
+  type: string,
+  actor: Actor,
+  data: { from?: unknown; to?: unknown; changedFields?: string[]; effectiveDate?: Date; reason?: string },
+) {
+  await EmployeeEvent.create({
+    employeeId,
+    type,
+    actorUserId: actor.userId,
+    actorEmail: actor.email,
+    ...data,
+  });
 }
 
-export async function createEmployee(input: CreateEmployeeInput, actor: Actor): Promise<{ employee: EmployeeDoc; temporaryPassword?: string }> {
-  if (!(await Department.exists({ _id: input.departmentId, deletedAt: null }))) throw badRequest('القسم غير موجود');
-  if (input.positionId && !(await Position.exists({ _id: input.positionId, deletedAt: null }))) throw badRequest('المسمى الوظيفي غير موجود');
-  if (input.directManagerId && !(await Employee.exists({ _id: input.directManagerId, deletedAt: null }))) throw badRequest('المدير المباشر غير موجود');
-  if (await Employee.exists({ workEmail: input.workEmail })) throw conflict('البريد الوظيفي مستخدم لموظف آخر');
+export async function createEmployee(
+  input: CreateEmployeeInput,
+  actor: Actor,
+): Promise<{ employee: EmployeeDoc; temporaryPassword?: string }> {
+  if (!(await Department.exists({ _id: input.departmentId, deletedAt: null })))
+    throw badRequest('القسم غير موجود');
+  if (input.positionId && !(await Position.exists({ _id: input.positionId, deletedAt: null })))
+    throw badRequest('المسمى الوظيفي غير موجود');
+  if (input.directManagerId && !(await Employee.exists({ _id: input.directManagerId, deletedAt: null })))
+    throw badRequest('المدير المباشر غير موجود');
+  if (await Employee.exists({ workEmail: input.workEmail }))
+    throw conflict('البريد الوظيفي مستخدم لموظف آخر');
   if (await User.exists({ email: input.workEmail })) throw conflict('يوجد حساب مستخدم بهذا البريد');
   const employeeNumber = input.employeeNumber?.trim() || (await nextNumber('employee'));
   if (await Employee.exists({ employeeNumber })) throw conflict('الرقم الوظيفي مستخدم');
@@ -116,8 +155,15 @@ export async function createEmployee(input: CreateEmployeeInput, actor: Actor): 
     ...rest,
     employeeNumber,
     fullNameAr: input.fullNameAr ?? `${input.firstNameAr} ${input.lastNameAr}`,
-    identity: { type: identity.type, numberEnc: encrypt(identity.number), last4: identity.number.slice(-4), expiryDate: identity.expiryDate },
-    bank: bank ? { bankName: bank.bankName, ibanEnc: encrypt(bank.iban.toUpperCase()), ibanLast4: bank.iban.slice(-4) } : undefined,
+    identity: {
+      type: identity.type,
+      numberEnc: encrypt(identity.number),
+      last4: identity.number.slice(-4),
+      expiryDate: identity.expiryDate,
+    },
+    bank: bank
+      ? { bankName: bank.bankName, ibanEnc: encrypt(bank.iban.toUpperCase()), ibanLast4: bank.iban.slice(-4) }
+      : undefined,
     basicSalaryHalalas,
   });
 
@@ -136,9 +182,24 @@ export async function createEmployee(input: CreateEmployeeInput, actor: Actor): 
     employee.userId = user._id;
     await employee.save();
   }
-  await logEvent(employee._id, 'created', actor, { to: { departmentId: input.departmentId, positionId: input.positionId, status: employee.status }, effectiveDate: input.hireDate });
-  await recordAudit(actor, { action: 'create', resource: 'hr.employees', resourceId: String(employee._id), after: { employeeNumber, fullNameAr: employee.fullNameAr, departmentId: input.departmentId }, sensitive: true });
-  await publish({ type: 'hr.employee.created', aggregateType: 'employee', aggregateId: String(employee._id), payload: { employeeNumber, departmentId: input.departmentId }, actorUserId: actor.userId });
+  await logEvent(employee._id, 'created', actor, {
+    to: { departmentId: input.departmentId, positionId: input.positionId, status: employee.status },
+    effectiveDate: input.hireDate,
+  });
+  await recordAudit(actor, {
+    action: 'create',
+    resource: 'hr.employees',
+    resourceId: String(employee._id),
+    after: { employeeNumber, fullNameAr: employee.fullNameAr, departmentId: input.departmentId },
+    sensitive: true,
+  });
+  await publish({
+    type: 'hr.employee.created',
+    aggregateType: 'employee',
+    aggregateId: String(employee._id),
+    payload: { employeeNumber, departmentId: input.departmentId },
+    actorUserId: actor.userId,
+  });
   return { employee, temporaryPassword };
 }
 
@@ -148,12 +209,18 @@ export async function getEmployeeOrThrow(id: string): Promise<EmployeeDoc> {
   return e;
 }
 
-export async function updateEmployee(id: string, input: UpdateEmployeeInput, actor: Actor, notifyEmployee = true): Promise<EmployeeDoc> {
+export async function updateEmployee(
+  id: string,
+  input: UpdateEmployeeInput,
+  actor: Actor,
+  notifyEmployee = true,
+): Promise<EmployeeDoc> {
   const employee = await getEmployeeOrThrow(id);
   const before = employee.toObject();
   const { identity, bank, ...rest } = input;
   Object.assign(employee, rest);
-  if (rest.firstNameAr || rest.lastNameAr) employee.fullNameAr = input.fullNameAr ?? `${employee.firstNameAr} ${employee.lastNameAr}`;
+  if (rest.firstNameAr || rest.lastNameAr)
+    employee.fullNameAr = input.fullNameAr ?? `${employee.firstNameAr} ${employee.lastNameAr}`;
   if (identity) {
     employee.identity = {
       ...employee.identity,
@@ -164,21 +231,44 @@ export async function updateEmployee(id: string, input: UpdateEmployeeInput, act
       alertsSent: [],
     } as typeof employee.identity;
   }
-  if (bank) employee.bank = { bankName: bank.bankName, ibanEnc: encrypt(bank.iban.toUpperCase()), ibanLast4: bank.iban.slice(-4) };
+  if (bank)
+    employee.bank = {
+      bankName: bank.bankName,
+      ibanEnc: encrypt(bank.iban.toUpperCase()),
+      ibanLast4: bank.iban.slice(-4),
+    };
   if (input.workEmail && input.workEmail !== before.workEmail && employee.userId) {
     await User.updateOne({ _id: employee.userId }, { $set: { email: input.workEmail } });
   }
   await employee.save();
   const changed = Object.keys(input);
   await logEvent(employee._id, 'updated', actor, { changedFields: changed });
-  await recordAudit(actor, { action: 'update', resource: 'hr.employees', resourceId: String(employee._id), before: { changedFields: changed }, after: { changedFields: changed }, sensitive: changed.some((f) => (EMPLOYEE_SENSITIVE_FIELDS as readonly string[]).some((s) => s.startsWith(f))) });
+  await recordAudit(actor, {
+    action: 'update',
+    resource: 'hr.employees',
+    resourceId: String(employee._id),
+    before: { changedFields: changed },
+    after: { changedFields: changed },
+    sensitive: changed.some((f) =>
+      (EMPLOYEE_SENSITIVE_FIELDS as readonly string[]).some((s) => s.startsWith(f)),
+    ),
+  });
   if (notifyEmployee && employee.userId && actor.userId !== String(employee.userId)) {
-    await notify({ userIds: [String(employee.userId)], type: 'employee.data_updated', bodyAr: `تم تحديث: ${changed.join('، ')}`, link: '/me/profile' });
+    await notify({
+      userIds: [String(employee.userId)],
+      type: 'employee.data_updated',
+      bodyAr: `تم تحديث: ${changed.join('، ')}`,
+      link: '/me/profile',
+    });
   }
   return employee;
 }
 
-async function notifyJobChange(employee: EmployeeDoc, type: 'employee.manager_or_department_changed' | 'employee.promotion', bodyAr: string) {
+async function notifyJobChange(
+  employee: EmployeeDoc,
+  type: 'employee.manager_or_department_changed' | 'employee.promotion',
+  bodyAr: string,
+) {
   const ids: string[] = [];
   if (employee.userId) ids.push(String(employee.userId));
   if (employee.directManagerId) {
@@ -188,69 +278,178 @@ async function notifyJobChange(employee: EmployeeDoc, type: 'employee.manager_or
   await notify({ userIds: ids, type, bodyAr, link: `/hr/employees/${employee._id}` });
 }
 
-export async function transferEmployee(id: string, input: z.infer<typeof transferEmployeeSchema>, actor: Actor): Promise<EmployeeDoc> {
+export async function transferEmployee(
+  id: string,
+  input: z.infer<typeof transferEmployeeSchema>,
+  actor: Actor,
+): Promise<EmployeeDoc> {
   const employee = await getEmployeeOrThrow(id);
-  if (!(await Department.exists({ _id: input.departmentId, deletedAt: null }))) throw badRequest('القسم غير موجود');
+  if (!(await Department.exists({ _id: input.departmentId, deletedAt: null })))
+    throw badRequest('القسم غير موجود');
   if (input.directManagerId === String(employee._id)) throw badRequest('لا يمكن أن يكون الموظف مديرًا لنفسه');
-  const from = { departmentId: employee.departmentId, unitId: employee.unitId, branchId: employee.branchId, siteId: employee.siteId, directManagerId: employee.directManagerId };
+  const from = {
+    departmentId: employee.departmentId,
+    unitId: employee.unitId,
+    branchId: employee.branchId,
+    siteId: employee.siteId,
+    directManagerId: employee.directManagerId,
+  };
   employee.departmentId = input.departmentId as never;
   if (input.unitId !== undefined) employee.unitId = (input.unitId ?? undefined) as never;
   if (input.branchId !== undefined) employee.branchId = (input.branchId ?? undefined) as never;
   if (input.siteId !== undefined) employee.siteId = (input.siteId ?? undefined) as never;
-  if (input.directManagerId !== undefined) employee.directManagerId = (input.directManagerId ?? undefined) as never;
+  if (input.directManagerId !== undefined)
+    employee.directManagerId = (input.directManagerId ?? undefined) as never;
   await employee.save();
-  if (employee.userId) await User.updateOne({ _id: employee.userId }, { $set: { departmentId: input.departmentId } });
-  const to = { departmentId: employee.departmentId, unitId: employee.unitId, branchId: employee.branchId, siteId: employee.siteId, directManagerId: employee.directManagerId };
-  await logEvent(employee._id, 'transfer', actor, { from, to, effectiveDate: input.effectiveDate, reason: input.reason });
-  await recordAudit(actor, { action: 'update', resource: 'hr.employees', resourceId: String(employee._id), before: from, after: to, meta: { transfer: true, reason: input.reason } });
-  await publish({ type: 'hr.employee.transferred', aggregateType: 'employee', aggregateId: String(employee._id), payload: { from, to }, actorUserId: actor.userId });
-  await notifyJobChange(employee, 'employee.manager_or_department_changed', `تم نقلك اعتبارًا من ${input.effectiveDate.toISOString().slice(0, 10)}`);
+  if (employee.userId)
+    await User.updateOne({ _id: employee.userId }, { $set: { departmentId: input.departmentId } });
+  const to = {
+    departmentId: employee.departmentId,
+    unitId: employee.unitId,
+    branchId: employee.branchId,
+    siteId: employee.siteId,
+    directManagerId: employee.directManagerId,
+  };
+  await logEvent(employee._id, 'transfer', actor, {
+    from,
+    to,
+    effectiveDate: input.effectiveDate,
+    reason: input.reason,
+  });
+  await recordAudit(actor, {
+    action: 'update',
+    resource: 'hr.employees',
+    resourceId: String(employee._id),
+    before: from,
+    after: to,
+    meta: { transfer: true, reason: input.reason },
+  });
+  await publish({
+    type: 'hr.employee.transferred',
+    aggregateType: 'employee',
+    aggregateId: String(employee._id),
+    payload: { from, to },
+    actorUserId: actor.userId,
+  });
+  await notifyJobChange(
+    employee,
+    'employee.manager_or_department_changed',
+    `تم نقلك اعتبارًا من ${input.effectiveDate.toISOString().slice(0, 10)}`,
+  );
   return employee;
 }
 
-export async function promoteEmployee(id: string, input: z.infer<typeof promoteEmployeeSchema>, actor: Actor): Promise<EmployeeDoc> {
+export async function promoteEmployee(
+  id: string,
+  input: z.infer<typeof promoteEmployeeSchema>,
+  actor: Actor,
+): Promise<EmployeeDoc> {
   const employee = await getEmployeeOrThrow(id);
-  if (!(await Position.exists({ _id: input.positionId, deletedAt: null }))) throw badRequest('المسمى الوظيفي غير موجود');
-  const from = { positionId: employee.positionId, grade: employee.grade, basicSalaryHalalas: employee.basicSalaryHalalas };
+  if (!(await Position.exists({ _id: input.positionId, deletedAt: null })))
+    throw badRequest('المسمى الوظيفي غير موجود');
+  const from = {
+    positionId: employee.positionId,
+    grade: employee.grade,
+    basicSalaryHalalas: employee.basicSalaryHalalas,
+  };
   employee.positionId = input.positionId as never;
   if (input.grade !== undefined) employee.grade = input.grade;
   if (input.basicSalaryHalalas !== undefined) employee.basicSalaryHalalas = input.basicSalaryHalalas;
   await employee.save();
-  const to = { positionId: employee.positionId, grade: employee.grade, basicSalaryHalalas: employee.basicSalaryHalalas };
-  await logEvent(employee._id, 'promotion', actor, { from, to, effectiveDate: input.effectiveDate, reason: input.reason });
-  await recordAudit(actor, { action: 'update', resource: 'hr.employees', resourceId: String(employee._id), before: from, after: to, sensitive: input.basicSalaryHalalas !== undefined, meta: { promotion: true } });
+  const to = {
+    positionId: employee.positionId,
+    grade: employee.grade,
+    basicSalaryHalalas: employee.basicSalaryHalalas,
+  };
+  await logEvent(employee._id, 'promotion', actor, {
+    from,
+    to,
+    effectiveDate: input.effectiveDate,
+    reason: input.reason,
+  });
+  await recordAudit(actor, {
+    action: 'update',
+    resource: 'hr.employees',
+    resourceId: String(employee._id),
+    before: from,
+    after: to,
+    sensitive: input.basicSalaryHalalas !== undefined,
+    meta: { promotion: true },
+  });
   await notifyJobChange(employee, 'employee.promotion', 'تم اعتماد تغيير وظيفي في ملفك');
   return employee;
 }
 
-export async function changeManager(id: string, input: z.infer<typeof changeManagerSchema>, actor: Actor): Promise<EmployeeDoc> {
+export async function changeManager(
+  id: string,
+  input: z.infer<typeof changeManagerSchema>,
+  actor: Actor,
+): Promise<EmployeeDoc> {
   const employee = await getEmployeeOrThrow(id);
   if (input.directManagerId === String(employee._id)) throw badRequest('لا يمكن أن يكون الموظف مديرًا لنفسه');
-  if (input.directManagerId && !(await Employee.exists({ _id: input.directManagerId, deletedAt: null }))) throw badRequest('المدير غير موجود');
+  if (input.directManagerId && !(await Employee.exists({ _id: input.directManagerId, deletedAt: null })))
+    throw badRequest('المدير غير موجود');
   const from = { directManagerId: employee.directManagerId };
   employee.directManagerId = (input.directManagerId ?? undefined) as never;
   await employee.save();
-  await logEvent(employee._id, 'manager_change', actor, { from, to: { directManagerId: employee.directManagerId }, effectiveDate: input.effectiveDate, reason: input.reason });
-  await recordAudit(actor, { action: 'update', resource: 'hr.employees', resourceId: String(employee._id), before: from, after: { directManagerId: employee.directManagerId } });
+  await logEvent(employee._id, 'manager_change', actor, {
+    from,
+    to: { directManagerId: employee.directManagerId },
+    effectiveDate: input.effectiveDate,
+    reason: input.reason,
+  });
+  await recordAudit(actor, {
+    action: 'update',
+    resource: 'hr.employees',
+    resourceId: String(employee._id),
+    before: from,
+    after: { directManagerId: employee.directManagerId },
+  });
   await notifyJobChange(employee, 'employee.manager_or_department_changed', 'تم تغيير مديرك المباشر');
   return employee;
 }
 
-export async function changeStatus(id: string, input: z.infer<typeof changeStatusSchema>, actor: Actor): Promise<EmployeeDoc> {
+export async function changeStatus(
+  id: string,
+  input: z.infer<typeof changeStatusSchema>,
+  actor: Actor,
+): Promise<EmployeeDoc> {
   const employee = await getEmployeeOrThrow(id);
   if (input.status === 'seconded' && !input.secondment) throw badRequest('بيانات الانتداب مطلوبة');
   const from = { status: employee.status };
   employee.status = input.status;
-  if (input.status === 'seconded' && input.secondment) employee.secondment = { ...input.secondment } as typeof employee.secondment;
+  if (input.status === 'seconded' && input.secondment)
+    employee.secondment = { ...input.secondment } as typeof employee.secondment;
   if (input.status === 'terminated' || input.status === 'resigned') {
     employee.endDate = input.effectiveDate;
     // Account disabled at end of service [EP §3.10]; HR §3.10 full offboarding flow comes in phase 6.
-    if (employee.userId) await User.updateOne({ _id: employee.userId }, { $set: { status: 'disabled', disabledAt: new Date(), disabledReason: 'end_of_service' } });
+    if (employee.userId)
+      await User.updateOne(
+        { _id: employee.userId },
+        { $set: { status: 'disabled', disabledAt: new Date(), disabledReason: 'end_of_service' } },
+      );
   }
   await employee.save();
-  await logEvent(employee._id, 'status_change', actor, { from, to: { status: input.status, secondment: input.secondment }, effectiveDate: input.effectiveDate, reason: input.reason });
-  await recordAudit(actor, { action: 'update', resource: 'hr.employees', resourceId: String(employee._id), before: from, after: { status: input.status } });
-  await publish({ type: 'hr.employee.status_changed', aggregateType: 'employee', aggregateId: String(employee._id), payload: { from: from.status, to: input.status }, actorUserId: actor.userId });
+  await logEvent(employee._id, 'status_change', actor, {
+    from,
+    to: { status: input.status, secondment: input.secondment },
+    effectiveDate: input.effectiveDate,
+    reason: input.reason,
+  });
+  await recordAudit(actor, {
+    action: 'update',
+    resource: 'hr.employees',
+    resourceId: String(employee._id),
+    before: from,
+    after: { status: input.status },
+  });
+  await publish({
+    type: 'hr.employee.status_changed',
+    aggregateType: 'employee',
+    aggregateId: String(employee._id),
+    payload: { from: from.status, to: input.status },
+    actorUserId: actor.userId,
+  });
   return employee;
 }
 

@@ -41,7 +41,10 @@ export async function ensureCoreRoles(): Promise<void> {
     const knownRules = new Set((existing.fieldRules as FieldRule[]).map((r) => r.resource));
     const missingRules = def.fieldRules.filter((r) => !knownRules.has(r.resource));
     if (missingGrants.length || missingRules.length) {
-      await Role.updateOne({ code: def.code }, { $push: { grants: { $each: missingGrants }, fieldRules: { $each: missingRules } } });
+      await Role.updateOne(
+        { code: def.code },
+        { $push: { grants: { $each: missingGrants }, fieldRules: { $each: missingRules } } },
+      );
     }
   }
   clearRoleCache();
@@ -136,7 +139,8 @@ export function redact<T extends Record<string, unknown>>(doc: T, hidden: Set<st
   for (const path of hidden) {
     const parts = path.split('.');
     let cur: Record<string, unknown> | undefined = out;
-    for (let i = 0; i < parts.length - 1 && cur; i++) cur = cur[parts[i]] as Record<string, unknown> | undefined;
+    for (let i = 0; i < parts.length - 1 && cur; i++)
+      cur = cur[parts[i]] as Record<string, unknown> | undefined;
     if (cur && typeof cur === 'object') delete cur[parts[parts.length - 1]];
   }
   return out as Partial<T>;

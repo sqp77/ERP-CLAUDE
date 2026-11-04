@@ -17,9 +17,11 @@ import { seedHr } from './seedHr';
 export function assertLocalDatabase(uri: string | undefined): void {
   if (env().NODE_ENV === 'production') throw new Error('seed refused: NODE_ENV=production');
   if (!uri) throw new Error('seed refused: no database URI');
-  if (uri.startsWith('mongodb+srv://')) throw new Error('seed refused: SRV/Atlas URI is not a local database');
+  if (uri.startsWith('mongodb+srv://'))
+    throw new Error('seed refused: SRV/Atlas URI is not a local database');
   const host = new URL(uri.replace(/^mongodb:\/\//, 'http://')).hostname;
-  if (!['127.0.0.1', 'localhost', '::1', '[::1]'].includes(host)) throw new Error(`seed refused: ${host} is not a local database`);
+  if (!['127.0.0.1', 'localhost', '::1', '[::1]'].includes(host))
+    throw new Error(`seed refused: ${host} is not a local database`);
 }
 
 /**
@@ -27,7 +29,13 @@ export function assertLocalDatabase(uri: string | undefined): void {
  * branches are pending), national holidays placeholders, and one system admin.
  * Re-runnable: existing records are kept.
  */
-export async function seed(): Promise<{ adminEmail: string; adminPassword: string | undefined; sampleEmployees: number; sampleLogins: { email: string; role: string }[]; samplePassword: string }> {
+export async function seed(): Promise<{
+  adminEmail: string;
+  adminPassword: string | undefined;
+  sampleEmployees: number;
+  sampleLogins: { email: string; role: string }[];
+  samplePassword: string;
+}> {
   await ensureBaseline();
   for (const code of DEPARTMENT_CODES) {
     await Department.updateOne(

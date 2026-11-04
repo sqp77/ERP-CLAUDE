@@ -1,5 +1,12 @@
 import { Schema, model } from 'mongoose';
-import { CONTRACT_STATUSES, CONTRACT_TYPES, EMPLOYEE_STATUSES, EMPLOYMENT_TYPES, GENDERS, IDENTITY_TYPES } from '@eayni/shared';
+import {
+  CONTRACT_STATUSES,
+  CONTRACT_TYPES,
+  EMPLOYEE_STATUSES,
+  EMPLOYMENT_TYPES,
+  GENDERS,
+  IDENTITY_TYPES,
+} from '@eayni/shared';
 
 /**
  * Employee file [HR §3.3]. One record per employee (golden rule 2); the portal reads this record.
@@ -41,7 +48,13 @@ const employeeSchema = new Schema(
     hireDate: { type: Date, required: true },
     endDate: { type: Date },
     status: { type: String, enum: EMPLOYEE_STATUSES, default: 'active', index: true },
-    secondment: { destination: String, startDate: Date, endDate: Date, reportAttachmentId: Schema.Types.ObjectId, reportedAt: Date },
+    secondment: {
+      destination: String,
+      startDate: Date,
+      endDate: Date,
+      reportAttachmentId: Schema.Types.ObjectId,
+      reportedAt: Date,
+    },
     // Financial [EP §8] — HR owns, Finance reads (DECISIONS §7)
     basicSalaryHalalas: { type: Number },
     allowances: { type: [{ type: { type: String }, amountHalalas: Number }], default: [] },
@@ -60,7 +73,19 @@ export type EmployeeDoc = InstanceType<typeof Employee>;
 const employeeEventSchema = new Schema(
   {
     employeeId: { type: Schema.Types.ObjectId, ref: 'Employee', required: true, index: true },
-    type: { type: String, enum: ['created', 'updated', 'transfer', 'promotion', 'manager_change', 'status_change', 'secondment_report'], required: true },
+    type: {
+      type: String,
+      enum: [
+        'created',
+        'updated',
+        'transfer',
+        'promotion',
+        'manager_change',
+        'status_change',
+        'secondment_report',
+      ],
+      required: true,
+    },
     from: { type: Schema.Types.Mixed },
     to: { type: Schema.Types.Mixed },
     changedFields: { type: [String], default: [] },
@@ -106,7 +131,18 @@ const contractSchema = new Schema(
     probationEndDate: { type: Date },
     durationMonths: { type: Number },
     attachmentId: { type: Schema.Types.ObjectId },
-    addenda: { type: [{ titleAr: String, attachmentId: Schema.Types.ObjectId, notes: String, addedAt: Date, addedBy: Schema.Types.ObjectId }], default: [] },
+    addenda: {
+      type: [
+        {
+          titleAr: String,
+          attachmentId: Schema.Types.ObjectId,
+          notes: String,
+          addedAt: Date,
+          addedBy: Schema.Types.ObjectId,
+        },
+      ],
+      default: [],
+    },
     alertsSent: { type: [Number], default: [] },
     probationAlertSent: { type: Boolean, default: false },
     notes: { type: String },

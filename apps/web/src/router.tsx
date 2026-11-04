@@ -19,6 +19,10 @@ import { HolidaysPage } from './pages/admin/HolidaysPage';
 import { SettingsPage } from './pages/admin/SettingsPage';
 import { AuditPage } from './pages/admin/AuditPage';
 import { WorkflowsPage } from './pages/admin/WorkflowsPage';
+import { UnitsPage } from './pages/admin/UnitsPage';
+import { PositionsPage } from './pages/admin/PositionsPage';
+import { EmployeesPage } from './pages/hr/EmployeesPage';
+import { EmployeePage } from './pages/hr/EmployeePage';
 
 export const router = createBrowserRouter([
   {
@@ -63,6 +67,21 @@ export const router = createBrowserRouter([
           {
             element: <RequirePermission resource="org.branches" action="edit" />,
             children: [{ path: '/admin/branches', element: <BranchesPage /> }],
+          },
+          {
+            element: <RequirePermission resource="org.units" action="edit" />,
+            children: [{ path: '/admin/units', element: <UnitsPage /> }],
+          },
+          {
+            element: <RequirePermission resource="org.positions" action="edit" />,
+            children: [{ path: '/admin/positions', element: <PositionsPage /> }],
+          },
+          {
+            element: <RequirePermission resource="hr.employees" action="view" />,
+            children: [
+              { path: '/hr/employees', element: <EmployeesPage /> },
+              { path: '/hr/employees/:id', element: <EmployeePage /> },
+            ],
           },
           {
             element: <RequirePermission resource="holidays" action="edit" />,

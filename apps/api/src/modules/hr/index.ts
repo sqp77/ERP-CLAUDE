@@ -24,7 +24,15 @@ export function registerHrModule(): void {
   });
   registerDocumentAccess('employee', async (req, ownerId) => {
     if (req.authz?.scope === 'all') return true;
-    const filter = await employeeScopeFilter({ resource: 'hr.employees', action: 'view', scope: req.authz?.scope ?? 'own', departmentIds: req.authz?.departmentIds ?? [] }, req.auth.user);
+    const filter = await employeeScopeFilter(
+      {
+        resource: 'hr.employees',
+        action: 'view',
+        scope: req.authz?.scope ?? 'own',
+        departmentIds: req.authz?.departmentIds ?? [],
+      },
+      req.auth.user,
+    );
     return !!(await Employee.exists({ _id: ownerId, deletedAt: null, ...filter }));
   });
 
@@ -50,7 +58,12 @@ export function registerHrModule(): void {
       { key: 'mobile', labelAr: 'الجوال' },
       { key: 'departmentId', labelAr: 'القسم (معرّف)' },
       { key: 'birthDate', labelAr: 'تاريخ الميلاد', sensitive: true },
-      { key: 'basicSalaryHalalas', labelAr: 'الراتب الأساسي (ر.س)', sensitive: true, format: (v) => (typeof v === 'number' ? v / 100 : '') },
+      {
+        key: 'basicSalaryHalalas',
+        labelAr: 'الراتب الأساسي (ر.س)',
+        sensitive: true,
+        format: (v) => (typeof v === 'number' ? v / 100 : ''),
+      },
     ],
     query: async ({ filters, authz, userId, limit }) => {
       const { User } = await import('../../core/auth/model');

@@ -1,6 +1,11 @@
 import { ALL_ACTIONS, EMPLOYEE_SENSITIVE_FIELDS, type RoleDefinition } from '@eayni/shared';
 
-const HIDE_SENSITIVE = { resource: 'hr.employees', fields: [...EMPLOYEE_SENSITIVE_FIELDS], view: false, edit: false };
+const HIDE_SENSITIVE = {
+  resource: 'hr.employees',
+  fields: [...EMPLOYEE_SENSITIVE_FIELDS],
+  view: false,
+  edit: false,
+};
 
 /**
  * Seeded core roles (DECISIONS §4). Grants are data: the admin can edit them from the roles screen.
@@ -139,7 +144,14 @@ export const CORE_ROLES: RoleDefinition[] = [
       { resource: 'comments', actions: ['view', 'create'], scope: 'all' },
       { resource: 'hr.employees', actions: ['view'], scope: 'all' },
     ],
-    fieldRules: [{ resource: 'hr.employees', fields: ['identity.number', 'religion', 'birthDate'], view: false, edit: false }],
+    fieldRules: [
+      {
+        resource: 'hr.employees',
+        fields: ['identity.number', 'religion', 'birthDate'],
+        view: false,
+        edit: false,
+      },
+    ],
   },
   {
     code: 'finance_manager',
@@ -153,7 +165,14 @@ export const CORE_ROLES: RoleDefinition[] = [
       { resource: 'exports', actions: ['view', 'create'], scope: 'department' },
       { resource: 'hr.employees', actions: ['view', 'export'], scope: 'all' },
     ],
-    fieldRules: [{ resource: 'hr.employees', fields: ['identity.number', 'religion', 'birthDate'], view: false, edit: false }],
+    fieldRules: [
+      {
+        resource: 'hr.employees',
+        fields: ['identity.number', 'religion', 'birthDate'],
+        view: false,
+        edit: false,
+      },
+    ],
   },
   {
     code: 'executive',

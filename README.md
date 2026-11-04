@@ -23,6 +23,25 @@ Sign in at <http://localhost:5173> with `admin@eayni.local` / `Admin12345!`
 (override with `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` before seeding). The admin role requires
 TOTP: scan the QR code with an authenticator app on first login, then change the temporary password.
 
+### Sample accounts (local seed only)
+
+`npm run seed` also creates 25 sample employees with a real manager chain (CEO → department managers → staff),
+contracts (some close to expiry), identity documents close to expiry, and custody items. All sample accounts
+use the password `Sample12345!` (override with `SEED_SAMPLE_PASSWORD`). Useful logins:
+
+| Email | Role |
+|---|---|
+| abdullah@eayni.local | الإدارة التنفيذية (executive) |
+| noura@eayni.local | مدير الموارد البشرية (hr_manager, TOTP required) |
+| sara@eayni.local | مسؤول الموارد البشرية (hr_officer, TOTP required) |
+| khalid@eayni.local | مدير التشغيل (department_manager for ops) |
+| sultan@eayni.local | مدير المبيعات (department_manager for sales) |
+| abdulaziz@eayni.local | مدير المالية (finance_manager, TOTP required) |
+| omar@eayni.local | موظف ميداني في التشغيل (employee) |
+
+The seed refuses to run against anything that is not a loopback database (`assertLocalDatabase`), so these
+passwords can never reach staging or production.
+
 Password-reset emails are not sent locally (email channel off, DECISIONS §9); the reset link is shown
 on the forgot-password page in development.
 

@@ -24,7 +24,16 @@ interface Props<T extends { _id: string; active?: boolean }, F extends FieldValu
 }
 
 /** Simple audited CRUD screen for master data (units, positions …). */
-export function MasterDataPage<T extends { _id: string; active?: boolean }, F extends FieldValues>({ title, newLabel, endpoint, queryKey, columns, toForm, toBody, fields }: Props<T, F>) {
+export function MasterDataPage<T extends { _id: string; active?: boolean }, F extends FieldValues>({
+  title,
+  newLabel,
+  endpoint,
+  queryKey,
+  columns,
+  toForm,
+  toBody,
+  fields,
+}: Props<T, F>) {
   const { t } = useTranslation();
   const toast = useToast();
   const qc = useQueryClient();
@@ -33,7 +42,11 @@ export function MasterDataPage<T extends { _id: string; active?: boolean }, F ex
   const [error, setError] = useState<string>();
   const form = useForm<F>();
   const invalidate = () => qc.invalidateQueries({ queryKey: [queryKey] });
-  const remove = useMutation({ mutationFn: (id: string) => del(`${endpoint}/${id}`), onSuccess: invalidate, onError: (e) => toast(errorMessage(e), 'error') });
+  const remove = useMutation({
+    mutationFn: (id: string) => del(`${endpoint}/${id}`),
+    onSuccess: invalidate,
+    onError: (e) => toast(errorMessage(e), 'error'),
+  });
   const open = (row: T | 'new') => {
     form.reset(toForm(row === 'new' ? null : row));
     setError(undefined);
@@ -63,11 +76,24 @@ export function MasterDataPage<T extends { _id: string; active?: boolean }, F ex
                 {columns.map((c, i) => (
                   <Td key={i}>{c.render(row)}</Td>
                 ))}
-                <Td>{row.active === false ? <Badge>{t('common.inactive')}</Badge> : <Badge tone="green">{t('common.active')}</Badge>}</Td>
+                <Td>
+                  {row.active === false ? (
+                    <Badge>{t('common.inactive')}</Badge>
+                  ) : (
+                    <Badge tone="green">{t('common.active')}</Badge>
+                  )}
+                </Td>
                 <Td>
                   <div className="flex gap-1">
-                    <Button variant="ghost" onClick={() => open(row)}>{t('actions.edit')}</Button>
-                    <Button variant="ghost" onClick={() => confirm(t('actions.delete') + '؟') && remove.mutate(row._id)}>{t('actions.delete')}</Button>
+                    <Button variant="ghost" onClick={() => open(row)}>
+                      {t('actions.edit')}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      onClick={() => confirm(t('actions.delete') + '؟') && remove.mutate(row._id)}
+                    >
+                      {t('actions.delete')}
+                    </Button>
                   </div>
                 </Td>
               </tr>
@@ -75,13 +101,21 @@ export function MasterDataPage<T extends { _id: string; active?: boolean }, F ex
           </Table>
         )}
       </Card>
-      <Dialog open={!!editing} onClose={() => setEditing(null)} title={editing === 'new' ? newLabel : t('actions.edit')}>
+      <Dialog
+        open={!!editing}
+        onClose={() => setEditing(null)}
+        title={editing === 'new' ? newLabel : t('actions.edit')}
+      >
         <form onSubmit={submit} className="space-y-3" noValidate>
           {error && <Alert kind="error">{error}</Alert>}
           {fields(form, editing === 'new')}
           <div className="flex justify-end gap-2">
-            <Button type="button" variant="secondary" onClick={() => setEditing(null)}>{t('actions.cancel')}</Button>
-            <Button type="submit" loading={form.formState.isSubmitting}>{t('actions.save')}</Button>
+            <Button type="button" variant="secondary" onClick={() => setEditing(null)}>
+              {t('actions.cancel')}
+            </Button>
+            <Button type="submit" loading={form.formState.isSubmitting}>
+              {t('actions.save')}
+            </Button>
           </div>
         </form>
       </Dialog>

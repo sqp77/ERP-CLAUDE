@@ -35,9 +35,24 @@ export const IDENTITY_TYPE_AR: Record<(typeof IDENTITY_TYPES)[number], string> =
 export const GENDERS = ['male', 'female'] as const;
 
 /** Fields visible only to the employee and authorized HR/Finance users (EP §5.2, §8, §8.1; CLAUDE.md "Sensitive fields"). */
-export const EMPLOYEE_SENSITIVE_FIELDS = ['identity.number', 'religion', 'birthDate', 'basicSalaryHalalas', 'allowances', 'bank'] as const;
+export const EMPLOYEE_SENSITIVE_FIELDS = [
+  'identity.number',
+  'religion',
+  'birthDate',
+  'basicSalaryHalalas',
+  'allowances',
+  'bank',
+] as const;
 /** Document types with expiry alerts [HR §3.9]. */
-export const EMPLOYEE_DOCUMENT_TYPES = ['contract', 'identity', 'qualification', 'professional_certificate', 'job_description', 'bank_proof', 'other'] as const;
+export const EMPLOYEE_DOCUMENT_TYPES = [
+  'contract',
+  'identity',
+  'qualification',
+  'professional_certificate',
+  'job_description',
+  'bank_proof',
+  'other',
+] as const;
 export const EMPLOYEE_DOCUMENT_TYPE_AR: Record<(typeof EMPLOYEE_DOCUMENT_TYPES)[number], string> = {
   contract: 'عقد العمل',
   identity: 'الهوية أو الإقامة',
@@ -69,7 +84,11 @@ export const createEmployeeSchema = z.object({
   birthDate: z.coerce.date().optional(),
   nationality: z.string().trim().min(2),
   religion: z.string().trim().optional(),
-  identity: z.object({ type: z.enum(IDENTITY_TYPES), number: z.string().trim().min(5), expiryDate: z.coerce.date().optional() }),
+  identity: z.object({
+    type: z.enum(IDENTITY_TYPES),
+    number: z.string().trim().min(5),
+    expiryDate: z.coerce.date().optional(),
+  }),
   workEmail: emailSchema,
   mobile: phoneSchema.optional(),
   extension: z.string().trim().max(10).optional(),
@@ -86,7 +105,15 @@ export const createEmployeeSchema = z.object({
   status: z.enum(EMPLOYEE_STATUSES).default('active'),
   basicSalaryHalalas: z.number().int().min(0).optional(),
   allowances: z.array(allowanceSchema).default([]),
-  bank: z.object({ bankName: z.string().trim().min(2), iban: z.string().trim().regex(/^SA\d{22}$/i, 'آيبان سعودي غير صالح') }).optional(),
+  bank: z
+    .object({
+      bankName: z.string().trim().min(2),
+      iban: z
+        .string()
+        .trim()
+        .regex(/^SA\d{22}$/i, 'آيبان سعودي غير صالح'),
+    })
+    .optional(),
   medicalInsurance: z.boolean().default(false),
   /** Create the portal account now (temporary password returned once). */
   createAccount: z.boolean().default(true),
@@ -95,7 +122,15 @@ export type CreateEmployeeInput = z.infer<typeof createEmployeeSchema>;
 
 /** HR edits official data; job moves go through the dedicated actions below so history stays append-only. */
 export const updateEmployeeSchema = createEmployeeSchema
-  .omit({ createAccount: true, departmentId: true, positionId: true, directManagerId: true, status: true, employeeNumber: true, hireDate: true })
+  .omit({
+    createAccount: true,
+    departmentId: true,
+    positionId: true,
+    directManagerId: true,
+    status: true,
+    employeeNumber: true,
+    hireDate: true,
+  })
   .partial();
 export type UpdateEmployeeInput = z.infer<typeof updateEmployeeSchema>;
 
@@ -115,13 +150,19 @@ export const promoteEmployeeSchema = z.object({
   effectiveDate: z.coerce.date(),
   reason: z.string().trim().min(2),
 });
-export const changeManagerSchema = z.object({ directManagerId: objectIdSchema.nullable(), effectiveDate: z.coerce.date(), reason: z.string().trim().min(2) });
+export const changeManagerSchema = z.object({
+  directManagerId: objectIdSchema.nullable(),
+  effectiveDate: z.coerce.date(),
+  reason: z.string().trim().min(2),
+});
 export const changeStatusSchema = z.object({
   status: z.enum(EMPLOYEE_STATUSES),
   effectiveDate: z.coerce.date(),
   reason: z.string().trim().min(2),
   /** Secondment details [EP §5.3]. */
-  secondment: z.object({ destination: z.string().trim().min(2), startDate: z.coerce.date(), endDate: z.coerce.date() }).optional(),
+  secondment: z
+    .object({ destination: z.string().trim().min(2), startDate: z.coerce.date(), endDate: z.coerce.date() })
+    .optional(),
 });
 
 export const listEmployeesQuerySchema = z.object({
@@ -142,7 +183,10 @@ export const custodySchema = z.object({
   notes: z.string().trim().optional(),
   attachmentId: objectIdSchema.optional(),
 });
-export const custodyReturnSchema = z.object({ returnedAt: z.coerce.date(), condition: z.string().trim().optional() });
+export const custodyReturnSchema = z.object({
+  returnedAt: z.coerce.date(),
+  condition: z.string().trim().optional(),
+});
 
 export const contractSchema = z.object({
   type: z.enum(CONTRACT_TYPES),
@@ -153,5 +197,12 @@ export const contractSchema = z.object({
   attachmentId: objectIdSchema.optional(),
   notes: z.string().trim().optional(),
 });
-export const contractAddendumSchema = z.object({ titleAr: z.string().trim().min(2), attachmentId: objectIdSchema, notes: z.string().trim().optional() });
-export const contractStatusSchema = z.object({ status: z.enum(CONTRACT_STATUSES), reason: z.string().trim().optional() });
+export const contractAddendumSchema = z.object({
+  titleAr: z.string().trim().min(2),
+  attachmentId: objectIdSchema,
+  notes: z.string().trim().optional(),
+});
+export const contractStatusSchema = z.object({
+  status: z.enum(CONTRACT_STATUSES),
+  reason: z.string().trim().optional(),
+});

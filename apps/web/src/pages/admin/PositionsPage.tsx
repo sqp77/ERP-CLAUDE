@@ -12,7 +12,14 @@ interface Position {
   descriptionAr?: string;
   active: boolean;
 }
-type F = { code: string; titleAr: string; departmentId: string; grade: string; descriptionAr: string; active: boolean };
+type F = {
+  code: string;
+  titleAr: string;
+  departmentId: string;
+  grade: string;
+  descriptionAr: string;
+  active: boolean;
+};
 
 /** Positions with job descriptions [HR §3.1.4]. */
 export function PositionsPage() {
@@ -31,21 +38,49 @@ export function PositionsPage() {
         { label: t('admin.users.department'), render: (p) => name(p.departmentId) },
         { label: t('hr.grade'), render: (p) => p.grade },
       ]}
-      toForm={(p) => ({ code: p?.code ?? '', titleAr: p?.titleAr ?? '', departmentId: p?.departmentId ?? '', grade: p?.grade ?? '', descriptionAr: p?.descriptionAr ?? '', active: p?.active ?? true })}
-      toBody={(v, isNew) => ({ ...(isNew ? { code: v.code } : {}), titleAr: v.titleAr, departmentId: v.departmentId || null, grade: v.grade || undefined, descriptionAr: v.descriptionAr || undefined, active: v.active })}
+      toForm={(p) => ({
+        code: p?.code ?? '',
+        titleAr: p?.titleAr ?? '',
+        departmentId: p?.departmentId ?? '',
+        grade: p?.grade ?? '',
+        descriptionAr: p?.descriptionAr ?? '',
+        active: p?.active ?? true,
+      })}
+      toBody={(v, isNew) => ({
+        ...(isNew ? { code: v.code } : {}),
+        titleAr: v.titleAr,
+        departmentId: v.departmentId || null,
+        grade: v.grade || undefined,
+        descriptionAr: v.descriptionAr || undefined,
+        active: v.active,
+      })}
       fields={(form, isNew) => (
         <>
-          <Field label={t('common.code')} required><Input dir="ltr" disabled={!isNew} {...form.register('code', { required: true })} /></Field>
-          <Field label={t('hr.position')} required><Input {...form.register('titleAr', { required: true })} /></Field>
+          <Field label={t('common.code')} required>
+            <Input dir="ltr" disabled={!isNew} {...form.register('code', { required: true })} />
+          </Field>
+          <Field label={t('hr.position')} required>
+            <Input {...form.register('titleAr', { required: true })} />
+          </Field>
           <Field label={t('admin.users.department')}>
             <Select {...form.register('departmentId')}>
               <option value="">—</option>
-              {depts.data?.items.map((d) => <option key={d._id} value={d._id}>{d.nameAr}</option>)}
+              {depts.data?.items.map((d) => (
+                <option key={d._id} value={d._id}>
+                  {d.nameAr}
+                </option>
+              ))}
             </Select>
           </Field>
-          <Field label={t('hr.grade')}><Input dir="ltr" {...form.register('grade')} /></Field>
-          <Field label={t('hr.jobDescription')}><Textarea rows={3} {...form.register('descriptionAr')} /></Field>
-          <label className="flex items-center gap-2 text-sm"><input type="checkbox" {...form.register('active')} /> {t('common.active')}</label>
+          <Field label={t('hr.grade')}>
+            <Input dir="ltr" {...form.register('grade')} />
+          </Field>
+          <Field label={t('hr.jobDescription')}>
+            <Textarea rows={3} {...form.register('descriptionAr')} />
+          </Field>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" {...form.register('active')} /> {t('common.active')}
+          </label>
         </>
       )}
     />

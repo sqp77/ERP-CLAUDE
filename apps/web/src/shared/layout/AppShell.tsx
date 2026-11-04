@@ -4,7 +4,9 @@ import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import {
   Bell,
+  Briefcase,
   Building2,
+  IdCard,
   CalendarDays,
   ClipboardList,
   FileClock,
@@ -43,6 +45,18 @@ export function AppShell() {
     { to: '/notifications', label: t('nav.notifications'), icon: Bell, show: true },
     { to: '/me/security', label: t('nav.security'), icon: ShieldCheck, show: true },
   ];
+  const hrItems = [
+    {
+      to: '/hr/employees',
+      label: t('nav.employees'),
+      icon: IdCard,
+      show:
+        can('hr.employees', 'view') &&
+        (can('hr.employees', 'create') ||
+          can('hr.employees', 'export') ||
+          user?.roles.some((r) => r.role === 'department_manager' || r.role === 'executive')),
+    },
+  ];
   const admin = [
     { to: '/admin/users', label: t('nav.users'), icon: Users, show: can('users', 'view') },
     { to: '/admin/roles', label: t('nav.roles'), icon: Shield, show: can('roles', 'view') },
@@ -53,6 +67,13 @@ export function AppShell() {
       show: can('org.departments', 'edit'),
     },
     { to: '/admin/branches', label: t('nav.branches'), icon: Building2, show: can('org.branches', 'edit') },
+    { to: '/admin/units', label: t('nav.units'), icon: Building2, show: can('org.units', 'edit') },
+    {
+      to: '/admin/positions',
+      label: t('nav.positions'),
+      icon: Briefcase,
+      show: can('org.positions', 'edit'),
+    },
     { to: '/admin/holidays', label: t('nav.holidays'), icon: CalendarDays, show: can('holidays', 'edit') },
     { to: '/admin/workflows', label: t('nav.workflows'), icon: Workflow, show: can('workflows', 'view') },
     { to: '/admin/settings', label: t('nav.settings'), icon: Settings, show: can('settings', 'view') },
@@ -90,6 +111,14 @@ export function AppShell() {
         </button>
       </div>
       {items.filter((i) => i.show).map((i) => link(i.to, i.label, i.icon))}
+      {hrItems.some((a) => a.show) && (
+        <>
+          <div className="mt-4 mb-1 px-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
+            {t('nav.hr')}
+          </div>
+          {hrItems.filter((i) => i.show).map((i) => link(i.to, i.label, i.icon))}
+        </>
+      )}
       {admin.some((a) => a.show) && (
         <>
           <div className="mt-4 mb-1 px-3 text-xs font-semibold uppercase tracking-wide text-slate-400">

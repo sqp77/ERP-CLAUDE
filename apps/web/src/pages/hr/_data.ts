@@ -48,16 +48,28 @@ export interface EmployeeFull extends EmployeeRow {
   statusAr: string;
 }
 
-const list = <T,>(path: string) => get<{ items: T[] }>(path).then((r) => r.items);
+const list = <T>(path: string) => get<{ items: T[] }>(path).then((r) => r.items);
 
 /** Lookup tables used across HR screens. */
 export function useHrLookups() {
-  const departments = useQuery({ queryKey: ['departments', true], queryFn: () => list<Lookup>('/org/departments?all=true') });
+  const departments = useQuery({
+    queryKey: ['departments', true],
+    queryFn: () => list<Lookup>('/org/departments?all=true'),
+  });
   const units = useQuery({ queryKey: ['units'], queryFn: () => list<Lookup>('/org/units?all=true') });
-  const positions = useQuery({ queryKey: ['positions'], queryFn: () => list<Lookup>('/org/positions?all=true') });
-  const branches = useQuery({ queryKey: ['branches'], queryFn: () => list<Lookup>('/org/branches?all=true') });
+  const positions = useQuery({
+    queryKey: ['positions'],
+    queryFn: () => list<Lookup>('/org/positions?all=true'),
+  });
+  const branches = useQuery({
+    queryKey: ['branches'],
+    queryFn: () => list<Lookup>('/org/branches?all=true'),
+  });
   const sites = useQuery({ queryKey: ['sites'], queryFn: () => list<Lookup>('/org/sites?all=true') });
-  const employees = useQuery({ queryKey: ['employees', 'all'], queryFn: () => get<Paged<EmployeeRow>>('/hr/employees?limit=200').then((r) => r.items) });
+  const employees = useQuery({
+    queryKey: ['employees', 'all'],
+    queryFn: () => get<Paged<EmployeeRow>>('/hr/employees?limit=200').then((r) => r.items),
+  });
   const name = (items: Lookup[] | undefined, id?: string | null) => {
     const x = items?.find((i) => i._id === id);
     return x?.nameAr ?? x?.titleAr ?? '';
@@ -78,4 +90,7 @@ export function useHrLookups() {
   };
 }
 
-export const sar = (halalas?: number) => (typeof halalas === 'number' ? `${(halalas / 100).toLocaleString('ar-SA-u-nu-latn', { minimumFractionDigits: 2 })} ر.س` : '—');
+export const sar = (halalas?: number) =>
+  typeof halalas === 'number'
+    ? `${(halalas / 100).toLocaleString('ar-SA-u-nu-latn', { minimumFractionDigits: 2 })} ر.س`
+    : '—';
