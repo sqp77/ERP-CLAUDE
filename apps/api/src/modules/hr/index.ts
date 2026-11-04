@@ -5,7 +5,13 @@ import { registerDocumentAccess } from '../../core/documents/access';
 import { registerExportResource } from '../../core/export/service';
 import { Employee } from './model';
 import { employeeScopeFilter, hrUserIds, teamUserIdsOf } from './service';
-import { runAccountDeactivation, runContractAlerts, runIdentityAlerts, runProbationAlerts } from './jobs';
+import {
+  runAccountDeactivation,
+  runBirthdayGreetings,
+  runContractAlerts,
+  runIdentityAlerts,
+  runProbationAlerts,
+} from './jobs';
 
 let registered = false;
 /** Wire the HR module into the platform core (scopes, documents, jobs, exports). Idempotent. */
@@ -40,6 +46,7 @@ export function registerHrModule(): void {
   registerJob('hr.probation.alerts', (now) => runProbationAlerts(now));
   registerJob('hr.identity.alerts', (now) => runIdentityAlerts(now));
   registerJob('hr.accounts.deactivate', (now) => runAccountDeactivation(now));
+  registerJob('hr.birthdays', (now) => runBirthdayGreetings(now));
 
   // Field-picker export [HR §4]; sensitive columns need field-level permission.
   registerExportResource({

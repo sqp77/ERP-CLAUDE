@@ -137,3 +137,32 @@ export async function runIdentityAlerts(now = new Date()): Promise<number> {
   }
   return sent;
 }
+
+/** Birthday greeting notification once a year [EP §5.1, EP §15.12]. */
+export async function runBirthdayGreetings(now = new Date()): Promise<number> {
+  const today = riyadhDate(now); // YYYY-MM-DD
+  const [year, month, day] = today.split('-');
+  const employees = await Employee.find({
+    deletedAt: null,
+    status: { $nin: ['terminated', 'resigned'] },
+    birthDate: { $ne: null },
+    userId: { $ne: null },
+  })
+    .select('birthDate userId fullNameAr lastBirthdayYear')
+    .lean();
+  let sent = 0;
+  for (const e of employees) {
+    const b = riyadhDate(e.birthDate!);
+    if (b.slice(5) !== `${month}-${day}`) continue;
+    if ((e as { lastBirthdayYear?: number }).lastBirthdayYear === Number(year)) continue;
+    await notify({
+      userIds: [String(e.userId)],
+      type: 'employee.birthday',
+      bodyAr: `كل عام وأنت بخير ${e.fullNameAr}، نتمنى لك عامًا سعيدًا`,
+      link: '/',
+    });
+    await Employee.updateOne({ _id: e._id }, { $set: { lastBirthdayYear: Number(year) } });
+    sent++;
+  }
+  return sent;
+}

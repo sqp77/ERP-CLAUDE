@@ -63,6 +63,7 @@ const employeeSchema = new Schema(
     bank: { bankName: String, ibanEnc: String, ibanLast4: String },
     medicalInsurance: { type: Boolean, default: false },
     legacyId: { type: String }, // import-friendly (DECISIONS §3)
+    lastBirthdayYear: { type: Number },
     deletedAt: { type: Date },
   },
   { timestamps: true },

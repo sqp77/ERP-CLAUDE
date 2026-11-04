@@ -23,6 +23,8 @@ import { UnitsPage } from './pages/admin/UnitsPage';
 import { PositionsPage } from './pages/admin/PositionsPage';
 import { EmployeesPage } from './pages/hr/EmployeesPage';
 import { EmployeePage } from './pages/hr/EmployeePage';
+import { ProfilePage } from './pages/me/ProfilePage';
+import { ProfileChangesPage } from './pages/hr/ProfileChangesPage';
 
 export const router = createBrowserRouter([
   {
@@ -44,6 +46,7 @@ export const router = createBrowserRouter([
           { path: '/', element: <DashboardPage /> },
           { path: '/notifications', element: <NotificationsPage /> },
           { path: '/me/security', element: <SecurityPage /> },
+          { path: '/me/profile', element: <ProfilePage /> },
           {
             element: <RequirePermission resource="tasks" action="view" />,
             children: [{ path: '/tasks', element: <TasksPage /> }],
@@ -75,6 +78,10 @@ export const router = createBrowserRouter([
           {
             element: <RequirePermission resource="org.positions" action="edit" />,
             children: [{ path: '/admin/positions', element: <PositionsPage /> }],
+          },
+          {
+            element: <RequirePermission resource="hr.profile_changes" action="view" />,
+            children: [{ path: '/hr/profile-changes', element: <ProfileChangesPage /> }],
           },
           {
             element: <RequirePermission resource="hr.employees" action="view" />,

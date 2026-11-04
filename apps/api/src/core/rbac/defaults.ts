@@ -64,6 +64,7 @@ export const CORE_ROLES: RoleDefinition[] = [
       { resource: 'hr.employees', actions: ['view'], scope: 'own' },
       { resource: 'hr.contracts', actions: ['view'], scope: 'own' },
       { resource: 'hr.custody', actions: ['view'], scope: 'own' },
+      { resource: 'hr.profile_changes', actions: ['view', 'create'], scope: 'own' },
     ],
     fieldRules: [],
   },
@@ -104,6 +105,7 @@ export const CORE_ROLES: RoleDefinition[] = [
       { resource: 'hr.employees', actions: ['view', 'create', 'edit', 'export'], scope: 'all' },
       { resource: 'hr.contracts', actions: ['view', 'create', 'edit'], scope: 'all' },
       { resource: 'hr.custody', actions: ['view', 'create', 'edit'], scope: 'all' },
+      { resource: 'hr.profile_changes', actions: ['view'], scope: 'all' },
     ],
     fieldRules: [],
   },
@@ -130,6 +132,7 @@ export const CORE_ROLES: RoleDefinition[] = [
       { resource: 'hr.employees', actions: ALL_ACTIONS, scope: 'all' },
       { resource: 'hr.contracts', actions: ALL_ACTIONS, scope: 'all' },
       { resource: 'hr.custody', actions: ALL_ACTIONS, scope: 'all' },
+      { resource: 'hr.profile_changes', actions: ['view'], scope: 'all' },
     ],
     fieldRules: [],
   },
@@ -143,6 +146,7 @@ export const CORE_ROLES: RoleDefinition[] = [
       { resource: 'calendar', actions: ['view', 'create', 'edit'], scope: 'department' },
       { resource: 'comments', actions: ['view', 'create'], scope: 'all' },
       { resource: 'hr.employees', actions: ['view'], scope: 'all' },
+      { resource: 'hr.profile_changes', actions: ['view', 'approve'], scope: 'all' },
     ],
     fieldRules: [
       {
@@ -164,6 +168,7 @@ export const CORE_ROLES: RoleDefinition[] = [
       { resource: 'comments', actions: ['view', 'create'], scope: 'all' },
       { resource: 'exports', actions: ['view', 'create'], scope: 'department' },
       { resource: 'hr.employees', actions: ['view', 'export'], scope: 'all' },
+      { resource: 'hr.profile_changes', actions: ['view', 'approve'], scope: 'all' },
     ],
     fieldRules: [
       {

@@ -39,6 +39,9 @@ use the password `Sample12345!` (override with `SEED_SAMPLE_PASSWORD`). Useful l
 | abdulaziz@eayni.local | مدير المالية (finance_manager, TOTP required) |
 | omar@eayni.local | موظف ميداني في التشغيل (employee) |
 
+The seed is idempotent and skips employees once they exist; to get a fresh sample set (e.g. after a new slice adds
+sample records) stop the dev server, delete `apps/api/.data/mongo` and run `npm run seed` again.
+
 The seed refuses to run against anything that is not a loopback database (`assertLocalDatabase`), so these
 passwords can never reach staging or production.
 

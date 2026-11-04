@@ -11,6 +11,8 @@ import {
   ClipboardList,
   FileClock,
   Home,
+  UserRound,
+  FileCheck2,
   LogOut,
   Menu,
   Settings,
@@ -40,6 +42,7 @@ export function AppShell() {
 
   const items = [
     { to: '/', label: t('nav.dashboard'), icon: Home, show: true },
+    { to: '/me/profile', label: t('nav.profile'), icon: UserRound, show: true },
     { to: '/tasks', label: t('nav.tasks'), icon: ClipboardList, show: can('tasks', 'view') },
     { to: '/calendar', label: t('nav.calendar'), icon: CalendarDays, show: can('calendar', 'view') },
     { to: '/notifications', label: t('nav.notifications'), icon: Bell, show: true },
@@ -55,6 +58,12 @@ export function AppShell() {
         (can('hr.employees', 'create') ||
           can('hr.employees', 'export') ||
           user?.roles.some((r) => r.role === 'department_manager' || r.role === 'executive')),
+    },
+    {
+      to: '/hr/profile-changes',
+      label: t('nav.profileChanges'),
+      icon: FileCheck2,
+      show: (user?.permissions.find((p) => p.resource === 'hr.profile_changes')?.scope ?? 'own') !== 'own',
     },
   ];
   const admin = [

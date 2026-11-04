@@ -6,6 +6,9 @@ import { Contract, Custody, Employee } from './modules/hr/model';
 import { createEmployee } from './modules/hr/service';
 import { SYSTEM_ACTOR } from './core/http/context';
 import { nextNumber } from './core/numbering/service';
+import { ProfileChangeRequest } from './modules/hr/profileChanges.model';
+import { encrypt } from './core/auth/crypto';
+import { Attachment } from './core/files/model';
 
 /** Sample employees: Arabic names, one chain CEO → department managers → staff. Local testing only. */
 const DAY = 86_400_000;
@@ -442,6 +445,29 @@ export async function seedHr(
         assetTag: `IT-${String(200 + seq++).padStart(4, '0')}`,
         issuedAt: d(r.hireDays + 1),
       });
+  }
+  // One pending bank-change request (from the last created staff member) so the Finance queue has an item [EP §8.1].
+  const requester = await Employee.findOne({ workEmail: emailFor(ROWS[7], 7) });
+  if (requester?.userId) {
+    const proof = await Attachment.create({
+      key: `seed/${requester._id}-iban.pdf`,
+      originalName: 'iban-certificate.pdf',
+      mimeType: 'application/pdf',
+      size: 1024,
+      status: 'uploaded',
+      uploadedBy: requester.userId,
+      sensitive: true,
+      uploadedAt: new Date(),
+    });
+    await ProfileChangeRequest.create({
+      number: await nextNumber('profileChange'),
+      employeeId: requester._id,
+      userId: requester.userId,
+      type: 'bank',
+      payload: { bankName: 'الإنماء', ibanEnc: encrypt('SA6105000068203456789012'), ibanLast4: '9012' },
+      proofAttachmentId: proof._id,
+      notes: 'تغيير البنك بعد فتح حساب راتب جديد (بيانات تجريبية؛ ملف الإثبات غير موجود فعليًا على القرص)',
+    });
   }
   // Cross-department manager chain: department managers report to the CEO (set above); CEO has no manager.
   return { created: ids.length, logins };

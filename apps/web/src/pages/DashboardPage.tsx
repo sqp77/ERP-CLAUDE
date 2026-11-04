@@ -1,17 +1,44 @@
 import { Link } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { Bell, CalendarDays, ClipboardList } from 'lucide-react';
+import {
+  Bell,
+  Briefcase,
+  Cake,
+  CalendarDays,
+  ClipboardList,
+  FileText,
+  Landmark,
+  Newspaper,
+  Ticket,
+  UserRound,
+} from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { usePrefs } from '@/lib/preferences';
 import { get, type Paged } from '@/lib/api';
-import { Alert, Card, PageHeader } from '@/shared/ui';
+import { Alert, Badge, Card, PageHeader } from '@/shared/ui';
+import { sar } from './hr/_data';
 
-/** Employee dashboard shell [EP §4]. Phase 1 fills profile, contract, requests, tickets, reports, news. */
+interface MyProfile {
+  fullNameAr: string;
+  birthDate?: string;
+  status: string;
+  labels: { position?: string; department?: string; directManager?: string };
+  currentContract: null | {
+    status: string;
+    endDate?: string;
+    probation: null | { endDate: string; inProbation: boolean };
+  };
+  basicSalaryHalalas?: number;
+  pendingChanges: { number: string }[];
+}
+
+/** Employee dashboard [EP §4]: the nine sections as cards; later slices fill requests, tickets, reports and news. */
 export function DashboardPage() {
   const { t } = useTranslation();
   const { user, can } = useAuth();
   const { formatDate } = usePrefs();
+  const me = useQuery({ queryKey: ['me', 'profile'], queryFn: () => get<MyProfile>('/hr/me'), retry: false });
   const tasks = useQuery({
     queryKey: ['tasks', 'mine-open'],
     queryFn: () => get<Paged<unknown>>('/tasks?mine=true&limit=1'),
@@ -31,24 +58,29 @@ export function DashboardPage() {
       ),
     enabled: can('calendar', 'view'),
   });
+  const p = me.data;
+  const isBirthday =
+    p?.birthDate &&
+    new Date(p.birthDate).getMonth() === now.getMonth() &&
+    new Date(p.birthDate).getDate() === now.getDate();
 
-  const stat = (to: string, icon: typeof Bell, label: string, value: number | string | undefined) => {
-    const Icon = icon;
-    return (
-      <Link
-        to={to}
-        className="flex items-center gap-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-brand-500"
-      >
-        <div className="flex size-11 items-center justify-center rounded-lg bg-brand-50 text-brand-700">
-          <Icon className="size-5" aria-hidden />
+  const tile = (to: string, Icon: typeof Bell, title: string, body: React.ReactNode, soon = false) => (
+    <Link
+      to={to}
+      className="flex gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-brand-500"
+    >
+      <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-700">
+        <Icon className="size-5" aria-hidden />
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+          {title}
+          {soon && <Badge>{t('dashboard.soon')}</Badge>}
         </div>
-        <div>
-          <div className="text-2xl font-bold tabular">{value ?? '—'}</div>
-          <div className="text-sm text-slate-600">{label}</div>
-        </div>
-      </Link>
-    );
-  };
+        <div className="mt-0.5 text-sm text-slate-600">{body}</div>
+      </div>
+    </Link>
+  );
 
   return (
     <>
@@ -56,10 +88,60 @@ export function DashboardPage() {
         title={t('dashboard.welcome', { name: user?.displayNameAr })}
         subtitle={`${t('dashboard.today')}: ${formatDate(now, { dateStyle: 'full' })}`}
       />
-      <div className="grid gap-3 sm:grid-cols-3">
-        {stat('/tasks', ClipboardList, t('dashboard.openTasks'), tasks.data?.total)}
-        {stat('/notifications', Bell, t('dashboard.unread'), notif.data?.unread)}
-        {stat('/calendar', CalendarDays, t('dashboard.upcoming'), events.data?.items.length)}
+      {isBirthday && (
+        <div className="mb-4 flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-900">
+          <Cake className="size-6" aria-hidden />
+          <div className="font-medium">{t('dashboard.birthday', { name: p?.fullNameAr })}</div>
+        </div>
+      )}
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {tile(
+          '/me/profile',
+          UserRound,
+          t('dashboard.sections.profile'),
+          p ? `${p.labels.position ?? ''} · ${p.labels.department ?? ''}` : t('profile.noFile'),
+        )}
+        {tile(
+          '/me/profile',
+          FileText,
+          t('dashboard.sections.contract'),
+          p?.currentContract
+            ? p.currentContract.probation?.inProbation
+              ? `${t('profile.inProbation')} — ${formatDate(p.currentContract.probation.endDate)}`
+              : p.currentContract.endDate
+                ? `${t('calendar.end')}: ${formatDate(p.currentContract.endDate)}`
+                : t('hr.contractTypes.open_ended')
+            : '—',
+        )}
+        {tile(
+          '/me/profile',
+          Landmark,
+          t('dashboard.sections.financial'),
+          p
+            ? `${t('hr.basicSalary')}: ${sar(p.basicSalaryHalalas)}${p.pendingChanges.length ? ` · ${t('profile.pendingChange')}` : ''}`
+            : '—',
+        )}
+        {tile('/', Ticket, t('dashboard.sections.requests'), t('dashboard.phaseNote'), true)}
+        {tile(
+          '/tasks',
+          ClipboardList,
+          t('dashboard.sections.tasks'),
+          `${tasks.data?.total ?? 0} ${t('dashboard.openTasks')}`,
+        )}
+        {tile(
+          '/calendar',
+          CalendarDays,
+          t('dashboard.sections.calendar'),
+          `${events.data?.items.length ?? 0} ${t('dashboard.upcoming')}`,
+        )}
+        {tile('/', Briefcase, t('dashboard.sections.reports'), t('dashboard.phaseNote'), true)}
+        {tile('/', Newspaper, t('dashboard.sections.news'), t('dashboard.phaseNote'), true)}
+        {tile(
+          '/notifications',
+          Bell,
+          t('dashboard.sections.notifications'),
+          `${notif.data?.unread ?? 0} ${t('dashboard.unread')}`,
+        )}
       </div>
       <div className="mt-5 grid gap-4 lg:grid-cols-2">
         <Card title={t('dashboard.upcoming')}>
