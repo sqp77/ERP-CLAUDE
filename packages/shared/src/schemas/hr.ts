@@ -134,12 +134,13 @@ export const updateEmployeeSchema = createEmployeeSchema
   .partial();
 export type UpdateEmployeeInput = z.infer<typeof updateEmployeeSchema>;
 
+/** A transfer always names the new direct manager (slice 1 review); pending approvals move with it. */
 export const transferEmployeeSchema = z.object({
   departmentId: objectIdSchema,
   unitId: objectIdSchema.nullable().optional(),
   branchId: objectIdSchema.nullable().optional(),
   siteId: objectIdSchema.nullable().optional(),
-  directManagerId: objectIdSchema.nullable().optional(),
+  directManagerId: objectIdSchema,
   effectiveDate: z.coerce.date(),
   reason: z.string().trim().min(2),
 });

@@ -544,10 +544,11 @@ function JobTab({ e, canEdit }: { e: EmployeeFull; canEdit: boolean }) {
               </Field>
               <Field label={t('hr.unit')}>{selectOf('unitId', lk.units)}</Field>
               <Field label={t('admin.org.branch')}>{selectOf('branchId', lk.branches)}</Field>
-              <Field label={t('hr.directManager')}>
+              <Field label={t('hr.directManager')} required>
                 {selectOf(
                   'directManagerId',
                   lk.employees.filter((x) => x._id !== e._id),
+                  true,
                 )}
               </Field>
             </>

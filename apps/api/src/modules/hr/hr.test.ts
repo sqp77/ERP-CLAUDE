@@ -7,7 +7,8 @@ import { AuditLog } from '../../core/audit/model';
 import { Notification } from '../../core/notifications/model';
 import { Position } from '../../core/org/model';
 import { Contract, Employee } from './model';
-import { runContractAlerts, runProbationAlerts } from './jobs';
+import { runAccountDeactivation, runContractAlerts, runProbationAlerts } from './jobs';
+import { registerManagerChangeHandler } from './service';
 
 const app = () => testApp();
 
@@ -109,7 +110,12 @@ describe('HR employee file [HR §3.1, §3.3]', () => {
     const tr = await request(app())
       .post(`/api/v1/hr/employees/${id}/transfer`)
       .set(auth(hr))
-      .send({ departmentId: String(hrDept._id), effectiveDate: '2026-11-01', reason: 'إعادة هيكلة' });
+      .send({
+        departmentId: String(hrDept._id),
+        directManagerId: boss.body._id,
+        effectiveDate: '2026-11-01',
+        reason: 'إعادة هيكلة',
+      });
     expect(tr.status).toBe(200);
     expect(tr.body.departmentId).toBe(String(hrDept._id));
     const pr = await request(app())
@@ -149,7 +155,7 @@ describe('HR employee file [HR §3.1, §3.3]', () => {
     expect(reports.body.items).toHaveLength(1);
   });
 
-  it('end of service disables the portal account [EP §3.10]', async () => {
+  it('end of service keeps access until the last working day; the daily job disables the account after it [EP §3.10, DECISIONS §11.3]', async () => {
     const { ops, hr } = await setup();
     const emp = await request(app())
       .post('/api/v1/hr/employees')
@@ -160,16 +166,85 @@ describe('HR employee file [HR §3.1, §3.3]', () => {
         .post('/api/v1/auth/login')
         .send({ email: 'saud@eayni.local', password: emp.body.temporaryPassword })
     ).body.token;
+    const lastDay = new Date(Date.now() + 3 * 86_400_000);
     await request(app())
       .post(`/api/v1/hr/employees/${emp.body._id}/status`)
       .set(auth(hr))
-      .send({ status: 'terminated', effectiveDate: '2026-11-30', reason: 'استقالة' });
-    const after = await request(app()).get('/api/v1/auth/me').set(auth(token));
-    expect(after.status).toBe(401);
+      .send({ status: 'resigned', effectiveDate: lastDay.toISOString(), reason: 'استقالة' });
+    // Still working: normal access.
+    expect((await request(app()).get('/api/v1/auth/me').set(auth(token))).status).toBe(200);
+    expect(await runAccountDeactivation(new Date())).toBe(0);
+    expect(await runAccountDeactivation(lastDay)).toBe(0); // the last day itself is still a working day
+    expect(await runAccountDeactivation(new Date(lastDay.getTime() + 86_400_000))).toBe(1);
+    expect((await request(app()).get('/api/v1/auth/me').set(auth(token))).status).toBe(401);
     const login = await request(app())
       .post('/api/v1/auth/login')
       .send({ email: 'saud@eayni.local', password: emp.body.temporaryPassword });
     expect(login.body.error.code).toBe('account_disabled');
+    expect(await runAccountDeactivation(new Date(lastDay.getTime() + 2 * 86_400_000))).toBe(0); // idempotent
+  });
+
+  it('transfer names the new manager; pending items move through the registered handler and both managers are notified [DECISIONS §11.4]', async () => {
+    const { hrDept, ops, hr } = await setup();
+    const oldBoss = await request(app())
+      .post('/api/v1/hr/employees')
+      .set(auth(hr))
+      .send(
+        base({
+          departmentId: String(ops._id),
+          workEmail: 'old@eayni.local',
+          identity: { type: 'national_id', number: '1000000011' },
+        }),
+      );
+    const newBoss = await request(app())
+      .post('/api/v1/hr/employees')
+      .set(auth(hr))
+      .send(
+        base({
+          departmentId: String(hrDept._id),
+          workEmail: 'new@eayni.local',
+          identity: { type: 'national_id', number: '1000000012' },
+        }),
+      );
+    const emp = await request(app())
+      .post('/api/v1/hr/employees')
+      .set(auth(hr))
+      .send(base({ departmentId: String(ops._id), directManagerId: oldBoss.body._id }));
+    const calls: { from?: string; to?: string }[] = [];
+    const off = registerManagerChangeHandler(async ({ fromManagerUserId, toManagerUserId }) => {
+      calls.push({ from: fromManagerUserId, to: toManagerUserId });
+      return 2; // pretend two pending requests moved
+    });
+    try {
+      const missing = await request(app())
+        .post(`/api/v1/hr/employees/${emp.body._id}/transfer`)
+        .set(auth(hr))
+        .send({ departmentId: String(hrDept._id), effectiveDate: '2026-11-01', reason: 'x' });
+      expect(missing.status).toBe(400); // new manager is mandatory
+      const tr = await request(app())
+        .post(`/api/v1/hr/employees/${emp.body._id}/transfer`)
+        .set(auth(hr))
+        .send({
+          departmentId: String(hrDept._id),
+          directManagerId: newBoss.body._id,
+          effectiveDate: '2026-11-01',
+          reason: 'نقل',
+        });
+      expect(tr.status).toBe(200);
+      expect(calls).toEqual([{ from: oldBoss.body.userId, to: newBoss.body.userId }]);
+      const oldN = await Notification.findOne({
+        userId: oldBoss.body.userId,
+        type: 'employee.manager_or_department_changed',
+      }).lean();
+      const newN = await Notification.findOne({
+        userId: newBoss.body.userId,
+        type: 'employee.manager_or_department_changed',
+      }).lean();
+      expect(oldN?.bodyAr).toContain('2 طلبًا');
+      expect(newN?.bodyAr).toContain('2 طلبًا');
+    } finally {
+      off();
+    }
   });
 
   it('contracts: renewal supersedes the previous one; expiry and probation alerts fire once per offset [HR §3.9, EP §6]', async () => {
@@ -194,18 +269,32 @@ describe('HR employee file [HR §3.1, §3.3]', () => {
     const r1 = await runContractAlerts();
     expect(r1.alerts).toBe(2); // offsets 90 and 30 already passed for a contract ending in 20 days
     expect((await runContractAlerts()).alerts).toBe(0);
-    expect(await runProbationAlerts()).toBe(1);
+    // Probation ends in 3 days: both offsets (30 and 7) are due at once, then nothing more.
+    expect(await runProbationAlerts()).toBe(2);
     expect(await runProbationAlerts()).toBe(0);
+    const c3 = await request(app())
+      .post(`/api/v1/hr/employees/${id}/contracts`)
+      .set(auth(hr))
+      .send({
+        type: 'fixed_term',
+        startDate: '2026-01-01',
+        probationEndDate: new Date(Date.now() + 20 * 86_400_000).toISOString(),
+      });
+    expect(c3.status).toBe(201);
+    expect(await runProbationAlerts()).toBe(1); // only the 30-day offset
+    expect(await runProbationAlerts(new Date(Date.now() + 14 * 86_400_000))).toBe(1); // then the 7-day one
+    expect(await Notification.countDocuments({ type: 'probation.ending' })).toBeGreaterThan(0);
     expect(await Notification.countDocuments({ type: 'contract.expiring' })).toBeGreaterThan(0);
 
     const c2 = await request(app())
       .post(`/api/v1/hr/employees/${id}/contracts`)
       .set(auth(hr))
       .send({ type: 'open_ended', startDate: in20 });
-    expect(c2.body.version).toBe(2);
+    expect(c2.body.version).toBe(3);
     expect((await Contract.findById(c1.body._id))?.status).toBe('expired');
+    expect((await Contract.findById(c3.body._id))?.status).toBe('expired');
     const list = await request(app()).get(`/api/v1/hr/employees/${id}/contracts`).set(auth(hr));
-    expect(list.body.items).toHaveLength(2);
+    expect(list.body.items).toHaveLength(3);
     // The employee can read own contracts but cannot add one.
     const token = (
       await request(app())

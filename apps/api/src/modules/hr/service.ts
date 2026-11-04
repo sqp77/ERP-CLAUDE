@@ -278,6 +278,68 @@ async function notifyJobChange(
   await notify({ userIds: ids, type, bodyAr, link: `/hr/employees/${employee._id}` });
 }
 
+/**
+ * When an employee's direct manager changes, items waiting for the old manager's action (HR requests,
+ * approvals…) move to the new one. Modules register a handler; each returns how many items it moved
+ * and writes its own stage-log entries. (slice 1 review, DECISIONS §11.4)
+ */
+export type ManagerChangeHandler = (args: {
+  employee: EmployeeDoc;
+  fromManagerUserId?: string;
+  toManagerUserId?: string;
+  actor: Actor;
+  reason: string;
+}) => Promise<number>;
+const managerChangeHandlers: ManagerChangeHandler[] = [];
+export function registerManagerChangeHandler(fn: ManagerChangeHandler): () => void {
+  managerChangeHandlers.push(fn);
+  return () => {
+    const i = managerChangeHandlers.indexOf(fn);
+    if (i >= 0) managerChangeHandlers.splice(i, 1);
+  };
+}
+
+async function managerUserId(employeeId: unknown): Promise<string | undefined> {
+  if (!employeeId) return undefined;
+  const m = await Employee.findById(employeeId).select('userId').lean();
+  return m?.userId ? String(m.userId) : undefined;
+}
+
+/** Run the reassignment handlers and notify both managers. Returns the number of moved items. */
+async function onManagerChanged(
+  employee: EmployeeDoc,
+  fromManagerId: unknown,
+  toManagerId: unknown,
+  actor: Actor,
+  reason: string,
+): Promise<number> {
+  if (String(fromManagerId ?? '') === String(toManagerId ?? '')) return 0;
+  const fromUser = await managerUserId(fromManagerId);
+  const toUser = await managerUserId(toManagerId);
+  let moved = 0;
+  for (const h of managerChangeHandlers)
+    moved += await h({ employee, fromManagerUserId: fromUser, toManagerUserId: toUser, actor, reason });
+  const body = moved
+    ? `${employee.fullNameAr}: تم نقل ${moved} طلبًا معلّقًا إلى المدير الجديد`
+    : `${employee.fullNameAr}: تغيّر المدير المباشر`;
+  const ids = [fromUser, toUser].filter((x): x is string => !!x);
+  if (ids.length)
+    await notify({
+      userIds: ids,
+      type: 'employee.manager_or_department_changed',
+      bodyAr: body,
+      link: `/hr/employees/${employee._id}`,
+    });
+  await publish({
+    type: 'hr.employee.manager_changed',
+    aggregateType: 'employee',
+    aggregateId: String(employee._id),
+    payload: { fromManagerId, toManagerId, moved },
+    actorUserId: actor.userId,
+  });
+  return moved;
+}
+
 export async function transferEmployee(
   id: string,
   input: z.infer<typeof transferEmployeeSchema>,
@@ -298,8 +360,9 @@ export async function transferEmployee(
   if (input.unitId !== undefined) employee.unitId = (input.unitId ?? undefined) as never;
   if (input.branchId !== undefined) employee.branchId = (input.branchId ?? undefined) as never;
   if (input.siteId !== undefined) employee.siteId = (input.siteId ?? undefined) as never;
-  if (input.directManagerId !== undefined)
-    employee.directManagerId = (input.directManagerId ?? undefined) as never;
+  if (!(await Employee.exists({ _id: input.directManagerId, deletedAt: null })))
+    throw badRequest('المدير المباشر غير موجود');
+  employee.directManagerId = input.directManagerId as never;
   await employee.save();
   if (employee.userId)
     await User.updateOne({ _id: employee.userId }, { $set: { departmentId: input.departmentId } });
@@ -331,11 +394,14 @@ export async function transferEmployee(
     payload: { from, to },
     actorUserId: actor.userId,
   });
-  await notifyJobChange(
-    employee,
-    'employee.manager_or_department_changed',
-    `تم نقلك اعتبارًا من ${input.effectiveDate.toISOString().slice(0, 10)}`,
-  );
+  if (employee.userId)
+    await notify({
+      userIds: [String(employee.userId)],
+      type: 'employee.manager_or_department_changed',
+      bodyAr: `تم نقلك اعتبارًا من ${input.effectiveDate.toISOString().slice(0, 10)}`,
+      link: '/me/profile',
+    });
+  await onManagerChanged(employee, from.directManagerId, employee.directManagerId, actor, input.reason);
   return employee;
 }
 
@@ -405,7 +471,14 @@ export async function changeManager(
     before: from,
     after: { directManagerId: employee.directManagerId },
   });
-  await notifyJobChange(employee, 'employee.manager_or_department_changed', 'تم تغيير مديرك المباشر');
+  if (employee.userId)
+    await notify({
+      userIds: [String(employee.userId)],
+      type: 'employee.manager_or_department_changed',
+      bodyAr: 'تم تغيير مديرك المباشر',
+      link: '/me/profile',
+    });
+  await onManagerChanged(employee, from.directManagerId, employee.directManagerId, actor, input.reason);
   return employee;
 }
 
@@ -421,12 +494,16 @@ export async function changeStatus(
   if (input.status === 'seconded' && input.secondment)
     employee.secondment = { ...input.secondment } as typeof employee.secondment;
   if (input.status === 'terminated' || input.status === 'resigned') {
+    // The effective date is the last working day; the daily job disables the portal account at the end of
+    // that day (DECISIONS §11.3). Until then the employee keeps normal access.
     employee.endDate = input.effectiveDate;
-    // Account disabled at end of service [EP §3.10]; HR §3.10 full offboarding flow comes in phase 6.
+  } else if (from.status === 'terminated' || from.status === 'resigned') {
+    employee.endDate = undefined;
+    employee.accountDisabledAt = undefined;
     if (employee.userId)
       await User.updateOne(
-        { _id: employee.userId },
-        { $set: { status: 'disabled', disabledAt: new Date(), disabledReason: 'end_of_service' } },
+        { _id: employee.userId, disabledReason: 'end_of_service' },
+        { $set: { status: 'active' }, $unset: { disabledAt: 1, disabledReason: 1 } },
       );
   }
   await employee.save();

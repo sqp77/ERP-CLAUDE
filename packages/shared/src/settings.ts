@@ -100,6 +100,13 @@ export const SETTING_DEFINITIONS = {
     schema: z.number().int().positive().nullable(),
     default: null, // DECISIONS §5: not decided
   }),
+  'hr.probationAlertDaysBefore': def({
+    key: 'hr.probationAlertDaysBefore',
+    labelAr: 'تنبيه انتهاء فترة التجربة قبل (أيام)',
+    group: 'hr',
+    schema: z.array(z.number().int().min(0)),
+    default: [30, 7], // slice 1 review: time for HR to decide on an extension
+  }),
   'hr.requestStageSlaBusinessDays': def({
     key: 'hr.requestStageSlaBusinessDays',
     labelAr: 'مهلة كل مرحلة في طلبات الموظفين (أيام عمل)',

@@ -47,6 +47,8 @@ const employeeSchema = new Schema(
     employmentType: { type: String, enum: EMPLOYMENT_TYPES, default: 'full_time' },
     hireDate: { type: Date, required: true },
     endDate: { type: Date },
+    /** Set by the daily job when the portal account is disabled after the last working day. */
+    accountDisabledAt: { type: Date },
     status: { type: String, enum: EMPLOYEE_STATUSES, default: 'active', index: true },
     secondment: {
       destination: String,
@@ -144,7 +146,7 @@ const contractSchema = new Schema(
       default: [],
     },
     alertsSent: { type: [Number], default: [] },
-    probationAlertSent: { type: Boolean, default: false },
+    probationAlertsSent: { type: [Number], default: [] },
     notes: { type: String },
     version: { type: Number, default: 1 },
     previousId: { type: Schema.Types.ObjectId, ref: 'Contract' },
