@@ -25,6 +25,7 @@ All ten department specs are in **one file: `docs/SPECS.md`** (Arabic, transcrib
 - The file is large: don't load it whole. Find the chapter for the module you're working on (search for its heading) and read that chapter, plus any chapter a hand-off touches.
 - Before building a feature, re-read its spec section; this CLAUDE.md is a summary, `docs/SPECS.md` wins when they differ.
 - The original PDFs are kept in `docs/specs/originals/` for reference only; use `docs/SPECS.md`.
+- **`docs/DECISIONS.md` settles what the specs leave open or contradict, and overrides CLAUDE.md defaults.** Read it before building a feature; add to it when the user decides something new.
 
 ## Golden rules
 1. **The server is the source of truth.** Permissions, workflow transitions, approval limits and validation are enforced in the API. The UI only hides what the API already forbids.
@@ -158,7 +159,7 @@ Each row is a workflow config plus domain events. The receiving department sees 
 | Inactive app customers | CS → Marketing reactivation campaign | CS §6.2 |
 
 ## Roles
-Most departments have **Manager** and **Staff**; Operations adds **Field staff**. Cross-cutting: **Executive management** (read KPIs/reports, approve above limits), **Direct manager** (derived from the org chart), **System admin** (IT; manages settings, users and integrations but has no financial approval right — FIN §12). Department-specific rights:
+Most departments have **Manager** and **Staff**; Operations adds **Field staff**. Cross-cutting: **Executive management** (read KPIs/reports, approve above limits), **Direct manager** (derived from the `directManager` field on the employee record, never a role), **Department manager** (a role scoped to one department; not automatically anyone's direct manager — DECISIONS §4), **System admin** (IT; manages settings, users and integrations but has no financial approval right — FIN §12). Department-specific rights:
 
 | Department | Notable rights and limits |
 |---|---|
@@ -176,7 +177,7 @@ Most departments have **Manager** and **Staff**; Operations adds **Field staff**
 ### HR — foundation [HR]
 Everything hangs on the org chart and employee records, so HR comes first (HR §8).
 - **Collections:** departments, units, branches/sites, positions, employees (job history, status history), contracts, employeeDocuments, custody (links to IT assets), jobRequisitions, applicants, interviews, offers, shifts, shiftAssignments, attendance, attendanceCorrections, hrRequests, payrollRuns, payslips, advances, goals, appraisals, improvementPlans, disciplinaryActions, promotions, trainingPlans, trainings, offboardings.
-- **Employee status:** على رأس العمل / إجازة / عمل ميداني / انتداب / موقوف / مستقيل / منتهي الخدمة (merged from HR §3.1 and EP §5.3; confirm). Field work counts as on duty. Account status: نشط / غير نشط.
+- **Employee status:** على رأس العمل / إجازة / عمل ميداني / انتداب / موقوف / مستقيل / منتهي الخدمة (merged from HR §3.1 and EP §5.3; confirmed in DECISIONS §6). Field work counts as on duty. Account status: نشط / غير نشط.
 - **Recruitment** (HR §3.2): requisition → approval → posting → applications → screening → interviews → offer → acceptance → contracting → registration in Qiwa/GOSI (manual record first).
 - **Attendance** (HR §3.4): shifts and schedules incl. field and shift work; check-in/out records time and GPS; geofence per site; block outside the geofence unless an approved exception; **location is captured only at check-in/out, never tracked otherwise**; lateness, absence, actual hours, overtime; alerts for missed check-in/out; correction requests with approval; daily and monthly reports.
 - **Self-service requests** (HR §3.5): leave, permission, remote work, salary certificate (detailed or not, Chamber attestation flag), experience certificate (from template), advance, data update, official letter. States: جديد / قيد المراجعة / بانتظار موافقة المدير / بانتظار الموارد البشرية / بانتظار الاعتماد النهائي / يحتاج استكمال / معتمد / مرفوض / مغلق.
@@ -329,16 +330,17 @@ Each one sits behind an adapter interface. Manual entry must work first; the int
 | Qiwa and GOSI | HR §3.2, §7.12 |
 | Maps and geocoding | OPS §7, HR §3.4 |
 
-## Build order (proposed — confirm with the user before starting)
-- [ ] Phase 0: platform core, deploy pipeline, CI
-- [ ] Phase 1: HR foundation (org chart, employees, users, roles) + Employee Portal (login, dashboard, profile, tickets, notifications, news)
-- [ ] Phase 2: CRM core + Customer Service (conversations entered manually, transfers, leads) + Sales phase 1
-- [ ] Phase 3: Finance phase 1 (department financial requests, review and approval, expenses and payments, archive, basic reports) + Procurement + Operations (intake, containers, vehicles, visits, calendar)
-- [ ] Phase 4: Sales services, pricing, contracts + Finance phase 2 (revenue, collection, customer invoices) + Sustainability + Marketing phases 1–2 + IT
-- [ ] Phase 5: HR attendance, payroll, performance, training + Marketing phase 3 + CS app customers and company portal
-- [ ] Phase 6: Finance phase 3 (ZATCA integration; earlier if the cooperative's wave requires it), channel integrations, Qiwa/GOSI, mobile app APIs, Marketing phase 4
+## Build order (confirmed 2026-11-04 — see DECISIONS §7)
+- [ ] Phase 0: platform core, local dev setup, CI; deploy pipeline written but not run (DECISIONS §1)
+- [ ] Phase 1: HR foundation (org chart, employees, users, roles, contracts and documents, salary data entry) + Employee Portal (login, dashboard, profile, HR requests, tickets, tasks, calendar, reports, news, notifications)
+- [ ] Phase 2: HR attendance (shifts, GPS check-in/out with geofence, corrections, lateness/overtime per settings, reports) — HR §8 "التشغيل اليومي"
+- [ ] Phase 3: CRM core + Customer Service (conversations entered manually, transfers, leads) + Sales phase 1
+- [ ] Phase 4: Finance phase 1 (department financial requests, review and approval, expenses and payments, archive, basic reports) + Procurement + Operations (intake, containers, vehicles, visits, calendar)
+- [ ] Phase 5: Sales services, pricing, contracts + Finance phase 2 (revenue, collection, customer invoices) + Sustainability + Marketing phases 1–2 + IT
+- [ ] Phase 6: HR payroll, performance, training, recruitment, end of service + Marketing phase 3 + CS app customers and company portal
+- [ ] Phase 7: Finance phase 3 (ZATCA integration; earlier if the cooperative's wave requires it), channel integrations, Qiwa/GOSI, mobile app APIs, Marketing phase 4
 
-Finish a phase, demo it to the user, then start the next.
+Finish a phase, demo it to the user (on staging once DECISIONS §1 is cleared), then start the next.
 
 ## Definition of done (every feature)
 - Typecheck, lint and tests pass. API tests cover each validation, each workflow transition, and each role's allowed and forbidden actions
@@ -349,15 +351,17 @@ Finish a phase, demo it to the user, then start the next.
 - Deployed and checked on staging
 
 ## Open decisions (ask, don't assume)
+Settled items live in `docs/DECISIONS.md`. Still open:
 - **Accounting depth:** FIN covers requests, approvals, payments, revenue and invoicing, but no chart of accounts or journal entries. Does a general ledger stay in an existing accounting system (e.g. the current ERPNext) fed by this system, or is it built later?
 - **ZATCA route:** direct Fatoora integration or a certified solution provider, and whether the cooperative is already in a mandatory wave (FIN §10)
-- **Financial authority matrix:** approval limits per role and amount (FIN §12); monthly cut-off date (FIN §4)
+- **Financial authority matrix:** approval limits per role and amount (FIN §12); monthly cut-off date (FIN §4); advance limit (DECISIONS §5)
 - **Customer app:** does it exist already, and is this backend replacing or integrating with it? (CS §6.2, MKT-02, MKT-05)
 - **Company portal:** scope and timing (CS §6.3)
-- Serverless platform (AWS Lambda assumed), hosting region and data-residency requirements
-- Authentication provider and second-factor method
+- Serverless platform (AWS Lambda assumed), hosting region and data-residency requirements; MongoDB Atlas; staging and email domains; brand assets (DECISIONS §1 "Pending before staging")
+- SSO provider (email + password now; TOTP settled — DECISIONS §2)
 - Email, telephony and WhatsApp providers; maps provider
+- Branches and operating sites; employee import from ERPNext (DECISIONS §3)
 - Offline support for field staff
-- Policies with no numbers in the specs: discount limits (SAL §7.2), points/rewards (CS §6.2), certificate weight criterion (SUS §6.2 wording is unclear), impact factors and method (SUS §11), geofence radius and exceptions (HR §3.4), payroll deductions (HR §3.6)
-- Lists that differ between specs: organization types (SAL §4.1 vs CS §6.8), employee status (HR §3.1 vs EP §5.3), ticket states (EP §9.4 vs IT §7.1), Finance-stage states (FIN §5 vs PRC §4 and MKT §8)
+- Policies with no numbers in the specs: discount limits (SAL §7.2), points/rewards (CS §6.2), certificate weight criterion (SUS §6.2 wording is unclear), impact factors and method (SUS §11), payroll deductions (HR §3.6). Geofence radius, lateness tolerance and overtime are decided in phase 2 as settings (DECISIONS §7)
+- Lists that differ between specs: organization types (SAL §4.1 vs CS §6.8), Finance-stage states (FIN §5 vs PRC §4 and MKT §8). Employee status and ticket states are settled (DECISIONS §6, §8)
 - Migrating existing leads and customers from the current ERPNext
