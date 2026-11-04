@@ -9,6 +9,8 @@ import { requireAuth } from '../auth/middleware';
 import { authorize } from '../rbac/authorize';
 import { recordAudit } from '../audit/service';
 import { DocumentRecord } from './model';
+import { canAccessDocuments } from './access';
+import { forbidden } from '../http/errors';
 
 export const documentsRouter = Router();
 
@@ -22,6 +24,7 @@ documentsRouter.get(
   ),
   asyncHandler(async (req: AuthedRequest, res) => {
     const q = req.query as unknown as { ownerType: string; ownerId: string; includeOld?: boolean };
+    if (!(await canAccessDocuments(req, q.ownerType, q.ownerId))) throw forbidden();
     const items = await DocumentRecord.find({ ownerType: q.ownerType, ownerId: q.ownerId, deletedAt: null })
       .sort({ type: 1, version: -1 })
       .lean();
@@ -47,6 +50,7 @@ documentsRouter.post(
   validate(createDocumentSchema),
   asyncHandler(async (req: AuthedRequest, res) => {
     const body = req.body as z.infer<typeof createDocumentSchema>;
+    if (!(await canAccessDocuments(req, body.ownerType, body.ownerId))) throw forbidden();
     const prev = await DocumentRecord.findOne({
       ownerType: body.ownerType,
       ownerId: body.ownerId,

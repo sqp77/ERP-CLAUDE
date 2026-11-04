@@ -25,10 +25,24 @@ export async function loadRoles(): Promise<Map<string, RoleDoc>> {
   return cache.roles;
 }
 
-/** Insert missing core roles; never overwrite admin edits to existing ones. */
+/**
+ * Insert missing core roles, and add grants/field rules for resources a system role doesn't know yet
+ * (new modules). Existing grants edited by the admin are never changed.
+ */
 export async function ensureCoreRoles(): Promise<void> {
   for (const def of CORE_ROLES) {
-    await Role.updateOne({ code: def.code }, { $setOnInsert: def }, { upsert: true });
+    const existing = await Role.findOne({ code: def.code });
+    if (!existing) {
+      await Role.create(def);
+      continue;
+    }
+    const known = new Set((existing.grants as PermissionGrant[]).map((g) => g.resource));
+    const missingGrants = def.grants.filter((g) => !known.has(g.resource));
+    const knownRules = new Set((existing.fieldRules as FieldRule[]).map((r) => r.resource));
+    const missingRules = def.fieldRules.filter((r) => !knownRules.has(r.resource));
+    if (missingGrants.length || missingRules.length) {
+      await Role.updateOne({ code: def.code }, { $push: { grants: { $each: missingGrants }, fieldRules: { $each: missingRules } } });
+    }
   }
   clearRoleCache();
 }
@@ -115,10 +129,15 @@ export async function fieldRestrictions(
   return { hidden, readOnly };
 }
 
-/** Strip hidden fields from a plain object (field-level view rules). */
+/** Strip hidden fields from a plain object (field-level view rules). Supports dot paths ("bank.iban"). */
 export function redact<T extends Record<string, unknown>>(doc: T, hidden: Set<string>): Partial<T> {
   if (!hidden.size) return doc;
-  const out: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(doc)) if (!hidden.has(k)) out[k] = v;
+  const out = structuredClone(doc) as Record<string, unknown>;
+  for (const path of hidden) {
+    const parts = path.split('.');
+    let cur: Record<string, unknown> | undefined = out;
+    for (let i = 0; i < parts.length - 1 && cur; i++) cur = cur[parts[i]] as Record<string, unknown> | undefined;
+    if (cur && typeof cur === 'object') delete cur[parts[parts.length - 1]];
+  }
   return out as Partial<T>;
 }

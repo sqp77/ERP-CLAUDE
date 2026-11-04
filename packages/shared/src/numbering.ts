@@ -11,6 +11,7 @@ export const NUMBER_PREFIXES = {
   purchaseRequest: 'PRQ',
   financialRequest: 'FRQ',
   export: 'EXP',
+  contract: 'CNT',
 } as const;
 export type NumberPrefixKey = keyof typeof NUMBER_PREFIXES;
 export const NUMBER_PATTERN = /^[A-Z]{2,5}-\d{4}-\d{5,}$/;

@@ -1,4 +1,6 @@
-import { ALL_ACTIONS, type RoleDefinition } from '@eayni/shared';
+import { ALL_ACTIONS, EMPLOYEE_SENSITIVE_FIELDS, type RoleDefinition } from '@eayni/shared';
+
+const HIDE_SENSITIVE = { resource: 'hr.employees', fields: [...EMPLOYEE_SENSITIVE_FIELDS], view: false, edit: false };
 
 /**
  * Seeded core roles (DECISIONS §4). Grants are data: the admin can edit them from the roles screen.
@@ -30,10 +32,11 @@ export const CORE_ROLES: RoleDefinition[] = [
       { resource: 'comments', actions: ['view', 'create'], scope: 'all' },
       { resource: 'drafts', actions: ALL_ACTIONS, scope: 'own' },
       { resource: 'exports', actions: ['view', 'create'], scope: 'all' },
+      { resource: 'hr.employees', actions: ['view'], scope: 'all' },
     ],
     // FIN §12: the system admin has no automatic financial approval right. Finance resources are
     // granted to finance roles only when the Finance module arrives; nothing here gives approve on them.
-    fieldRules: [],
+    fieldRules: [HIDE_SENSITIVE],
   },
   {
     code: 'employee',
@@ -53,6 +56,9 @@ export const CORE_ROLES: RoleDefinition[] = [
       { resource: 'documents', actions: ['view'], scope: 'own' },
       { resource: 'comments', actions: ['view', 'create'], scope: 'own' },
       { resource: 'drafts', actions: ALL_ACTIONS, scope: 'own' },
+      { resource: 'hr.employees', actions: ['view'], scope: 'own' },
+      { resource: 'hr.contracts', actions: ['view'], scope: 'own' },
+      { resource: 'hr.custody', actions: ['view'], scope: 'own' },
     ],
     fieldRules: [],
   },
@@ -67,8 +73,9 @@ export const CORE_ROLES: RoleDefinition[] = [
       { resource: 'documents', actions: ['view'], scope: 'department' },
       { resource: 'comments', actions: ['view', 'create'], scope: 'department' },
       { resource: 'exports', actions: ['view', 'create'], scope: 'department' },
+      { resource: 'hr.employees', actions: ['view'], scope: 'department' },
     ],
-    fieldRules: [],
+    fieldRules: [HIDE_SENSITIVE],
   },
   {
     code: 'hr_officer',
@@ -89,6 +96,9 @@ export const CORE_ROLES: RoleDefinition[] = [
       { resource: 'comments', actions: ['view', 'create'], scope: 'all' },
       { resource: 'exports', actions: ['view', 'create'], scope: 'all' },
       { resource: 'audit', actions: ['view'], scope: 'all' },
+      { resource: 'hr.employees', actions: ['view', 'create', 'edit', 'export'], scope: 'all' },
+      { resource: 'hr.contracts', actions: ['view', 'create', 'edit'], scope: 'all' },
+      { resource: 'hr.custody', actions: ['view', 'create', 'edit'], scope: 'all' },
     ],
     fieldRules: [],
   },
@@ -112,6 +122,9 @@ export const CORE_ROLES: RoleDefinition[] = [
       { resource: 'comments', actions: ['view', 'create'], scope: 'all' },
       { resource: 'exports', actions: ['view', 'create'], scope: 'all' },
       { resource: 'audit', actions: ['view'], scope: 'all' },
+      { resource: 'hr.employees', actions: ALL_ACTIONS, scope: 'all' },
+      { resource: 'hr.contracts', actions: ALL_ACTIONS, scope: 'all' },
+      { resource: 'hr.custody', actions: ALL_ACTIONS, scope: 'all' },
     ],
     fieldRules: [],
   },
@@ -124,8 +137,9 @@ export const CORE_ROLES: RoleDefinition[] = [
       { resource: 'tasks', actions: ['view', 'create', 'edit'], scope: 'department' },
       { resource: 'calendar', actions: ['view', 'create', 'edit'], scope: 'department' },
       { resource: 'comments', actions: ['view', 'create'], scope: 'all' },
+      { resource: 'hr.employees', actions: ['view'], scope: 'all' },
     ],
-    fieldRules: [],
+    fieldRules: [{ resource: 'hr.employees', fields: ['identity.number', 'religion', 'birthDate'], view: false, edit: false }],
   },
   {
     code: 'finance_manager',
@@ -137,8 +151,9 @@ export const CORE_ROLES: RoleDefinition[] = [
       { resource: 'calendar', actions: ['view', 'create', 'edit'], scope: 'department' },
       { resource: 'comments', actions: ['view', 'create'], scope: 'all' },
       { resource: 'exports', actions: ['view', 'create'], scope: 'department' },
+      { resource: 'hr.employees', actions: ['view', 'export'], scope: 'all' },
     ],
-    fieldRules: [],
+    fieldRules: [{ resource: 'hr.employees', fields: ['identity.number', 'religion', 'birthDate'], view: false, edit: false }],
   },
   {
     code: 'executive',
@@ -152,7 +167,8 @@ export const CORE_ROLES: RoleDefinition[] = [
       { resource: 'documents', actions: ['view'], scope: 'all' },
       { resource: 'exports', actions: ['view', 'create'], scope: 'all' },
       { resource: 'audit', actions: ['view'], scope: 'all' },
+      { resource: 'hr.employees', actions: ['view'], scope: 'all' },
     ],
-    fieldRules: [],
+    fieldRules: [HIDE_SENSITIVE],
   },
 ];

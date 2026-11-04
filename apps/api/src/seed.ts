@@ -8,13 +8,26 @@ import { hashPassword } from './core/auth/crypto';
 import { Branch, Department, Position, Site } from './core/org/model';
 import { Holiday } from './core/dates/model';
 import { startDevMongo } from './devMongo';
+import { seedHr } from './seedHr';
+
+/**
+ * The seed carries a default admin password and sample data. It may only ever run against the local
+ * development database: loopback host, no Atlas/SRV, never in production.
+ */
+export function assertLocalDatabase(uri: string | undefined): void {
+  if (env().NODE_ENV === 'production') throw new Error('seed refused: NODE_ENV=production');
+  if (!uri) throw new Error('seed refused: no database URI');
+  if (uri.startsWith('mongodb+srv://')) throw new Error('seed refused: SRV/Atlas URI is not a local database');
+  const host = new URL(uri.replace(/^mongodb:\/\//, 'http://')).hostname;
+  if (!['127.0.0.1', 'localhost', '::1', '[::1]'].includes(host)) throw new Error(`seed refused: ${host} is not a local database`);
+}
 
 /**
  * Local seed: departments (DECISIONS §3), sample branch/site/positions (sample data only — real
  * branches are pending), national holidays placeholders, and one system admin.
  * Re-runnable: existing records are kept.
  */
-export async function seed(): Promise<{ adminEmail: string; adminPassword: string | undefined }> {
+export async function seed(): Promise<{ adminEmail: string; adminPassword: string | undefined; sampleEmployees: number; sampleLogins: { email: string; role: string }[]; samplePassword: string }> {
   await ensureBaseline();
   for (const code of DEPARTMENT_CODES) {
     await Department.updateOne(
@@ -77,7 +90,9 @@ export async function seed(): Promise<{ adminEmail: string; adminPassword: strin
       mustChangePassword: true,
     });
   }
-  return { adminEmail, adminPassword };
+  const samplePassword = process.env.SEED_SAMPLE_PASSWORD ?? 'Sample12345!';
+  const hr = await seedHr(samplePassword);
+  return { adminEmail, adminPassword, sampleEmployees: hr.created, sampleLogins: hr.logins, samplePassword };
 }
 
 const isMain = process.argv[1]?.endsWith('seed.ts') || process.argv[1]?.endsWith('seed.js');
@@ -86,6 +101,7 @@ if (isMain) {
     let uri = env().MONGODB_URI;
     let stop = async () => {};
     if (!uri && env().DEV_AUTO_MONGO) ({ uri, stop } = await startDevMongo());
+    assertLocalDatabase(uri);
     await connectDb(uri);
     const r = await seed();
     await disconnectDb();

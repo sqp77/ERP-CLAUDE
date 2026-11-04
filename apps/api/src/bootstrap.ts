@@ -7,6 +7,7 @@ import { runEventReminders } from './core/calendar/jobs';
 import { runDocumentExpiryAlerts } from './core/documents/service';
 import { registerExportResource } from './core/export/service';
 import { User } from './core/auth/model';
+import { registerHrModule } from './modules/hr';
 
 let jobsRegistered = false;
 /** Idempotent: jobs and export resources are registered once per process. */
@@ -16,6 +17,7 @@ export function registerCoreJobs(): void {
   registerJob('tasks.reminders', (now) => runTaskReminders(now));
   registerJob('calendar.reminders', (now) => runEventReminders(now));
   registerJob('documents.expiry', (now) => runDocumentExpiryAlerts(now));
+  registerHrModule();
 
   registerExportResource({
     resource: 'users',

@@ -12,3 +12,4 @@ export * from './schemas/org';
 export * from './schemas/tasks';
 export * from './schemas/calendar';
 export * from './schemas/misc';
+export * from './schemas/hr';

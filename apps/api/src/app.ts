@@ -23,6 +23,7 @@ import { draftsRouter } from './core/drafts/routes';
 import { commentsRouter } from './core/comments/routes';
 import { exportRouter } from './core/export/routes';
 import { registerCoreJobs } from './bootstrap';
+import { hrRouter } from './modules/hr/routes';
 
 /**
  * Express app. Staff realm under /api/v1; the external realm (/api/portal) is added with the
@@ -63,6 +64,7 @@ export function createApp(): Express {
   v1.use('/drafts', draftsRouter);
   v1.use('/comments', commentsRouter);
   v1.use('/export', exportRouter);
+  v1.use('/hr', hrRouter);
   app.use('/api/v1', v1);
 
   app.use(notFoundHandler);
