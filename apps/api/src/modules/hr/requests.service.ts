@@ -1,4 +1,4 @@
-import type { FilterQuery } from 'mongoose';
+import type { ClientSession, FilterQuery } from 'mongoose';
 import {
   DEFAULT_HR_REQUEST_ROUTES,
   HR_REQUEST_DETAIL_SCHEMAS,
@@ -21,6 +21,7 @@ import { HrRequest, HrRequestAction, type HrRequestDoc } from './requests.model'
 import { employeeOfUser, hrUserIds, registerManagerChangeHandler } from './service';
 import { issueCertificate } from './certificates';
 import { claimAttachments } from '../../core/files/service';
+import { withTransaction } from '../../db';
 
 const FINANCE_ROLES = ['finance_staff', 'finance_manager'];
 const HR_ROLES = ['hr_officer', 'hr_manager'];
@@ -85,18 +86,24 @@ async function logAction(
   action: string,
   actor: Actor,
   data: { fromState?: string; toState?: string; note?: string; changes?: unknown; role?: string } = {},
+  session?: ClientSession,
 ) {
-  await HrRequestAction.create({
-    requestId: request._id,
-    action,
-    fromState: data.fromState,
-    toState: data.toState,
-    actorUserId: actor.userId,
-    actorEmail: actor.email,
-    actorRole: data.role,
-    note: data.note,
-    changes: data.changes,
-  });
+  await HrRequestAction.create(
+    [
+      {
+        requestId: request._id,
+        action,
+        fromState: data.fromState,
+        toState: data.toState,
+        actorUserId: actor.userId,
+        actorEmail: actor.email,
+        actorRole: data.role,
+        note: data.note,
+        changes: data.changes,
+      },
+    ],
+    { session },
+  );
 }
 
 async function notifyPending(request: HrRequestDoc, employee: EmployeeDoc) {
@@ -234,14 +241,12 @@ export async function transition(
   const employee = await Employee.findById(request.employeeId);
   if (!employee) throw notFound();
   // Requester edits on resubmission [HR §3.5 stage 3: "إعادته لاستكمال البيانات"].
+  const edits: Record<string, unknown> = {};
   if (opts.details || opts.attachmentIds) {
     if (!opts.relations.includes('requester') || request.state !== 'needs_completion')
       throw forbidden('التعديل متاح لمقدّم الطلب عندما يكون الطلب بحاجة إلى استكمال');
-    if (opts.details) request.details = validateDetails(request.type as HrRequestType, opts.details);
-    if (opts.attachmentIds) {
-      await claimAttachments(opts.attachmentIds, 'hr_request', String(request._id), opts.user._id);
-      request.attachmentIds = opts.attachmentIds as never;
-    }
+    if (opts.details) edits.details = validateDetails(request.type as HrRequestType, opts.details);
+    if (opts.attachmentIds) edits.attachmentIds = opts.attachmentIds;
   }
   // Defence in depth for the two rules the UI also applies (security review A6/A7).
   const isRequester = String(request.requesterUserId) === String(opts.user._id);
@@ -271,111 +276,146 @@ export async function transition(
   if (FINAL_TRANSITIONS.has(effective) && !opts.relations.includes('approver'))
     throw forbidden('الاعتماد النهائي لهذا الطلب من صلاحية مدير المالية أو الإدارة التنفيذية فقط');
   const fromState = request.state;
-  const result = await applyTransition({
-    def,
-    record: request.toObject() as never,
-    recordType: 'hr_request',
-    transition: effective,
-    actor: opts.actor,
-    actorRelations: opts.relations,
-    reason: opts.reason,
-    departmentId: request.departmentId ? String(request.departmentId) : undefined,
-  });
-  Object.assign(request, result.fields);
-  request.pendingWith = pendingFor(result.to, request) ?? undefined;
-  const decided = ['approved', 'rejected', 'needs_completion'].includes(result.to);
-  if (decided)
-    request.decision = {
-      by: opts.user._id,
-      at: new Date(),
-      outcome: result.to,
+  const now = new Date();
+  const toFinance = request.route?.finalApprover === 'hr_then_finance';
+  const isCertificate = request.type === 'salary_certificate' || request.type === 'experience_certificate';
+  const actorRole = opts.relations.find((r) =>
+    [
+      'requester',
+      'direct_manager',
+      'hr_officer',
+      'hr_manager',
+      'finance_manager',
+      'finance_staff',
+      'executive',
+    ].includes(r),
+  );
+
+  // One transaction (review B10): conditional record update → certificate → stage log → action log →
+  // audit → outbox. A lost race (review B9) throws 409 before anything is written.
+  const { doc, to } = await withTransaction(async (session) => {
+    if (opts.attachmentIds)
+      await claimAttachments(opts.attachmentIds, 'hr_request', String(request._id), opts.user._id, session);
+    let updated: HrRequestDoc | null = null;
+    const result = await applyTransition({
+      def,
+      record: { ...request.toObject(), ...edits } as never,
+      recordType: 'hr_request',
+      transition: effective,
+      actor: opts.actor,
+      actorRelations: opts.relations,
       reason: opts.reason,
-    } as never;
-  if (result.to === 'awaiting_final' && request.route?.finalApprover === 'hr_then_finance') {
-    request.handoff = { department: 'finance', since: new Date(), status: 'waiting' } as never; // FIN §11: same number, same attachments
-  }
-  if (result.to === 'approved' && request.handoff) request.handoff.status = 'done';
-  // Certificates are generated on approval [HR §3.5.4–3.5.5].
-  if (
-    result.to === 'approved' &&
-    (request.type === 'salary_certificate' || request.type === 'experience_certificate')
-  ) {
-    const cert = await issueCertificate(request, employee, String(opts.user._id));
-    request.certificate = {
-      number: cert.number,
-      attachmentId: cert.attachmentId,
-      issuedAt: new Date(),
-      issuedBy: opts.user._id,
-    } as never;
-    await recordAudit(opts.actor, {
-      action: 'create',
-      resource: 'hr.certificates',
-      resourceId: cert.number,
-      meta: { requestId: String(request._id), employeeId: String(employee._id) },
-      sensitive: true,
-    });
-  }
-  await request.save();
-  await logAction(request, effective, opts.actor, {
-    fromState,
-    toState: result.to,
-    note: opts.reason,
-    changes: opts.details ? { details: opts.details } : undefined,
-    role: opts.relations.find((r) =>
-      [
-        'requester',
-        'direct_manager',
-        'hr_officer',
-        'hr_manager',
-        'finance_manager',
-        'finance_staff',
-        'executive',
-      ].includes(r),
-    ),
-  });
-  await recordAudit(opts.actor, {
-    action: 'transition',
-    resource: 'hr.requests',
-    resourceId: String(request._id),
-    before: { state: fromState },
-    after: { state: result.to },
-    meta: { transition: effective, reason: opts.reason },
-  });
-  await publish({
-    type: `hr.request.${result.to}`,
-    aggregateType: 'hr_request',
-    aggregateId: String(request._id),
-    payload: { number: request.number, type: request.type, from: fromState },
-    actorUserId: opts.actor.userId,
-  });
-  if (request.handoff?.status === 'waiting' && result.to === 'awaiting_final') {
-    await publish({
-      type: 'hr.request.handoff.finance',
-      aggregateType: 'hr_request',
-      aggregateId: String(request._id),
-      payload: {
-        number: request.number,
-        amountHalalas: (request.details as { amountHalalas?: number }).amountHalalas,
+      departmentId: request.departmentId ? String(request.departmentId) : undefined,
+      now,
+      session,
+      persist: async (fields) => {
+        const set: Record<string, unknown> = { ...fields, ...edits };
+        set.pendingWith = pendingFor(fields.state, request) ?? null;
+        if (['approved', 'rejected', 'needs_completion'].includes(fields.state))
+          set.decision = { by: opts.user._id, at: now, outcome: fields.state, reason: opts.reason };
+        if (fields.state === 'awaiting_final' && toFinance)
+          set.handoff = { department: 'finance', since: now, status: 'waiting' }; // FIN §11: same number, same attachments
+        else if (fields.state === 'approved' && request.handoff?.department) set['handoff.status'] = 'done';
+        updated = await HrRequest.findOneAndUpdate(
+          { _id: request._id, state: fromState },
+          { $set: set },
+          { new: true, session },
+        );
+        return !!updated;
       },
-      actorUserId: opts.actor.userId,
     });
-  }
-  // Notifications [HR §3.5 stage 4, EP §15.8].
-  if (result.to === 'approved' || result.to === 'rejected') {
-    const label = HR_REQUEST_TYPE_AR[request.type as HrRequestType];
+    const doc = updated! as HrRequestDoc;
+    // Certificates are generated on approval [HR §3.5.4–3.5.5], only by the transition that won.
+    if (result.to === 'approved' && isCertificate) {
+      const cert = await issueCertificate(doc, employee, String(opts.user._id), session);
+      doc.certificate = {
+        number: cert.number,
+        attachmentId: cert.attachmentId,
+        issuedAt: now,
+        issuedBy: opts.user._id,
+      } as never;
+      await HrRequest.updateOne({ _id: doc._id }, { $set: { certificate: doc.certificate } }, { session });
+      await recordAudit(
+        opts.actor,
+        {
+          action: 'create',
+          resource: 'hr.certificates',
+          resourceId: cert.number,
+          meta: { requestId: String(doc._id), employeeId: String(employee._id) },
+          sensitive: true,
+        },
+        session,
+      );
+    }
+    await logAction(
+      doc,
+      effective,
+      opts.actor,
+      {
+        fromState,
+        toState: result.to,
+        note: opts.reason,
+        changes: opts.details ? { details: opts.details } : undefined,
+        role: actorRole,
+      },
+      session,
+    );
+    await recordAudit(
+      opts.actor,
+      {
+        action: 'transition',
+        resource: 'hr.requests',
+        resourceId: String(doc._id),
+        before: { state: fromState },
+        after: { state: result.to },
+        meta: { transition: effective, reason: opts.reason },
+      },
+      session,
+    );
+    await publish(
+      {
+        type: `hr.request.${result.to}`,
+        aggregateType: 'hr_request',
+        aggregateId: String(doc._id),
+        payload: { number: doc.number, type: doc.type, from: fromState },
+        actorUserId: opts.actor.userId,
+      },
+      session,
+    );
+    if (result.to === 'awaiting_final' && toFinance) {
+      await publish(
+        {
+          type: 'hr.request.handoff.finance',
+          aggregateType: 'hr_request',
+          aggregateId: String(doc._id),
+          payload: {
+            number: doc.number,
+            amountHalalas: (doc.details as { amountHalalas?: number }).amountHalalas,
+          },
+          actorUserId: opts.actor.userId,
+        },
+        session,
+      );
+    }
+    return { doc, to: result.to };
+  });
+
+  // Notifications after commit [HR §3.5 stage 4, EP §15.8].
+  if (to === 'approved' || to === 'rejected') {
+    const label = HR_REQUEST_TYPE_AR[doc.type as HrRequestType];
     await notify({
-      userIds: [String(request.requesterUserId)],
+      userIds: [String(doc.requesterUserId)],
       type: 'request.decided',
       bodyAr:
-        result.to === 'approved'
-          ? `تم اعتماد ${label} (${request.number})`
-          : `تم رفض ${label} (${request.number}): ${opts.reason ?? ''}`,
-      link: `/me/requests/${request._id}`,
+        to === 'approved'
+          ? `تم اعتماد ${label} (${doc.number})`
+          : `تم رفض ${label} (${doc.number}): ${opts.reason ?? ''}`,
+      link: `/me/requests/${doc._id}`,
     });
   } else {
-    await notifyPending(request, employee);
+    await notifyPending(doc, employee);
   }
-  return request;
+  return doc;
 }
 
 export async function availableActions(user: UserDoc, request: HrRequestDoc): Promise<string[]> {

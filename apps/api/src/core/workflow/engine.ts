@@ -5,7 +5,7 @@ import {
   type WorkflowDefinitionInput,
   type WorkflowFields,
 } from '@eayni/shared';
-import { badRequest, forbidden } from '../http/errors';
+import { badRequest, conflict, forbidden } from '../http/errors';
 import type { Actor } from '../http/context';
 import { addBusinessDays, loadHolidaySet } from '../dates/businessDays';
 import { StageLog, WorkflowDef } from './model';
@@ -81,6 +81,12 @@ export interface TransitionArgs {
   departmentId?: string;
   now?: Date;
   session?: ClientSession;
+  /**
+   * Persist the new fields with a conditional update on { _id, state: fromState } and return whether a
+   * document was updated (review B9). When it returns false the engine throws 409 and writes no stage
+   * log. When omitted the caller persists after the call (legacy behaviour).
+   */
+  persist?: (fields: WorkflowFields, session?: ClientSession) => Promise<boolean>;
 }
 
 export interface TransitionResult {
@@ -97,8 +103,8 @@ export function availableTransitions(def: WorkflowDefinition, state: string, act
 }
 
 /**
- * Validate and apply one transition. Returns the new workflow fields and appends the stage log.
- * The caller persists `fields` on the record (ideally in the same session).
+ * Validate and apply one transition. Returns the new workflow fields and appends the stage log — after
+ * `persist` succeeded, so a lost race never leaves a stage-log row behind.
  */
 export async function applyTransition(args: TransitionArgs): Promise<TransitionResult> {
   const { def, record, transition, actorRelations } = args;
@@ -127,6 +133,10 @@ export async function applyTransition(args: TransitionArgs): Promise<TransitionR
     dueAt: closed ? null : await dueFor(def, t.to, now),
     closedAt: closed ? now : null,
   };
+  if (args.persist && !(await args.persist(fields, args.session)))
+    throw conflict('تغيّرت حالة السجل من مستخدم آخر أثناء العمل عليه، حدّث الصفحة وأعد المحاولة', {
+      state: record.state,
+    });
   await StageLog.create(
     [
       {

@@ -1,3 +1,4 @@
+import type { ClientSession } from 'mongoose';
 import { randomUUID } from 'node:crypto';
 import { CONTRACT_TYPE_AR, EMPLOYMENT_TYPE_AR } from '@eayni/shared';
 import { htmlDocument, renderTemplate } from '../../core/templates/render';
@@ -39,6 +40,7 @@ export async function issueCertificate(
   request: HrRequestDoc,
   employee: EmployeeDoc,
   issuedBy: string,
+  session?: ClientSession,
 ): Promise<{ number: string; attachmentId: string; html: string }> {
   const [orgName, dept, pos, contract] = await Promise.all([
     getSetting('general.organizationNameAr'),
@@ -46,7 +48,7 @@ export async function issueCertificate(
     employee.positionId ? Position.findById(employee.positionId).select('titleAr').lean() : null,
     Contract.findOne({ employeeId: employee._id }).sort({ version: -1 }).lean(),
   ]);
-  const number = await nextNumber('certificate');
+  const number = await nextNumber('certificate', session);
   const issuedAt = new Date();
   const details = request.details as Record<string, unknown>;
   const { decrypt } = await import('../../core/auth/crypto');
@@ -91,17 +93,22 @@ export async function issueCertificate(
   const html = htmlDocument(body, `${number}`);
   const key = `certificates/${issuedAt.getUTCFullYear()}/${number}-${randomUUID().slice(0, 8)}.html`;
   await storage().putObject(key, Buffer.from(html, 'utf8'), 'text/html; charset=utf-8');
-  const att = await Attachment.create({
-    key,
-    originalName: `${number}.html`,
-    mimeType: 'text/html',
-    size: Buffer.byteLength(html),
-    status: 'uploaded',
-    uploadedAt: issuedAt,
-    uploadedBy: issuedBy,
-    ownerType: 'hr_request',
-    ownerId: String(request._id),
-    sensitive: true,
-  });
+  const [att] = await Attachment.create(
+    [
+      {
+        key,
+        originalName: `${number}.html`,
+        mimeType: 'text/html',
+        size: Buffer.byteLength(html),
+        status: 'uploaded',
+        uploadedAt: issuedAt,
+        uploadedBy: issuedBy,
+        ownerType: 'hr_request',
+        ownerId: String(request._id),
+        sensitive: true,
+      },
+    ],
+    { session },
+  );
   return { number, attachmentId: String(att._id), html };
 }

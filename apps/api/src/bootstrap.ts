@@ -8,12 +8,17 @@ import { runDocumentExpiryAlerts } from './core/documents/service';
 import { registerExportResource } from './core/export/service';
 import { User } from './core/auth/model';
 import { registerHrModule } from './modules/hr';
+import { registerSubscribers } from './subscribers';
 
 let jobsRegistered = false;
-/** Idempotent: jobs and export resources are registered once per process. */
-export function registerCoreJobs(): void {
+/**
+ * Idempotent: jobs, export resources, record-access checkers and outbox subscribers are registered
+ * once per process. Every Lambda entry point (api, jobs, outbox) calls this.
+ */
+export function registerModules(): void {
   if (jobsRegistered) return;
   jobsRegistered = true;
+  registerSubscribers();
   registerJob('tasks.reminders', (now) => runTaskReminders(now));
   registerJob('calendar.reminders', (now) => runEventReminders(now));
   registerJob('documents.expiry', (now) => runDocumentExpiryAlerts(now));
@@ -38,6 +43,9 @@ export function registerCoreJobs(): void {
       User.find({ deletedAt: null }).limit(limit).lean() as unknown as Promise<Record<string, unknown>[]>,
   });
 }
+
+/** @deprecated name kept for the existing call sites; same as registerModules(). */
+export const registerCoreJobs = registerModules;
 
 /** Make sure configuration data exists (roles, workflow defaults). Safe to run on every start. */
 export async function ensureBaseline(): Promise<void> {

@@ -10,12 +10,17 @@ const outboxSchema = new Schema(
     idempotencyKey: { type: String, unique: true, sparse: true },
     status: {
       type: String,
-      enum: ['pending', 'processing', 'delivered', 'failed'],
+      // 'unhandled' = no subscriber yet; replayed automatically once one registers (review B11b).
+      enum: ['pending', 'processing', 'delivered', 'failed', 'unhandled'],
       default: 'pending',
       index: true,
     },
     attempts: { type: Number, default: 0 },
     availableAt: { type: Date, default: () => new Date(), index: true },
+    /** Claim lease; an event still 'processing' after this time is reclaimed by the next worker (review B11a). */
+    leaseExpiresAt: { type: Date },
+    /** Subscriber keys that already succeeded; skipped on retry (review B11c). */
+    handledBy: { type: [String], default: [] },
     lastError: { type: String },
     deliveredAt: { type: Date },
     createdAt: { type: Date, default: () => new Date() },

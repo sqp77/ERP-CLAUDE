@@ -22,7 +22,7 @@ import { documentsRouter } from './core/documents/routes';
 import { draftsRouter } from './core/drafts/routes';
 import { commentsRouter } from './core/comments/routes';
 import { exportRouter } from './core/export/routes';
-import { registerCoreJobs } from './bootstrap';
+import { registerModules } from './bootstrap';
 import { hrRouter } from './modules/hr/routes';
 import { portalRouter, profileChangesRouter } from './modules/hr/portalRoutes';
 import { requestsRouter } from './modules/hr/requests.routes';
@@ -74,6 +74,6 @@ export function createApp(): Express {
 
   app.use(notFoundHandler);
   app.use(errorHandler);
-  registerCoreJobs();
+  registerModules();
   return app;
 }

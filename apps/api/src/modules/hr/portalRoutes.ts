@@ -19,6 +19,7 @@ import { nextNumber } from '../../core/numbering/service';
 import { notify } from '../../core/notifications/service';
 import { Attachment } from '../../core/files/model';
 import { claimAttachments } from '../../core/files/service';
+import { withTransaction } from '../../db';
 import { decrypt, encrypt } from '../../core/auth/crypto';
 import { Branch, Department, Position, Site, Unit } from '../../core/org/model';
 import { Contract, Employee } from './model';
@@ -301,41 +302,63 @@ profileChangesRouter.get(
 );
 
 async function decide(req: AuthedRequest, approve: boolean) {
-  const pcr = await ProfileChangeRequest.findOne({ _id: req.params.id, state: 'pending' });
-  if (!pcr) throw notFound('الطلب غير موجود أو تم البت فيه');
-  if (String(pcr.userId) === String(req.auth.user._id)) throw badRequest('لا يمكنك اعتماد طلبك (فصل المهام)');
+  const existing = await ProfileChangeRequest.findById(req.params.id).lean();
+  if (!existing) throw notFound('الطلب غير موجود');
+  if (String(existing.userId) === String(req.auth.user._id))
+    throw badRequest('لا يمكنك اعتماد طلبك (فصل المهام)');
   const { reason } = req.body as z.infer<typeof decideChangeRequestSchema>;
   if (!approve && !reason?.trim()) throw badRequest('سبب الرفض مطلوب');
-  const employee = await Employee.findById(pcr.employeeId);
+  const employee = await Employee.findById(existing.employeeId);
   if (!employee) throw notFound();
-  if (approve && pcr.type === 'bank' && pcr.payload?.ibanEnc) {
-    const before = { bankName: employee.bank?.bankName, ibanLast4: employee.bank?.ibanLast4 };
-    employee.bank = {
-      bankName: pcr.payload.bankName,
-      ibanEnc: pcr.payload.ibanEnc,
-      ibanLast4: pcr.payload.ibanLast4,
-    };
-    await employee.save();
-    await recordAudit(actorFrom(req), {
-      action: 'approve',
-      resource: 'hr.employees',
-      resourceId: String(employee._id),
-      before,
-      after: { bankName: pcr.payload.bankName, ibanLast4: pcr.payload.ibanLast4 },
-      sensitive: true,
-      meta: { profileChange: pcr.number },
-    });
-  }
-  pcr.state = approve ? 'approved' : 'rejected';
-  pcr.decidedBy = req.auth.user._id;
-  pcr.decidedAt = new Date();
-  pcr.decisionReason = reason;
-  await pcr.save();
-  await recordAudit(actorFrom(req), {
-    action: approve ? 'approve' : 'reject',
-    resource: 'hr.profile_changes',
-    resourceId: String(pcr._id),
-    meta: { reason },
+  // One transaction with a conditional update on the pending state (review B9/B10): the second
+  // decider of a race gets 409 and the bank account is written once.
+  const pcr = await withTransaction(async (session) => {
+    const won = await ProfileChangeRequest.findOneAndUpdate(
+      { _id: existing._id, state: 'pending' },
+      {
+        $set: {
+          state: approve ? 'approved' : 'rejected',
+          decidedBy: req.auth.user._id,
+          decidedAt: new Date(),
+          decisionReason: reason,
+        },
+      },
+      { new: true, session },
+    );
+    if (!won) throw conflict('تم البت في هذا الطلب من مستخدم آخر، حدّث الصفحة');
+    if (approve && won.type === 'bank' && won.payload?.ibanEnc) {
+      const before = { bankName: employee.bank?.bankName, ibanLast4: employee.bank?.ibanLast4 };
+      const bank = {
+        bankName: won.payload.bankName,
+        ibanEnc: won.payload.ibanEnc,
+        ibanLast4: won.payload.ibanLast4,
+      };
+      await Employee.updateOne({ _id: employee._id }, { $set: { bank } }, { session });
+      await recordAudit(
+        actorFrom(req),
+        {
+          action: 'approve',
+          resource: 'hr.employees',
+          resourceId: String(employee._id),
+          before,
+          after: { bankName: bank.bankName, ibanLast4: bank.ibanLast4 },
+          sensitive: true,
+          meta: { profileChange: won.number },
+        },
+        session,
+      );
+    }
+    await recordAudit(
+      actorFrom(req),
+      {
+        action: approve ? 'approve' : 'reject',
+        resource: 'hr.profile_changes',
+        resourceId: String(won._id),
+        meta: { reason },
+      },
+      session,
+    );
+    return won;
   });
   await notify({
     userIds: [String(pcr.userId)],
