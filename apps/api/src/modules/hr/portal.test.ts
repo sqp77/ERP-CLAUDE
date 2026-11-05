@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import request from 'supertest';
-import { auth, loginAs, makeDepartment, makeUser, PASSWORD, testApp } from '../../test/helpers';
+import {
+  activateAccount,
+  auth,
+  loginAs,
+  makeDepartment,
+  makeUser,
+  PASSWORD,
+  testApp,
+} from '../../test/helpers';
 import { setSetting } from '../../core/settings/service';
 import { SYSTEM_ACTOR } from '../../core/http/context';
 import { AuditLog } from '../../core/audit/model';
@@ -32,11 +40,7 @@ async function setup() {
       basicSalaryHalalas: 900_000,
       bank: { bankName: 'الراجحي', iban: 'SA0380000000608010167519' },
     });
-  const me = (
-    await request(app())
-      .post('/api/v1/auth/login')
-      .send({ email: 'omar@eayni.local', password: created.body.temporaryPassword })
-  ).body.token as string;
+  const me = await activateAccount('omar@eayni.local', created.body.temporaryPassword);
   return { ops, hr, me, employeeId: created.body._id as string, userId: created.body.userId as string };
 }
 
@@ -248,11 +252,7 @@ describe('secondment report after the mission [EP §5.3, EP §15.14, DECISIONS �
         hireDate: '2025-01-10',
       });
     const id = created.body._id as string;
-    const me = (
-      await request(app())
-        .post('/api/v1/auth/login')
-        .send({ email: 'dana@eayni.local', password: created.body.temporaryPassword })
-    ).body.token as string;
+    const me = await activateAccount('dana@eayni.local', created.body.temporaryPassword);
     // Secondment Sunday 2026-11-01 → Wednesday 2026-11-04, then back to work.
     await request(app())
       .post(`/api/v1/hr/employees/${id}/status`)

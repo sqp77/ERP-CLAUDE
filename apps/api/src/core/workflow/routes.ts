@@ -39,11 +39,10 @@ workflowsRouter.put(
   validate(workflowDefinitionSchema),
   asyncHandler(async (req: AuthedRequest, res) => {
     const before = await WorkflowDef.findOne({ type: req.params.type }).lean();
-    const def = await saveWorkflow({
-      ...req.body,
-      type: req.params.type,
-      version: (before?.version ?? 0) + 1,
-    });
+    const def = await saveWorkflow(
+      { ...req.body, type: req.params.type, version: (before?.version ?? 0) + 1 },
+      String(req.auth.user._id),
+    );
     await recordAudit(actorFrom(req), {
       action: before ? 'update' : 'create',
       resource: 'workflows',

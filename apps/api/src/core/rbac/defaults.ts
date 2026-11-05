@@ -19,6 +19,8 @@ export const CORE_ROLES: RoleDefinition[] = [
     departmentScoped: false,
     grants: [
       { resource: 'users', actions: ALL_ACTIONS, scope: 'all' },
+      // Authenticator resets and other account-security actions (security review A1).
+      { resource: 'users.security', actions: ['edit'], scope: 'all' },
       { resource: 'roles', actions: ALL_ACTIONS, scope: 'all' },
       { resource: 'settings', actions: ALL_ACTIONS, scope: 'all' },
       { resource: 'audit', actions: ['view', 'export'], scope: 'all' },

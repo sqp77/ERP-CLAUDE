@@ -18,6 +18,7 @@ import { recordAudit } from '../../core/audit/service';
 import { nextNumber } from '../../core/numbering/service';
 import { notify } from '../../core/notifications/service';
 import { Attachment } from '../../core/files/model';
+import { claimAttachments } from '../../core/files/service';
 import { decrypt, encrypt } from '../../core/auth/crypto';
 import { Branch, Department, Position, Site, Unit } from '../../core/org/model';
 import { Contract, Employee } from './model';
@@ -116,6 +117,7 @@ portalRouter.post(
     });
     if (!att || !att.mimeType.startsWith('image/')) throw badRequest('الصورة غير صالحة');
     const before = e.photoAttachmentId;
+    await claimAttachments([att._id], 'employee', String(e._id), req.auth.user._id);
     e.photoAttachmentId = att._id;
     await e.save();
     await recordAudit(actorFrom(req), {
@@ -160,6 +162,7 @@ portalRouter.post(
       proofAttachmentId: proof._id,
       notes: body.notes,
     });
+    await claimAttachments([proof._id], 'profile_change', String(pcr._id), req.auth.user._id);
     await recordAudit(actorFrom(req), {
       action: 'create',
       resource: 'hr.profile_changes',
@@ -234,6 +237,7 @@ portalRouter.post(
     // Allowed during and after the secondment [EP §5.3: the report follows the mission]; a new upload replaces the old one.
     if (!e.secondment?.destination) throw badRequest('لا يوجد انتداب مسجّل في ملفك');
     const body = req.body as z.infer<typeof secondmentReportSchema>;
+    await claimAttachments([body.attachmentId], 'employee', String(e._id), req.auth.user._id);
     e.secondment.reportAttachmentId = body.attachmentId as never;
     e.secondment.reportedAt = new Date();
     e.secondment.reportNotes = body.notes;

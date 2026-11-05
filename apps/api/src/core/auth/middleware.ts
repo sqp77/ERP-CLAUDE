@@ -1,6 +1,6 @@
 import type { RequestHandler } from 'express';
 import { randomUUID } from 'node:crypto';
-import { unauthorized } from '../http/errors';
+import { forbidden, unauthorized } from '../http/errors';
 import type { AuthedRequest } from '../http/context';
 import { getSetting } from '../settings/service';
 import { User } from './model';
@@ -24,6 +24,14 @@ export async function mfaRequiredFor(roleCodes: string[]): Promise<boolean> {
   return roleCodes.some((r) => required.includes(r));
 }
 
+/** With a temporary password only these endpoints work (security review A8). */
+const TEMP_PASSWORD_ALLOWED = [
+  /^\/api\/v1\/auth\/me$/,
+  /^\/api\/v1\/auth\/password\/change$/,
+  /^\/api\/v1\/auth\/mfa\//,
+  /^\/api\/v1\/auth\/logout$/,
+];
+
 export function requireAuth(opts: RequireAuthOptions = {}): RequestHandler {
   return (req, _res, next) => {
     const r = req as AuthedRequest;
@@ -44,6 +52,11 @@ export function requireAuth(opts: RequireAuthOptions = {}): RequestHandler {
       if (!user || user.status !== 'active' || user.deletedAt)
         throw unauthorized('الحساب غير نشط', 'account_disabled');
       const roleCodes = [...new Set(user.roles.map((x) => x.role))];
+      if (user.mustChangePassword) {
+        const path = `${req.baseUrl}${req.path}`.replace(/\/$/, '');
+        if (!TEMP_PASSWORD_ALLOWED.some((re) => re.test(path)))
+          throw forbidden('يلزم تغيير كلمة المرور المؤقتة أولًا', 'password_change_required');
+      }
       if (!opts.allowMfaPending) {
         const required = await mfaRequiredFor(roleCodes);
         if (required && !user.totpEnabled)

@@ -7,6 +7,7 @@ import { flattenPermissions } from '../rbac/service';
 import { notify } from '../notifications/service';
 import { env, isProd } from '../../config';
 import { decrypt, encrypt, hashPassword, randomToken, sha256, verifyPassword } from './crypto';
+import { notifySystemAdmins } from '../notifications/alerts';
 import { LoginLog, PasswordReset, Session, User, type SessionDoc, type UserDoc } from './model';
 import { mfaRequiredFor } from './middleware';
 import { createSession, revokeAllSessions, revokeSession } from './session';
@@ -52,6 +53,18 @@ export async function login(email: string, password: string, meta: ClientMeta) {
     await log('login_disabled', { userId: user._id, email, ...meta });
     throw unauthorized('الحساب معطّل، تواصل مع مدير النظام', 'account_disabled');
   }
+  // Temporary passwords expire (security review A8): the admin must issue a new one.
+  if (user.mustChangePassword) {
+    const hours = await getSetting('auth.temporaryPasswordHours');
+    const issuedAt = user.passwordChangedAt ?? user.createdAt ?? new Date(0);
+    if (Date.now() - new Date(issuedAt).getTime() > hours * 3_600_000) {
+      await log('login_temp_password_expired', { userId: user._id, email, ...meta });
+      throw unauthorized(
+        'انتهت صلاحية كلمة المرور المؤقتة، اطلب كلمة مرور جديدة من مدير النظام',
+        'temporary_password_expired',
+      );
+    }
+  }
   user.failedLogins = 0;
   user.lockedUntil = undefined;
   user.lastLoginAt = new Date();
@@ -82,16 +95,49 @@ export async function verifyMfa(
   meta: ClientMeta,
 ): Promise<void> {
   if (!user.totpEnabled || !user.totpSecret) throw badRequest('التحقق الثنائي غير مفعّل');
-  if (!verifyTotp(code, decrypt(user.totpSecret))) {
-    await log('mfa_failed', { userId: user._id, email: user.email, sessionId: session._id, ...meta });
-    throw unauthorized('رمز التحقق غير صحيح', 'mfa_invalid');
+  if (session.mfaVerified) return;
+  const codeHash = sha256(`${user._id}:${code}`);
+  // Replay guard: a code accepted within the last window (±1 step of 30 s) is never accepted again (security review A2).
+  const replayed =
+    user.totpLastCodeHash === codeHash &&
+    !!user.totpLastCodeAt &&
+    Date.now() - user.totpLastCodeAt.getTime() < TOTP_REPLAY_WINDOW_MS;
+  if (replayed || !verifyTotp(code, decrypt(user.totpSecret))) {
+    session.mfaFailedAttempts = (session.mfaFailedAttempts ?? 0) + 1;
+    const base = { userId: user._id, email: user.email, sessionId: session._id, ...meta };
+    await log(replayed ? 'mfa_replayed' : 'mfa_failed', base);
+    if (session.mfaFailedAttempts >= MFA_MAX_ATTEMPTS) {
+      await revokeSession(session, 'mfa_locked');
+      await log('mfa_locked', base);
+      throw unauthorized('تم إنهاء الجلسة بعد محاولات تحقق فاشلة متكررة، سجّل الدخول مجددًا', 'mfa_locked');
+    }
+    await session.save();
+    throw unauthorized(
+      replayed ? 'هذا الرمز استُخدم للتو، انتظر الرمز التالي' : 'رمز التحقق غير صحيح',
+      replayed ? 'mfa_replayed' : 'mfa_invalid',
+    );
   }
+  user.totpLastCodeHash = codeHash;
+  user.totpLastCodeAt = new Date();
+  await user.save();
   session.mfaVerified = true;
+  session.mfaFailedAttempts = 0;
   await session.save();
   await log('mfa_verified', { userId: user._id, email: user.email, sessionId: session._id, ...meta });
 }
 
-export async function startMfaEnrollment(user: UserDoc) {
+const MFA_MAX_ATTEMPTS = 5;
+/** otplib window = 1 → codes from the previous, current and next 30-second step are valid. */
+const TOTP_REPLAY_WINDOW_MS = 3 * 30_000;
+
+/** Enrollment (first or replacement) needs a fully verified session once an authenticator exists (security review A1). */
+function assertMayEnroll(user: UserDoc, session: SessionDoc): void {
+  if (user.totpEnabled && !session.mfaVerified)
+    throw unauthorized('يلزم إدخال رمز التحقق الحالي قبل تغيير تطبيق المصادقة', 'mfa_required');
+}
+
+export async function startMfaEnrollment(user: UserDoc, session: SessionDoc) {
+  assertMayEnroll(user, session);
   const secret = generateTotpSecret();
   user.totpPendingSecret = encrypt(secret);
   await user.save();
@@ -105,6 +151,7 @@ export async function confirmMfaEnrollment(
   code: string,
   actor: Actor,
 ): Promise<void> {
+  assertMayEnroll(user, session);
   if (!user.totpPendingSecret) throw badRequest('ابدأ التفعيل أولًا');
   const secret = decrypt(user.totpPendingSecret);
   if (!verifyTotp(code, secret)) throw unauthorized('رمز التحقق غير صحيح', 'mfa_invalid');
@@ -139,6 +186,53 @@ export async function disableMfa(user: UserDoc, code: string, actor: Actor): Pro
   });
 }
 
+/**
+ * Admin resets a lost authenticator (security review A1): secrets are dropped, every session is revoked,
+ * the action is audited and the user plus the other system admins are told. If the user's role requires
+ * MFA, the next login forces a fresh enrollment.
+ */
+export async function resetMfaByAdmin(target: UserDoc, actor: Actor, meta: ClientMeta): Promise<void> {
+  if (String(target._id) === actor.userId)
+    throw forbidden('أعد تفعيل المصادقة من صفحة الأمان، لا عبر الإعادة الإدارية');
+  const had = target.totpEnabled;
+  target.totpEnabled = false;
+  target.totpSecret = undefined;
+  target.totpPendingSecret = undefined;
+  target.totpLastCodeHash = undefined;
+  target.totpLastCodeAt = undefined;
+  await target.save();
+  await revokeAllSessions(String(target._id), 'mfa_reset');
+  await log('mfa_reset', { userId: target._id, email: target.email, ...meta });
+  await recordAudit(actor, {
+    action: 'update',
+    resource: 'users',
+    resourceId: String(target._id),
+    before: { totpEnabled: had },
+    after: { totpEnabled: false },
+    meta: { mfaReset: true },
+  });
+  await notify({
+    userIds: [String(target._id)],
+    type: 'security.alert',
+    bodyAr: 'أعاد مدير النظام تعيين تطبيق المصادقة لحسابك. إن لم تطلب ذلك فتواصل مع التقنية فورًا.',
+    link: '/me/security',
+  });
+  await notifySystemAdmins({
+    bodyAr: `تمت إعادة تعيين المصادقة الثنائية للمستخدم ${target.email} بواسطة ${actor.email ?? 'النظام'}`,
+    link: `/admin/users/${target._id}`,
+    excludeUserId: actor.userId,
+  });
+}
+
+/** Temporary password that always satisfies the policy (letters + digits, length ≥ policy minimum). */
+export async function generateTemporaryPassword(): Promise<string> {
+  const min = await getSetting('auth.passwordMinLength');
+  for (;;) {
+    const candidate = randomToken(Math.max(9, Math.ceil(min * 0.75))).replace(/[-_]/g, 'a');
+    if (candidate.length >= min && /[A-Za-z]/.test(candidate) && /\d/.test(candidate)) return candidate;
+  }
+}
+
 export async function validatePasswordPolicy(password: string): Promise<void> {
   const min = await getSetting('auth.passwordMinLength');
   if (password.length < min) throw badRequest(`كلمة المرور يجب ألا تقل عن ${min} أحرف`);
@@ -153,6 +247,9 @@ export async function changePassword(
   next: string,
   meta: ClientMeta,
 ): Promise<void> {
+  // A password-only session must not change the password of a user who has an authenticator (security review A8).
+  if (user.totpEnabled && !session.mfaVerified)
+    throw unauthorized('يلزم إدخال رمز التحقق أولًا', 'mfa_required');
   if (!(await verifyPassword(current, user.passwordHash)))
     throw unauthorized('كلمة المرور الحالية غير صحيحة', 'invalid_credentials');
   await validatePasswordPolicy(next);

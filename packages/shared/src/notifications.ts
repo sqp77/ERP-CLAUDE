@@ -23,6 +23,7 @@ export const NOTIFICATION_TYPES = [
   'comment.mention',
   'auth.password_reset',
   'auth.new_login',
+  'security.alert',
   'generic',
 ] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
@@ -50,5 +51,6 @@ export const NOTIFICATION_TITLES_AR: Record<NotificationType, string> = {
   'comment.mention': 'تمت الإشارة إليك في تعليق',
   'auth.password_reset': 'طلب إعادة تعيين كلمة المرور',
   'auth.new_login': 'تسجيل دخول جديد إلى حسابك',
+  'security.alert': 'تنبيه أمني',
   generic: 'إشعار',
 };

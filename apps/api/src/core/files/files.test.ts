@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import request from 'supertest';
 import { auth, loginAs, makeUser, testApp } from '../../test/helpers';
 import { AuditLog } from '../audit/model';
+import { registerRecordAccess, registerSensitiveOwnerType } from '../access/registry';
 
 const app = () => testApp();
 
@@ -9,10 +10,19 @@ describe('files: presigned upload/download with the local adapter [CLAUDE.md Fil
   it('presigns, uploads bytes directly, then serves a signed download; sensitive downloads are audited', async () => {
     await makeUser('u@eayni.local');
     const t = await loginAs('u@eayni.local');
+    // Sensitivity follows the owner type on the server (security review A3); the client flag is ignored.
+    registerSensitiveOwnerType('test_contract');
+    registerRecordAccess('test_contract', async () => true);
     const pre = await request(app())
       .post('/api/v1/files/presign')
       .set(auth(t))
-      .send({ fileName: 'contract.pdf', mimeType: 'application/pdf', size: 11, sensitive: true });
+      .send({
+        fileName: 'contract.pdf',
+        mimeType: 'application/pdf',
+        size: 11,
+        ownerType: 'test_contract',
+        ownerId: 'c1',
+      });
     expect(pre.status).toBe(201);
     const uploadUrl = new URL(pre.body.upload.url);
     const put = await request(app())

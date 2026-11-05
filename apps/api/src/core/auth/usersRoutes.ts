@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import {
   createUserSchema,
+  grantableRolesFor,
   listUsersQuerySchema,
   updateUserSchema,
   type CreateUserInput,
@@ -10,15 +11,16 @@ import { z } from 'zod';
 import { asyncHandler } from '../http/async';
 import { validate } from '../http/validate';
 import { actorFrom, type AuthedRequest } from '../http/context';
-import { badRequest, notFound } from '../http/errors';
+import { badRequest, forbidden, notFound } from '../http/errors';
+import { notifySystemAdmins } from '../notifications/alerts';
 import { recordAudit } from '../audit/service';
 import { authorize } from '../rbac/authorize';
 import { loadRoles } from '../rbac/service';
-import { hashPassword, randomToken } from './crypto';
+import { hashPassword } from './crypto';
 import { requireAuth } from './middleware';
 import { LoginLog, User } from './model';
 import { revokeAllSessions } from './session';
-import { validatePasswordPolicy } from './service';
+import { generateTemporaryPassword, resetMfaByAdmin, validatePasswordPolicy } from './service';
 
 export const usersRouter = Router();
 
@@ -29,6 +31,46 @@ async function assertRolesExist(roles: { role: string }[]) {
   const known = await loadRoles();
   const missing = roles.map((r) => r.role).filter((r) => !known.has(r));
   if (missing.length) throw badRequest(`أدوار غير معروفة: ${missing.join(', ')}`);
+}
+
+/**
+ * Role changes are limited by the grantable matrix (security review A5): the actor may add or remove
+ * only roles in the union of GRANTABLE_ROLES over their own roles. Returns the diff for the audit log.
+ */
+function assertMayChangeRoles(
+  req: AuthedRequest,
+  before: { role: string }[],
+  after: { role: string }[],
+): { added: string[]; removed: string[] } {
+  const prev = new Set(before.map((r) => r.role));
+  const next = new Set(after.map((r) => r.role));
+  const added = [...next].filter((r) => !prev.has(r));
+  const removed = [...prev].filter((r) => !next.has(r));
+  const allowed = grantableRolesFor(req.auth.roleCodes);
+  if (allowed !== '*') {
+    const denied = [...added, ...removed].filter((r) => !allowed.has(r));
+    if (denied.length)
+      throw forbidden(`ليست لديك صلاحية منح أو سحب الأدوار: ${denied.join(', ')}`, 'role_not_grantable');
+  }
+  return { added, removed };
+}
+
+async function announceRoleChange(
+  req: AuthedRequest,
+  target: { _id: unknown; email: string },
+  diff: { added: string[]; removed: string[] },
+) {
+  if (!diff.added.length && !diff.removed.length) return;
+  const parts = [
+    diff.added.length ? `منح: ${diff.added.join(', ')}` : '',
+    diff.removed.length ? `سحب: ${diff.removed.join(', ')}` : '',
+  ].filter(Boolean);
+  await notifySystemAdmins({
+    bodyAr: `تغيير أدوار ${target.email} بواسطة ${req.auth.user.email} — ${parts.join(' / ')}`,
+    link: `/admin/users/${target._id}`,
+    data: { userId: String(target._id), ...diff },
+    excludeUserId: String(req.auth.user._id),
+  });
 }
 
 usersRouter.get(
@@ -63,12 +105,14 @@ usersRouter.post(
   asyncHandler(async (req: AuthedRequest, res) => {
     const body = req.body as CreateUserInput;
     await assertRolesExist(body.roles);
-    const password = body.password ?? randomToken(9);
+    const diff = assertMayChangeRoles(req, [], body.roles);
+    const password = body.password ?? (await generateTemporaryPassword());
     await validatePasswordPolicy(password);
     const user = await User.create({
       email: body.email,
       displayNameAr: body.displayNameAr,
       passwordHash: await hashPassword(password),
+      passwordChangedAt: new Date(),
       roles: body.roles,
       employeeId: body.employeeId,
       departmentId: body.departmentId,
@@ -79,7 +123,9 @@ usersRouter.post(
       resource: 'users',
       resourceId: String(user._id),
       after: user,
+      meta: { roleChanges: diff },
     });
+    await announceRoleChange(req, user, diff);
     const out = await User.findById(user._id).select(PUBLIC).lean();
     // The temporary password is returned once so the admin can hand it over; it is never stored or logged.
     res.status(201).json({ ...out, temporaryPassword: body.password ? undefined : password });
@@ -107,6 +153,7 @@ usersRouter.patch(
     const before = await User.findOne({ _id: req.params.id, deletedAt: null });
     if (!before) throw notFound();
     if (body.roles) await assertRolesExist(body.roles);
+    const diff = body.roles ? assertMayChangeRoles(req, before.roles, body.roles) : undefined;
     if (body.status === 'disabled' && String(before._id) === String(req.auth.user._id))
       throw badRequest('لا يمكنك تعطيل حسابك');
     const snapshot = before.toObject();
@@ -121,7 +168,9 @@ usersRouter.patch(
       resourceId: String(before._id),
       before: snapshot,
       after: before,
+      meta: diff ? { roleChanges: diff } : undefined,
     });
+    if (diff) await announceRoleChange(req, before, diff);
     res.json(await User.findById(before._id).select(PUBLIC).lean());
   }),
 );
@@ -133,7 +182,7 @@ usersRouter.post(
   asyncHandler(async (req: AuthedRequest, res) => {
     const user = await User.findOne({ _id: req.params.id, deletedAt: null });
     if (!user) throw notFound();
-    const password = randomToken(9);
+    const password = await generateTemporaryPassword();
     user.passwordHash = await hashPassword(password);
     user.mustChangePassword = true;
     user.passwordChangedAt = new Date();
@@ -146,6 +195,22 @@ usersRouter.post(
       meta: { adminPasswordReset: true },
     });
     res.json({ temporaryPassword: password });
+  }),
+);
+
+/** Reset a lost authenticator — system admin only, audited, sessions revoked (security review A1). */
+usersRouter.post(
+  '/:id/mfa/reset',
+  requireAuth(),
+  authorize('users.security', 'edit'),
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const user = await User.findOne({ _id: req.params.id, deletedAt: null });
+    if (!user) throw notFound();
+    await resetMfaByAdmin(user, actorFrom(req), {
+      ip: req.ip,
+      userAgent: String(req.headers['user-agent'] ?? ''),
+    });
+    res.json({ ok: true });
   }),
 );
 

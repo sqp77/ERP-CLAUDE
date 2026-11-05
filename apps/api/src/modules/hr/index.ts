@@ -1,11 +1,16 @@
 import { registerJob } from '../../core/jobs/registry';
 import { registerTeamResolver } from '../../core/rbac/scope';
 import { registerExpiryRecipients } from '../../core/documents/service';
-import { registerDocumentAccess } from '../../core/documents/access';
+import { registerRecordAccess, registerSensitiveOwnerType } from '../../core/access/registry';
+import { effectivePermission } from '../../core/rbac/service';
+import type { RoleAssignment } from '@eayni/shared';
+import type { AuthedRequest } from '../../core/http/context';
+import { ProfileChangeRequest } from './profileChanges.model';
+import { HrRequest } from './requests.model';
 import { registerExportResource } from '../../core/export/service';
 import { Employee } from './model';
 import { employeeScopeFilter, hrUserIds, teamUserIdsOf } from './service';
-import { registerRequestHandlers, runRequestOverdueReminders } from './requests.service';
+import { registerRequestHandlers, runRequestOverdueReminders, visibilityFilter } from './requests.service';
 import {
   runAccountDeactivation,
   runBirthdayGreetings,
@@ -32,19 +37,38 @@ export function registerHrModule(): void {
     if (e?.userId) ids.push(String(e.userId));
     return ids;
   });
-  registerDocumentAccess('employee', async (req, ownerId) => {
-    if (req.authz?.scope === 'all') return true;
+  // Record access for files, documents and comments hanging on HR records (security review A3/A4).
+  // Each checker evaluates the user's permission on the HR resource itself, not on the calling resource.
+  const permissionOn = async (req: AuthedRequest, resource: string) =>
+    effectivePermission(
+      req.auth.user.roles as RoleAssignment[],
+      req.auth.user.departmentId ? String(req.auth.user.departmentId) : undefined,
+      resource,
+      'view',
+    );
+  registerRecordAccess('employee', async (req, ownerId) => {
+    const eff = await permissionOn(req, 'hr.employees');
+    if (!eff) return false;
+    if (eff.scope === 'all') return true;
     const filter = await employeeScopeFilter(
-      {
-        resource: 'hr.employees',
-        action: 'view',
-        scope: req.authz?.scope ?? 'own',
-        departmentIds: req.authz?.departmentIds ?? [],
-      },
+      { resource: 'hr.employees', action: 'view', ...eff },
       req.auth.user,
     );
     return !!(await Employee.exists({ _id: ownerId, deletedAt: null, ...filter }));
   });
+  registerRecordAccess('hr_request', async (req, id) => {
+    const eff = await permissionOn(req, 'hr.requests');
+    if (!eff) return false;
+    const filter = await visibilityFilter(req.auth.user, { resource: 'hr.requests', action: 'view', ...eff });
+    return !!(await HrRequest.exists({ _id: id, deletedAt: null, ...filter }));
+  });
+  registerRecordAccess('profile_change', async (req, id) => {
+    const eff = await permissionOn(req, 'hr.profile_changes');
+    if (!eff) return false;
+    const filter = eff.scope === 'own' ? { userId: req.auth.user._id } : {};
+    return !!(await ProfileChangeRequest.exists({ _id: id, ...filter }));
+  });
+  for (const t of ['employee', 'hr_request', 'profile_change']) registerSensitiveOwnerType(t);
 
   registerJob('hr.contracts.alerts', (now) => runContractAlerts(now));
   registerJob('hr.probation.alerts', (now) => runProbationAlerts(now));

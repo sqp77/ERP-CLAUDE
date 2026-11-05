@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import request from 'supertest';
-import { auth, loginAs, makeDepartment, makeUser, PASSWORD, testApp } from '../../test/helpers';
+import {
+  activateAccount,
+  auth,
+  loginAs,
+  makeDepartment,
+  makeUser,
+  PASSWORD,
+  testApp,
+} from '../../test/helpers';
 import { setSetting } from '../../core/settings/service';
 import { SYSTEM_ACTOR } from '../../core/http/context';
 import { AuditLog } from '../../core/audit/model';
@@ -52,11 +60,8 @@ describe('HR employee file [HR §3.1, §3.3]', () => {
     expect(stored?.bank?.ibanEnc).not.toContain('0167519');
 
     // The employee logs in with the temporary password and reads own file.
-    const me = await request(app())
-      .post('/api/v1/auth/login')
-      .send({ email: 'saud@eayni.local', password: created.body.temporaryPassword });
-    expect(me.status).toBe(200);
-    const own = await request(app()).get('/api/v1/hr/employees/me').set(auth(me.body.token));
+    const meToken = await activateAccount('saud@eayni.local', created.body.temporaryPassword);
+    const own = await request(app()).get('/api/v1/hr/employees/me').set(auth(meToken));
     expect(own.status).toBe(200);
     expect(own.body.bank.iban).toBe('SA0380000000608010167519');
     expect(own.body.basicSalaryHalalas).toBe(1_200_000);
@@ -161,11 +166,7 @@ describe('HR employee file [HR §3.1, §3.3]', () => {
       .post('/api/v1/hr/employees')
       .set(auth(hr))
       .send(base({ departmentId: String(ops._id) }));
-    const token = (
-      await request(app())
-        .post('/api/v1/auth/login')
-        .send({ email: 'saud@eayni.local', password: emp.body.temporaryPassword })
-    ).body.token;
+    const token = await activateAccount('saud@eayni.local', emp.body.temporaryPassword);
     const lastDay = new Date(Date.now() + 3 * 86_400_000);
     await request(app())
       .post(`/api/v1/hr/employees/${emp.body._id}/status`)
@@ -179,7 +180,7 @@ describe('HR employee file [HR §3.1, §3.3]', () => {
     expect((await request(app()).get('/api/v1/auth/me').set(auth(token))).status).toBe(401);
     const login = await request(app())
       .post('/api/v1/auth/login')
-      .send({ email: 'saud@eayni.local', password: emp.body.temporaryPassword });
+      .send({ email: 'saud@eayni.local', password: PASSWORD });
     expect(login.body.error.code).toBe('account_disabled');
     expect(await runAccountDeactivation(new Date(lastDay.getTime() + 2 * 86_400_000))).toBe(0); // idempotent
   });
@@ -296,11 +297,7 @@ describe('HR employee file [HR §3.1, §3.3]', () => {
     const list = await request(app()).get(`/api/v1/hr/employees/${id}/contracts`).set(auth(hr));
     expect(list.body.items).toHaveLength(3);
     // The employee can read own contracts but cannot add one.
-    const token = (
-      await request(app())
-        .post('/api/v1/auth/login')
-        .send({ email: 'saud@eayni.local', password: emp.body.temporaryPassword })
-    ).body.token;
+    const token = await activateAccount('saud@eayni.local', emp.body.temporaryPassword);
     expect((await request(app()).get(`/api/v1/hr/employees/${id}/contracts`).set(auth(token))).status).toBe(
       200,
     );

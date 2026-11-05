@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/lib/auth';
+import { grantableRolesFor } from '@eayni/shared';
 import { usePrefs } from '@/lib/preferences';
 import { get, patch, post, type Paged } from '@/lib/api';
 import { errorMessage } from '@/lib/errors';
@@ -37,7 +38,7 @@ interface UserRow {
 /** Users administration [HR §6, EP §3.10]. Employee files themselves arrive with HR in phase 1. */
 export function UsersPage() {
   const { t } = useTranslation();
-  const { can } = useAuth();
+  const { can, user } = useAuth();
   const { formatDateTime } = usePrefs();
   const toast = useToast();
   const qc = useQueryClient();
@@ -51,6 +52,9 @@ export function UsersPage() {
   });
   const depts = useDepartments();
   const roles = useRoles();
+  // The API refuses roles outside the grantable matrix (security review A5); the form shows only those.
+  const grantable = grantableRolesFor(user?.roles.map((r) => r.role) ?? []);
+  const roleOptions = roles.data?.items.filter((r) => grantable === '*' || grantable.has(r.code)) ?? [];
   const invalidate = () => qc.invalidateQueries({ queryKey: ['users'] });
   const toggle = useMutation({
     mutationFn: (u: UserRow) =>
@@ -65,6 +69,14 @@ export function UsersPage() {
         password: r.temporaryPassword,
       })),
     onSuccess: (r) => setTemp(r),
+    onError: (e) => toast(errorMessage(e), 'error'),
+  });
+  const resetMfa = useMutation({
+    mutationFn: (u: UserRow) => post(`/users/${u._id}/mfa/reset`),
+    onSuccess: () => {
+      invalidate();
+      toast(t('admin.users.mfaResetDone'), 'success');
+    },
     onError: (e) => toast(errorMessage(e), 'error'),
   });
   const form = useForm<{ email: string; displayNameAr: string; role: string; departmentId?: string }>({
@@ -165,6 +177,16 @@ export function UsersPage() {
                       <Button variant="ghost" onClick={() => reset.mutate(u)}>
                         {t('admin.users.resetPassword')}
                       </Button>
+                      {u.totpEnabled && can('users.security', 'edit') && (
+                        <Button
+                          variant="ghost"
+                          onClick={() =>
+                            window.confirm(t('admin.users.mfaResetConfirm')) && resetMfa.mutate(u)
+                          }
+                        >
+                          {t('admin.users.mfaReset')}
+                        </Button>
+                      )}
                     </div>
                   )}
                 </Td>
@@ -185,7 +207,7 @@ export function UsersPage() {
           </Field>
           <Field label={t('admin.users.roles')}>
             <Select {...form.register('role')}>
-              {roles.data?.items.map((r) => (
+              {roleOptions.map((r) => (
                 <option key={r.code} value={r.code}>
                   {r.nameAr}
                 </option>

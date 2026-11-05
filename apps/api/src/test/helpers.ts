@@ -40,3 +40,17 @@ export async function loginAs(email: string, password = PASSWORD): Promise<strin
 }
 
 export const auth = (token: string) => ({ Authorization: `Bearer ${token}` });
+
+/**
+ * First login of an account created with a temporary password: the API only allows the password
+ * change until it is done (security review A8). Returns a fully usable Bearer token.
+ */
+export async function activateAccount(email: string, temporaryPassword: string): Promise<string> {
+  const token = await loginAs(email, temporaryPassword);
+  const res = await request(testApp())
+    .post('/api/v1/auth/password/change')
+    .set(auth(token))
+    .send({ currentPassword: temporaryPassword, newPassword: PASSWORD });
+  if (res.status !== 200) throw new Error(`activate failed: ${res.status} ${JSON.stringify(res.body)}`);
+  return token;
+}

@@ -7,6 +7,8 @@ import { actorFrom, type AuthedRequest } from '../http/context';
 import { requireAuth } from '../auth/middleware';
 import { authorize } from '../rbac/authorize';
 import { recordAudit } from '../audit/service';
+import { forbidden } from '../http/errors';
+import { canAccessRecord } from '../access/registry';
 import { notify } from '../notifications/service';
 import { Comment } from './model';
 
@@ -17,8 +19,9 @@ commentsRouter.get(
   requireAuth(),
   authorize('comments', 'view'),
   validate(z.object({ recordType: z.string(), recordId: z.string() }), 'query'),
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: AuthedRequest, res) => {
     const { recordType, recordId } = req.query as { recordType: string; recordId: string };
+    if (!(await canAccessRecord(req, recordType, recordId))) throw forbidden();
     res.json({ items: await Comment.find({ recordType, recordId }).sort({ createdAt: 1 }).lean() });
   }),
 );
@@ -30,6 +33,7 @@ commentsRouter.post(
   validate(createCommentSchema),
   asyncHandler(async (req: AuthedRequest, res) => {
     const body = req.body as Z.infer<typeof createCommentSchema>;
+    if (!(await canAccessRecord(req, body.recordType, body.recordId))) throw forbidden();
     const c = await Comment.create({ ...body, authorId: req.auth.user._id });
     await recordAudit(actorFrom(req), {
       action: 'create',

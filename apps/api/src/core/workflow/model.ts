@@ -10,6 +10,8 @@ const workflowDefSchema = new Schema(
     states: { type: Schema.Types.Mixed, required: true },
     transitions: { type: Schema.Types.Mixed, required: true },
     reopen: { type: Schema.Types.Mixed },
+    /** Set when an admin edited the definition; such definitions are never overwritten by newer defaults. */
+    updatedBy: { type: String },
   },
   { timestamps: true },
 );

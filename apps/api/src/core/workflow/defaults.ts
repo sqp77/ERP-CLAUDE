@@ -94,6 +94,7 @@ export const TICKET_WORKFLOW: WorkflowDefinitionInput = {
 export const HR_REQUEST_WORKFLOW: WorkflowDefinitionInput = {
   type: 'hr_request',
   nameAr: 'طلب موظف',
+  version: 2, // v2: the final step is decided by the 'approver' relation only (security review A7)
   initialState: 'new',
   states: {
     new: { labelAr: 'جديد', category: 'open', owner: 'requester' },
@@ -186,14 +187,14 @@ export const HR_REQUEST_WORKFLOW: WorkflowDefinitionInput = {
       labelAr: 'الاعتماد النهائي',
       from: ['awaiting_final'],
       to: 'approved',
-      allow: ['approver', 'hr_manager', 'finance_manager', 'executive'],
+      allow: ['approver'],
     },
     {
       code: 'final_reject',
       labelAr: 'رفض نهائي',
       from: ['awaiting_final'],
       to: 'rejected',
-      allow: ['approver', 'hr_manager', 'finance_manager', 'executive'],
+      allow: ['approver'],
       requireReason: true,
     },
     {

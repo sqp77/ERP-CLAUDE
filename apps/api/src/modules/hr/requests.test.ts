@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import request from 'supertest';
-import { auth, loginAs, makeDepartment, makeUser, testApp } from '../../test/helpers';
+import { activateAccount, auth, loginAs, makeDepartment, makeUser, testApp } from '../../test/helpers';
 import { setSetting } from '../../core/settings/service';
 import { SYSTEM_ACTOR } from '../../core/http/context';
 import { Notification } from '../../core/notifications/model';
@@ -43,15 +43,13 @@ async function setup() {
     .post('/api/v1/hr/employees')
     .set(auth(hr))
     .send(emp({ departmentId: String(ops._id), directManagerId: boss.body._id }));
-  const login = async (email: string, pw: string) =>
-    (await request(app()).post('/api/v1/auth/login').send({ email, password: pw })).body.token as string;
   return {
     ops,
     hr,
     boss,
     staff,
-    me: await login('omar@eayni.local', staff.body.temporaryPassword),
-    mgr: await login('boss@eayni.local', boss.body.temporaryPassword),
+    me: await activateAccount('omar@eayni.local', staff.body.temporaryPassword),
+    mgr: await activateAccount('boss@eayni.local', boss.body.temporaryPassword),
     fin: await loginAs('fin@eayni.local'),
   };
 }
@@ -240,11 +238,7 @@ describe('HR self-service requests [HR §3.5, EP §11, DECISIONS §5]', () => {
       type: 'employee.manager_or_department_changed',
     }).lean();
     expect(oldN?.bodyAr).toContain('2 طلبًا');
-    const newMgr = (
-      await request(app())
-        .post('/api/v1/auth/login')
-        .send({ email: 'new@eayni.local', password: newBoss.body.temporaryPassword })
-    ).body.token;
+    const newMgr = await activateAccount('new@eayni.local', newBoss.body.temporaryPassword);
     const inbox = await request(app()).get('/api/v1/hr/requests?view=inbox').set(auth(newMgr));
     expect(inbox.body.items.map((i: { number: string }) => i.number).sort()).toEqual(
       [leave.body.number, perm.body.number].sort(),
@@ -274,5 +268,64 @@ describe('HR self-service requests [HR §3.5, EP §11, DECISIONS §5]', () => {
         titleAr: 'طلب متأخر عن مهلته',
       }),
     ).toBe(1);
+  });
+  it('A6: nobody decides their own request, even with an HR or Finance role', async () => {
+    const { hr, ops } = await setup();
+    // An HR officer who is also an employee files a certificate request that lands in the HR queue.
+    const hrEmp = await request(app())
+      .post('/api/v1/hr/employees')
+      .set(auth(hr))
+      .send(
+        emp({
+          workEmail: 'hremp@eayni.local',
+          identity: { type: 'national_id', number: '1000000009' },
+          departmentId: String(ops._id),
+        }),
+      );
+    const { User } = await import('../../core/auth/model');
+    await User.updateOne({ email: 'hremp@eayni.local' }, { $push: { roles: { role: 'hr_officer' } } });
+    const mine = await activateAccount('hremp@eayni.local', hrEmp.body.temporaryPassword);
+    const cert = await post(mine, {
+      type: 'salary_certificate',
+      details: { addressedTo: 'بنك الراجحي', purpose: 'تمويل', detailed: false },
+    });
+    expect(cert.body.state).toBe('awaiting_hr');
+    const detail = await request(app()).get(`/api/v1/hr/requests/${cert.body._id}`).set(auth(mine));
+    expect(detail.body.actions).not.toContain('approve');
+    const self = await act(mine, cert.body._id, 'approve');
+    expect(self.status).toBe(403);
+    expect((await HrRequest.findById(cert.body._id))!.state).toBe('awaiting_hr');
+    // Another HR officer approves it.
+    expect((await act(hr, cert.body._id, 'approve')).status).toBe(200);
+  });
+
+  it('A7: only a finance manager or the executive decides the final step of an advance', async () => {
+    const { me, mgr, hr, fin } = await setup();
+    await makeUser('hrm@eayni.local', [{ role: 'employee' }, { role: 'hr_manager' }]);
+    await makeUser('fstaff@eayni.local', [{ role: 'employee' }, { role: 'finance_staff' }]);
+    const hrm = await loginAs('hrm@eayni.local');
+    const fstaff = await loginAs('fstaff@eayni.local');
+    const adv = await post(me, {
+      type: 'advance',
+      details: { amountHalalas: 500_000, installments: 5, reason: 'ظرف طارئ' },
+    });
+    expect((await act(mgr, adv.body._id, 'approve')).status).toBe(200);
+    expect((await act(hr, adv.body._id, 'approve')).status).toBe(200);
+    expect((await HrRequest.findById(adv.body._id))!.state).toBe('awaiting_final');
+    for (const [token, who] of [
+      [hrm, 'hr_manager'],
+      [fstaff, 'finance_staff'],
+      [hr, 'hr_officer'],
+    ] as const) {
+      const detail = await request(app()).get(`/api/v1/hr/requests/${adv.body._id}`).set(auth(token));
+      expect(detail.body.actions, who).not.toContain('approve');
+      expect((await act(token, adv.body._id, 'approve')).status, who).toBe(403);
+      expect((await act(token, adv.body._id, 'reject', { reason: 'لا' })).status, who).toBe(403);
+    }
+    expect((await HrRequest.findById(adv.body._id))!.state).toBe('awaiting_final');
+    const detail = await request(app()).get(`/api/v1/hr/requests/${adv.body._id}`).set(auth(fin));
+    expect(detail.body.actions).toContain('approve');
+    expect((await act(fin, adv.body._id, 'approve')).status).toBe(200);
+    expect((await HrRequest.findById(adv.body._id))!.state).toBe('approved');
   });
 });

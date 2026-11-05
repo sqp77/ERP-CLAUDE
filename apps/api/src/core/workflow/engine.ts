@@ -27,16 +27,25 @@ export async function getWorkflow(type: string): Promise<WorkflowDefinition> {
   return def;
 }
 
-/** Insert a default definition when none exists; admin edits are preserved. */
+/**
+ * Insert a default definition when none exists. A stored default that was never edited by an admin is
+ * upgraded when the shipped default has a higher version; admin-edited definitions are preserved.
+ */
 export async function ensureWorkflow(input: WorkflowDefinitionInput): Promise<void> {
   const def = workflowDefinitionSchema.parse(input);
-  await WorkflowDef.updateOne({ type: def.type }, { $setOnInsert: def }, { upsert: true });
+  const existing = await WorkflowDef.findOne({ type: def.type }).select('version updatedBy').lean();
+  if (!existing) await WorkflowDef.updateOne({ type: def.type }, { $setOnInsert: def }, { upsert: true });
+  else if (!existing.updatedBy && (existing.version ?? 1) < def.version)
+    await WorkflowDef.updateOne({ type: def.type }, { $set: def });
   cache.delete(def.type);
 }
 
-export async function saveWorkflow(input: WorkflowDefinitionInput): Promise<WorkflowDefinition> {
+export async function saveWorkflow(
+  input: WorkflowDefinitionInput,
+  updatedBy?: string,
+): Promise<WorkflowDefinition> {
   const def = workflowDefinitionSchema.parse(input);
-  await WorkflowDef.updateOne({ type: def.type }, { $set: def }, { upsert: true });
+  await WorkflowDef.updateOne({ type: def.type }, { $set: { ...def, updatedBy } }, { upsert: true });
   cache.delete(def.type);
   return def;
 }

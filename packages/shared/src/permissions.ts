@@ -86,3 +86,24 @@ export const CORE_ROLE_CODES = [
   'executive',
 ] as const;
 export type CoreRoleCode = (typeof CORE_ROLE_CODES)[number];
+
+/**
+ * Which roles a user holding a given role may assign to others (security review A5). The union over the
+ * actor's roles is the whitelist; anything outside it is refused by the API. The system admin may assign
+ * every role; HR assigns only the two roles it needs for the org chart (DECISIONS §4). '*' = any known role.
+ */
+export const GRANTABLE_ROLES: Record<string, readonly string[] | '*'> = {
+  system_admin: '*',
+  hr_officer: ['employee', 'department_manager'],
+  hr_manager: ['employee', 'department_manager'],
+};
+
+export function grantableRolesFor(actorRoles: readonly string[]): Set<string> | '*' {
+  const out = new Set<string>();
+  for (const r of actorRoles) {
+    const g = GRANTABLE_ROLES[r];
+    if (g === '*') return '*';
+    for (const code of g ?? []) out.add(code);
+  }
+  return out;
+}

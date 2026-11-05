@@ -20,10 +20,22 @@ import { Employee, type EmployeeDoc } from './model';
 import { HrRequest, HrRequestAction, type HrRequestDoc } from './requests.model';
 import { employeeOfUser, hrUserIds, registerManagerChangeHandler } from './service';
 import { issueCertificate } from './certificates';
+import { claimAttachments } from '../../core/files/service';
 
 const FINANCE_ROLES = ['finance_staff', 'finance_manager'];
 const HR_ROLES = ['hr_officer', 'hr_manager'];
 const FINAL_ROLES = ['finance_manager', 'executive', 'hr_manager'];
+
+/**
+ * One rule for who decides "awaiting_final" (security review A7), used by relationsFor (→ UI actions)
+ * and enforced again inside transition(): an advance (hr_then_finance) is decided by the Finance
+ * manager or the executive only — never Finance staff or HR [FIN §12, DECISIONS §13].
+ */
+export function finalDeciderRoles(request: { route?: { finalApprover?: string | null } | null }): string[] {
+  return request.route?.finalApprover === 'hr_then_finance' ? ['finance_manager', 'executive'] : FINAL_ROLES;
+}
+const FINAL_TRANSITIONS = new Set(['final_approve', 'final_reject']);
+const REQUESTER_TRANSITIONS = new Set(['submit_to_manager', 'submit_to_hr']);
 
 export function validateDetails(type: HrRequestType, details: unknown) {
   const schema = HR_REQUEST_DETAIL_SCHEMAS[type];
@@ -166,6 +178,7 @@ export async function createRequest(
     pendingWith: 'requester',
     flags,
   });
+  await claimAttachments(input.attachmentIds, 'hr_request', String(request._id), user._id);
   await logAction(request, 'created', actor, { toState: 'new' });
   await recordAudit(actor, {
     action: 'create',
@@ -194,20 +207,20 @@ export interface TransitionOpts {
   attachmentIds?: string[];
 }
 
+/**
+ * Relations of a user to a request, fed to the workflow engine. The requester is only ever the
+ * requester: role relations are dropped so nobody decides their own request at any stage
+ * (security review A6, DECISIONS §13, FIN §12).
+ */
 export async function relationsFor(user: UserDoc, request: HrRequestDoc): Promise<string[]> {
-  const rel = new Set<string>();
   const uid = String(user._id);
-  if (String(request.requesterUserId) === uid) rel.add('requester');
+  if (String(request.requesterUserId) === uid) return ['requester'];
+  const rel = new Set<string>();
   if (request.directManagerUserId && String(request.directManagerUserId) === uid) rel.add('direct_manager');
   for (const r of user.roles.map((x) => x.role)) rel.add(r);
   if (request.state === 'awaiting_final') {
-    const finance = request.route?.finalApprover === 'hr_then_finance';
-    if (
-      finance
-        ? user.roles.some((x) => FINANCE_ROLES.includes(x.role))
-        : user.roles.some((x) => FINAL_ROLES.includes(x.role))
-    )
-      rel.add('approver');
+    const deciders = finalDeciderRoles(request);
+    if (user.roles.some((x) => deciders.includes(x.role))) rel.add('approver');
   }
   return [...rel];
 }
@@ -225,8 +238,15 @@ export async function transition(
     if (!opts.relations.includes('requester') || request.state !== 'needs_completion')
       throw forbidden('التعديل متاح لمقدّم الطلب عندما يكون الطلب بحاجة إلى استكمال');
     if (opts.details) request.details = validateDetails(request.type as HrRequestType, opts.details);
-    if (opts.attachmentIds) request.attachmentIds = opts.attachmentIds as never;
+    if (opts.attachmentIds) {
+      await claimAttachments(opts.attachmentIds, 'hr_request', String(request._id), opts.user._id);
+      request.attachmentIds = opts.attachmentIds as never;
+    }
   }
+  // Defence in depth for the two rules the UI also applies (security review A6/A7).
+  const isRequester = String(request.requesterUserId) === String(opts.user._id);
+  if (isRequester && !REQUESTER_TRANSITIONS.has(code) && code !== 'resubmit')
+    throw forbidden('لا يمكنك البت في طلبك (فصل المهام)');
   // The route decides where HR approval leads: directly to approved, or to Finance with the same number.
   let effective = code;
   if (code === 'hr_approve' && request.route?.finalApprover === 'hr_then_finance')
@@ -248,6 +268,8 @@ export async function transition(
       effective = 'hr_forward_final';
   }
   if (code === 'return') effective = 'hr_return';
+  if (FINAL_TRANSITIONS.has(effective) && !opts.relations.includes('approver'))
+    throw forbidden('الاعتماد النهائي لهذا الطلب من صلاحية مدير المالية أو الإدارة التنفيذية فقط');
   const fromState = request.state;
   const result = await applyTransition({
     def,
@@ -368,12 +390,8 @@ export async function availableActions(user: UserDoc, request: HrRequestDoc): Pr
     else if (c === 'hr_return') out.add('return');
     else out.add(c);
   }
-  // Finance hand-off: only Finance/exec decide an advance's final step (approver relation); HR manager sees it but may not approve.
-  if (
-    request.state === 'awaiting_final' &&
-    request.route?.finalApprover === 'hr_then_finance' &&
-    !rel.includes('approver')
-  ) {
+  // Same rule as transition(): the final step is for the 'approver' relation only.
+  if (request.state === 'awaiting_final' && !rel.includes('approver')) {
     out.delete('approve');
     out.delete('reject');
   }

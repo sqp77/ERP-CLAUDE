@@ -73,6 +73,18 @@ export const SETTING_DEFINITIONS = {
     schema: z.number().int().min(8).max(64),
     default: 10,
   }),
+  'auth.temporaryPasswordHours': def({
+    key: 'auth.temporaryPasswordHours',
+    labelAr: 'صلاحية كلمة المرور المؤقتة (ساعات)',
+    descriptionAr: 'بعدها يُرفض الدخول بكلمة المرور المؤقتة ويلزم إعادة تعيينها من مدير النظام',
+    group: 'auth',
+    schema: z
+      .number()
+      .int()
+      .min(1)
+      .max(24 * 30),
+    default: 72, // security review A8
+  }),
   'tickets.remindAfterBusinessDays': def({
     key: 'tickets.remindAfterBusinessDays',
     labelAr: 'تذكير مقدّم الطلب بعد الحل (أيام عمل)',

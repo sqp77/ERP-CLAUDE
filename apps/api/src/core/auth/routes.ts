@@ -27,6 +27,15 @@ const loginLimiter = rateLimit({
   message: { error: { code: 'rate_limited', message: 'محاولات كثيرة، حاول بعد قليل' } },
 });
 
+/** Second-factor codes: tight per-IP limit on top of the per-session lock (security review A2). */
+const mfaLimiter = rateLimit({
+  windowMs: 15 * 60_000,
+  limit: isTest() ? 1000 : 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: { code: 'rate_limited', message: 'محاولات كثيرة، حاول بعد قليل' } },
+});
+
 const meta = (req: Request) => ({ ip: req.ip, userAgent: String(req.headers['user-agent'] ?? '') });
 
 authRouter.post(
@@ -68,6 +77,7 @@ authRouter.get(
 
 authRouter.post(
   '/mfa/verify',
+  mfaLimiter,
   requireAuth({ allowMfaPending: true }),
   validate(mfaCodeSchema),
   asyncHandler(async (req: AuthedRequest, res) => {
@@ -80,12 +90,13 @@ authRouter.post(
   '/mfa/enroll/start',
   requireAuth({ allowMfaPending: true }),
   asyncHandler(async (req: AuthedRequest, res) => {
-    res.json(await auth.startMfaEnrollment(req.auth.user));
+    res.json(await auth.startMfaEnrollment(req.auth.user, req.auth.session));
   }),
 );
 
 authRouter.post(
   '/mfa/enroll/confirm',
+  mfaLimiter,
   requireAuth({ allowMfaPending: true }),
   validate(mfaCodeSchema),
   asyncHandler(async (req: AuthedRequest, res) => {
