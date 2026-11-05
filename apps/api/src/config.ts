@@ -8,8 +8,12 @@ const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().default(4000),
   MONGODB_URI: z.string().optional(),
-  /** Used to encrypt TOTP secrets and sign local file tokens. Must be set in production. */
+  /** Root secret: per-purpose keys are derived from it (HKDF). Must be set in production. */
   APP_SECRET: z.string().min(16).default('dev-only-secret-change-me-0123456789'),
+  /** Previous root secret, accepted for decryption only, while rotating APP_SECRET (review D21). */
+  APP_SECRET_PREVIOUS: z.string().min(16).optional(),
+  /** scrypt cost as log2(N); 17 in deployed stages (review D20). Tests lower it to keep the suite fast. */
+  SCRYPT_LOG2_N: z.coerce.number().int().min(12).max(20).default(17),
   APP_URL: z.string().default('http://localhost:5173'),
   API_URL: z.string().default('http://localhost:4000'),
   COOKIE_SECURE: z
@@ -48,6 +52,11 @@ export function env(): Env {
     }
   }
   return cached;
+}
+
+/** Tests only: forget the parsed environment so changed variables are read again. */
+export function resetEnvCache(): void {
+  cached = undefined;
 }
 
 export const isProd = () => env().NODE_ENV === 'production';

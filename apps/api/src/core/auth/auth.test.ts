@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import request from 'supertest';
-import { auth, loginAs, makeUser, PASSWORD, testApp } from '../../test/helpers';
+import { auth, loginAs, makeUser, PASSWORD, testApp, tokenFromCookies } from '../../test/helpers';
 import { LoginLog, Session, User } from './model';
 import { debugCurrentTotp } from './service';
 import { currentTotp } from './totp';
@@ -122,7 +122,7 @@ describe('auth [EP §3, DECISIONS §2]', () => {
       .post('/api/v1/auth/login')
       .send({ email: 'admin@eayni.local', password: PASSWORD });
     expect(login.body.mfa).toBe('enroll_required');
-    const token = login.body.token as string;
+    const token = tokenFromCookies(login);
     // Protected routes are blocked until enrolled.
     const blocked = await request(app()).get('/api/v1/users').set(auth(token));
     expect(blocked.body.error.code).toBe('mfa_enrollment_required');
@@ -146,7 +146,7 @@ describe('auth [EP §3, DECISIONS §2]', () => {
       .post('/api/v1/auth/login')
       .send({ email: 'admin@eayni.local', password: PASSWORD });
     expect(login2.body.mfa).toBe('required');
-    const t2 = login2.body.token as string;
+    const t2 = tokenFromCookies(login2);
     expect((await request(app()).get('/api/v1/users').set(auth(t2))).body.error.code).toBe('mfa_required');
     const user = await User.findOne({ email: 'admin@eayni.local' });
     const verify = await request(app())

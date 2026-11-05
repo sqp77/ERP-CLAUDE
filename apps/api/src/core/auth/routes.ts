@@ -46,7 +46,8 @@ authRouter.post(
     const { email, password } = req.body as { email: string; password: string };
     const result = await auth.login(email, password, meta(req));
     setSessionCookie(res, result.token, result.maxAgeMs);
-    res.json({ mfa: result.mfa, token: result.token, user: await auth.toCurrentUser(result.user) });
+    // The httpOnly cookie is the only carrier of the session token (review D23).
+    res.json({ mfa: result.mfa, user: await auth.toCurrentUser(result.user) });
   }),
 );
 

@@ -20,7 +20,7 @@ import { nextNumber } from '../../core/numbering/service';
 import { notify } from '../../core/notifications/service';
 import { publish } from '../../core/outbox/service';
 import { User, type UserDoc } from '../../core/auth/model';
-import { decrypt, encrypt, hashPassword, randomToken } from '../../core/auth/crypto';
+import { blindIndex, decrypt, encrypt, hashPassword, randomToken } from '../../core/auth/crypto';
 import { fieldRestrictions, redact } from '../../core/rbac/service';
 import { Department, Position } from '../../core/org/model';
 import { Employee, EmployeeEvent, type EmployeeDoc } from './model';
@@ -47,6 +47,23 @@ export async function teamUserIdsOf(userId: string): Promise<string[]> {
     .select('userId')
     .lean();
   return reports.map((r) => String(r.userId));
+}
+
+/** One-off backfill of the identity blind index for employees created before review D22. Idempotent. */
+export async function backfillIdentityHashes(): Promise<number> {
+  const missing = await Employee.find({ 'identity.hash': { $in: [null, ''] }, deletedAt: null }).select(
+    'identity',
+  );
+  let n = 0;
+  for (const e of missing) {
+    if (!e.identity?.numberEnc) continue;
+    await Employee.updateOne(
+      { _id: e._id },
+      { $set: { 'identity.hash': blindIndex(decrypt(e.identity.numberEnc)) } },
+    );
+    n++;
+  }
+  return n;
 }
 
 /** Scope → employee filter. 'team' is the direct-manager chain, one level (HR §6.2). */
@@ -151,6 +168,9 @@ export async function createEmployee(
   if (await Employee.exists({ employeeNumber })) throw conflict('الرقم الوظيفي مستخدم');
 
   const { identity, bank, createAccount, basicSalaryHalalas, ...rest } = input;
+  const identityHash = blindIndex(identity.number);
+  if (await Employee.exists({ 'identity.hash': identityHash, deletedAt: null }))
+    throw conflict('رقم الهوية مسجّل لموظف آخر');
   const employee = await Employee.create({
     ...rest,
     employeeNumber,
@@ -158,6 +178,7 @@ export async function createEmployee(
     identity: {
       type: identity.type,
       numberEnc: encrypt(identity.number),
+      hash: identityHash,
       last4: identity.number.slice(-4),
       expiryDate: identity.expiryDate,
     },
@@ -222,10 +243,14 @@ export async function updateEmployee(
   if (rest.firstNameAr || rest.lastNameAr)
     employee.fullNameAr = input.fullNameAr ?? `${employee.firstNameAr} ${employee.lastNameAr}`;
   if (identity) {
+    const hash = blindIndex(identity.number);
+    if (await Employee.exists({ 'identity.hash': hash, deletedAt: null, _id: { $ne: employee._id } }))
+      throw conflict('رقم الهوية مسجّل لموظف آخر');
     employee.identity = {
       ...employee.identity,
       type: identity.type,
       numberEnc: encrypt(identity.number),
+      hash,
       last4: identity.number.slice(-4),
       expiryDate: identity.expiryDate,
       alertsSent: [],

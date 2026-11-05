@@ -8,6 +8,7 @@ import { runDocumentExpiryAlerts } from './core/documents/service';
 import { registerExportResource } from './core/export/service';
 import { User } from './core/auth/model';
 import { registerHrModule } from './modules/hr';
+import { backfillIdentityHashes } from './modules/hr/service';
 import { registerSubscribers } from './subscribers';
 
 let jobsRegistered = false;
@@ -51,4 +52,5 @@ export const registerCoreJobs = registerModules;
 export async function ensureBaseline(): Promise<void> {
   await ensureCoreRoles();
   for (const def of DEFAULT_WORKFLOWS) await ensureWorkflow(def);
+  await backfillIdentityHashes();
 }

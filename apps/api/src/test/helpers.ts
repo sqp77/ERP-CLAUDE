@@ -32,11 +32,20 @@ export async function makeDepartment(code: string, nameAr = code) {
   return Department.create({ code, nameAr, active: true });
 }
 
+/** Session token from the login response's httpOnly cookie (the body carries none — review D23). */
+export function tokenFromCookies(res: { headers: Record<string, string | string[] | undefined> }): string {
+  const raw = res.headers['set-cookie'];
+  const list = Array.isArray(raw) ? raw : raw ? [raw] : [];
+  const sid = list.find((c) => c.startsWith('eayni_sid='));
+  if (!sid) throw new Error('no session cookie');
+  return decodeURIComponent(sid.split(';')[0].slice('eayni_sid='.length));
+}
+
 /** Log in and return a Bearer token (MFA verified when the user has TOTP enabled is the caller's job). */
 export async function loginAs(email: string, password = PASSWORD): Promise<string> {
   const res = await request(testApp()).post('/api/v1/auth/login').send({ email, password });
   if (res.status !== 200) throw new Error(`login failed: ${res.status} ${JSON.stringify(res.body)}`);
-  return res.body.token as string;
+  return tokenFromCookies(res);
 }
 
 export const auth = (token: string) => ({ Authorization: `Bearer ${token}` });

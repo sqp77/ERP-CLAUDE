@@ -7,6 +7,7 @@ export default defineConfig({
       APP_SECRET: 'test-secret-test-secret-test-secret',
       LOCAL_STORAGE_DIR: '.data/test-files',
       LOG_LEVEL: 'silent',
+      SCRYPT_LOG2_N: '14', // keep the suite fast; production uses 17 (review D20)
     },
     globals: false,
     environment: 'node',

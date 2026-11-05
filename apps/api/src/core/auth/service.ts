@@ -6,7 +6,17 @@ import { getSetting } from '../settings/service';
 import { flattenPermissions } from '../rbac/service';
 import { notify } from '../notifications/service';
 import { env, isProd } from '../../config';
-import { decrypt, encrypt, hashPassword, randomToken, sha256, verifyPassword } from './crypto';
+import {
+  decrypt,
+  dummyPasswordHash,
+  encrypt,
+  hashPassword,
+  needsRehash,
+  passwordCheck,
+  randomToken,
+  sha256,
+  verifyPassword,
+} from './crypto';
 import { notifySystemAdmins } from '../notifications/alerts';
 import { LoginLog, PasswordReset, Session, User, type SessionDoc, type UserDoc } from './model';
 import { mfaRequiredFor } from './middleware';
@@ -29,6 +39,8 @@ export async function login(email: string, password: string, meta: ClientMeta) {
   const user = await User.findOne({ email: email.toLowerCase(), deletedAt: null });
   const generic = unauthorized('البريد الإلكتروني أو كلمة المرور غير صحيحة', 'invalid_credentials');
   if (!user) {
+    // Same cost as a wrong password so response time does not reveal which emails exist (review D23).
+    await passwordCheck.verify(password, await dummyPasswordHash());
     await log('login_failed', { email, ...meta });
     throw generic;
   }
@@ -36,7 +48,7 @@ export async function login(email: string, password: string, meta: ClientMeta) {
     await log('login_locked', { userId: user._id, email, ...meta });
     throw unauthorized('تم قفل الحساب مؤقتًا بسبب محاولات فاشلة متكررة، حاول لاحقًا', 'account_locked');
   }
-  const ok = await verifyPassword(password, user.passwordHash);
+  const ok = await passwordCheck.verify(password, user.passwordHash);
   if (!ok) {
     user.failedLogins += 1;
     const max = await getSetting('auth.maxFailedLogins');
@@ -68,6 +80,8 @@ export async function login(email: string, password: string, meta: ClientMeta) {
   user.failedLogins = 0;
   user.lockedUntil = undefined;
   user.lastLoginAt = new Date();
+  // Upgrade hashes made under a weaker cost (review D20).
+  if (needsRehash(user.passwordHash)) user.passwordHash = await hashPassword(password);
   await user.save();
 
   const roleCodes = user.roles.map((r) => r.role);
@@ -102,7 +116,7 @@ export async function verifyMfa(
     user.totpLastCodeHash === codeHash &&
     !!user.totpLastCodeAt &&
     Date.now() - user.totpLastCodeAt.getTime() < TOTP_REPLAY_WINDOW_MS;
-  if (replayed || !verifyTotp(code, decrypt(user.totpSecret))) {
+  if (replayed || !verifyTotp(code, decrypt(user.totpSecret, 'totp'))) {
     session.mfaFailedAttempts = (session.mfaFailedAttempts ?? 0) + 1;
     const base = { userId: user._id, email: user.email, sessionId: session._id, ...meta };
     await log(replayed ? 'mfa_replayed' : 'mfa_failed', base);
@@ -139,7 +153,7 @@ function assertMayEnroll(user: UserDoc, session: SessionDoc): void {
 export async function startMfaEnrollment(user: UserDoc, session: SessionDoc) {
   assertMayEnroll(user, session);
   const secret = generateTotpSecret();
-  user.totpPendingSecret = encrypt(secret);
+  user.totpPendingSecret = encrypt(secret, 'totp');
   await user.save();
   const uri = totpUri(user.email, secret);
   return { otpauthUrl: uri, qrDataUrl: await totpQrDataUrl(uri), manualKey: secret };
@@ -153,7 +167,7 @@ export async function confirmMfaEnrollment(
 ): Promise<void> {
   assertMayEnroll(user, session);
   if (!user.totpPendingSecret) throw badRequest('ابدأ التفعيل أولًا');
-  const secret = decrypt(user.totpPendingSecret);
+  const secret = decrypt(user.totpPendingSecret, 'totp');
   if (!verifyTotp(code, secret)) throw unauthorized('رمز التحقق غير صحيح', 'mfa_invalid');
   user.totpSecret = user.totpPendingSecret;
   user.totpPendingSecret = undefined;
@@ -174,7 +188,8 @@ export async function disableMfa(user: UserDoc, code: string, actor: Actor): Pro
   if (await mfaRequiredFor(user.roles.map((r) => r.role)))
     throw forbidden('التحقق الثنائي إلزامي لدورك ولا يمكن تعطيله');
   if (!user.totpEnabled || !user.totpSecret) throw badRequest('التحقق الثنائي غير مفعّل');
-  if (!verifyTotp(code, decrypt(user.totpSecret))) throw unauthorized('رمز التحقق غير صحيح', 'mfa_invalid');
+  if (!verifyTotp(code, decrypt(user.totpSecret, 'totp')))
+    throw unauthorized('رمز التحقق غير صحيح', 'mfa_invalid');
   user.totpEnabled = false;
   user.totpSecret = undefined;
   await user.save();
@@ -341,5 +356,5 @@ export async function toCurrentUser(user: UserDoc): Promise<CurrentUser> {
 /** Test helper: compute the current TOTP for a user's enabled secret. */
 export function debugCurrentTotp(user: UserDoc): string {
   if (!user.totpSecret) throw new Error('no secret');
-  return currentTotp(decrypt(user.totpSecret));
+  return currentTotp(decrypt(user.totpSecret, 'totp'));
 }

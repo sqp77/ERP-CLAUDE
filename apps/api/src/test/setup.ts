@@ -11,6 +11,7 @@ process.env.NODE_ENV = 'test';
 process.env.APP_SECRET = 'test-secret-test-secret-test-secret';
 process.env.LOCAL_STORAGE_DIR = '.data/test-files';
 process.env.LOG_LEVEL = 'silent';
+process.env.SCRYPT_LOG2_N = '14';
 
 beforeAll(async () => {
   // Base URI looks like mongodb://127.0.0.1:PORT/?replicaSet=testset — insert a per-worker database name before the query.

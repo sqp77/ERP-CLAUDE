@@ -18,7 +18,7 @@ async function enrolledUser(email: string, roles = [{ role: 'employee' }]) {
   const secret = generateTotpSecret();
   const user = await makeUser(email, roles, {
     totpEnabled: true,
-    totpSecret: encrypt(secret),
+    totpSecret: encrypt(secret, 'totp'),
     totpEnabledAt: new Date(),
   });
   return { user, secret };

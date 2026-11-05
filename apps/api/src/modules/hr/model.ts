@@ -27,6 +27,8 @@ const employeeSchema = new Schema(
     identity: {
       type: { type: String, enum: IDENTITY_TYPES, required: true },
       numberEnc: { type: String, required: true },
+      /** HMAC blind index of the number (review D22): equality search and a unique constraint without clear text. */
+      hash: { type: String },
       last4: { type: String },
       expiryDate: { type: Date },
       alertsSent: { type: [Number], default: [] },
@@ -86,6 +88,7 @@ const employeeSchema = new Schema(
   { timestamps: true },
 );
 employeeSchema.index({ fullNameAr: 'text', employeeNumber: 1 });
+employeeSchema.index({ 'identity.hash': 1 }, { unique: true, sparse: true });
 export const Employee = model('Employee', employeeSchema);
 export type EmployeeDoc = InstanceType<typeof Employee>;
 

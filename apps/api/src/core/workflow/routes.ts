@@ -7,6 +7,7 @@ import { notFound } from '../http/errors';
 import { requireAuth } from '../auth/middleware';
 import { authorize } from '../rbac/authorize';
 import { recordAudit } from '../audit/service';
+import { notifySystemAdmins } from '../notifications/alerts';
 import { saveWorkflow, stageHistory } from './engine';
 import { WorkflowDef } from './model';
 
@@ -49,6 +50,11 @@ workflowsRouter.put(
       resourceId: req.params.type,
       before,
       after: def,
+    });
+    await notifySystemAdmins({
+      bodyAr: `تم تعديل مسار العمل "${def.nameAr}" (${req.params.type}) بواسطة ${req.auth.user.email}`,
+      link: '/admin/workflows',
+      data: { kind: 'workflow', type: req.params.type, version: def.version },
     });
     res.json(def);
   }),
