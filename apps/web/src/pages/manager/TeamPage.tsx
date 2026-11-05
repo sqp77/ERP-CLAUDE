@@ -45,6 +45,7 @@ export function TeamPage() {
               t('common.status'),
               t('team.openTasks'),
               t('team.pendingRequests'),
+              t('team.openTickets'),
               t('team.secondment'),
               '',
             ]}
@@ -73,6 +74,7 @@ export function TeamPage() {
                   )}
                 </Td>
                 <Td className="tabular">{r.pendingRequests || '—'}</Td>
+                <Td className="tabular">{r.openTickets || '—'}</Td>
                 <Td className="text-xs">
                   {r.secondment ? (
                     <span>

@@ -69,7 +69,7 @@ describe('workflow engine [EP §9.4, HR §3.5]', () => {
       record = { ...record, ...extra, ...r.fields };
       return r;
     };
-    await step('assign', ['department_staff'], { assigneeId: 'u9' });
+    await step('assign', ['department_manager'], { assigneeId: 'u9' });
     expect(record.state).toBe('in_progress');
     await step('resolve', ['assignee'], { resolution: 'تم' });
     // The receiving department can't close it finally [EP §9.4].
@@ -105,7 +105,7 @@ describe('workflow engine [EP §9.4, HR §3.5]', () => {
       recordType: 'ticket',
       transition: 'review',
       actor,
-      actorRelations: ['department_staff'],
+      actorRelations: ['department_manager'],
       now: new Date('2026-10-20T06:00:00Z'),
       delayReason: 'ضغط عمل',
     });

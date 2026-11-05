@@ -11,6 +11,7 @@ import { startDevMongo } from './devMongo';
 import { seedHr } from './seedHr';
 import { seedRequests } from './seedRequests';
 import { seedTasks } from './seedTasks';
+import { seedTickets } from './seedTickets';
 
 /**
  * The seed carries a default admin password and sample data. It may only ever run against the local
@@ -104,7 +105,8 @@ export async function seed(): Promise<{
   const hr = await seedHr(samplePassword);
   const requests = await seedRequests();
   const tasks = await seedTasks(samplePassword);
-  logger.info({ requests, tasks }, 'sample HR requests and tasks');
+  const tickets = await seedTickets();
+  logger.info({ requests, tasks, tickets }, 'sample HR requests, tasks and tickets');
   return { adminEmail, adminPassword, sampleEmployees: hr.created, sampleLogins: hr.logins, samplePassword };
 }
 

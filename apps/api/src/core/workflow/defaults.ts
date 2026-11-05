@@ -7,6 +7,7 @@ import type { WorkflowDefinitionInput } from '@eayni/shared';
 export const TICKET_WORKFLOW: WorkflowDefinitionInput = {
   type: 'ticket',
   nameAr: 'تذكرة داخلية',
+  version: 2, // v2: queue → assign → processing, requester-only close, system follow-ups (slice 4)
   initialState: 'new',
   states: {
     new: { labelAr: 'جديدة', category: 'open', slaBusinessDays: 1, owner: 'department' },
@@ -16,7 +17,7 @@ export const TICKET_WORKFLOW: WorkflowDefinitionInput = {
     resolved: { labelAr: 'تم الحل', category: 'waiting', owner: 'requester' },
     awaiting_confirmation: { labelAr: 'بانتظار تأكيد مقدم الطلب', category: 'waiting', owner: 'requester' },
     closed: { labelAr: 'مغلقة', category: 'done' },
-    reopened: { labelAr: 'معاد فتحها', category: 'open', slaBusinessDays: 2, owner: 'assignee' },
+    reopened: { labelAr: 'معاد فتحها', category: 'open', slaBusinessDays: 2, owner: 'department' },
   },
   transitions: [
     {
@@ -24,22 +25,22 @@ export const TICKET_WORKFLOW: WorkflowDefinitionInput = {
       labelAr: 'بدء المراجعة',
       from: ['new', 'reopened'],
       to: 'under_review',
-      allow: ['department_manager', 'department_staff', 'assignee'],
+      allow: ['department_manager'],
     },
     {
       code: 'assign',
       labelAr: 'إسناد',
-      from: ['new', 'under_review', 'reopened'],
+      from: ['new', 'under_review', 'reopened', 'in_progress', 'waiting_requester'],
       to: 'in_progress',
-      allow: ['department_manager', 'department_staff'],
+      allow: ['department_manager'],
       requiredFields: ['assigneeId'],
     },
     {
       code: 'start',
       labelAr: 'بدء المعالجة',
-      from: ['under_review', 'waiting_requester', 'reopened'],
+      from: ['reopened'],
       to: 'in_progress',
-      allow: ['assignee', 'department_manager'],
+      allow: ['assignee'],
     },
     {
       code: 'request_info',
@@ -69,7 +70,7 @@ export const TICKET_WORKFLOW: WorkflowDefinitionInput = {
       labelAr: 'طلب تأكيد مقدم الطلب',
       from: ['resolved'],
       to: 'awaiting_confirmation',
-      allow: ['assignee', 'department_manager', 'system'],
+      allow: ['system'],
     },
     {
       code: 'close',
@@ -88,6 +89,42 @@ export const TICKET_WORKFLOW: WorkflowDefinitionInput = {
     },
   ],
   reopen: { from: ['closed'], to: 'reopened', allow: ['requester'], withinDays: 10 },
+};
+
+/** IT's copy of the ticket workflow adds "متعثر" [IT §7.1, DECISIONS §8]. */
+export const TICKET_IT_WORKFLOW: WorkflowDefinitionInput = {
+  ...TICKET_WORKFLOW,
+  type: 'ticket_it',
+  nameAr: 'تذكرة تقنية',
+  version: 1,
+  states: {
+    ...TICKET_WORKFLOW.states,
+    stalled: { labelAr: 'متعثر', category: 'waiting', owner: 'assignee' },
+  },
+  transitions: [
+    ...TICKET_WORKFLOW.transitions.map((t) =>
+      t.code === 'resolve'
+        ? { ...t, from: [...t.from, 'stalled'] }
+        : t.code === 'assign'
+          ? { ...t, from: [...t.from, 'stalled'] }
+          : t,
+    ),
+    {
+      code: 'stall',
+      labelAr: 'تعليق (متعثر)',
+      from: ['in_progress'],
+      to: 'stalled',
+      allow: ['assignee', 'department_manager'],
+      requireReason: true,
+    },
+    {
+      code: 'resume',
+      labelAr: 'استئناف المعالجة',
+      from: ['stalled'],
+      to: 'in_progress',
+      allow: ['assignee', 'department_manager'],
+    },
+  ],
 };
 
 /** HR self-service request [HR §3.5]; the per-type route (skip manager or not) is applied by the HR module (DECISIONS §5). */
@@ -207,4 +244,8 @@ export const HR_REQUEST_WORKFLOW: WorkflowDefinitionInput = {
   ],
 };
 
-export const DEFAULT_WORKFLOWS: WorkflowDefinitionInput[] = [TICKET_WORKFLOW, HR_REQUEST_WORKFLOW];
+export const DEFAULT_WORKFLOWS: WorkflowDefinitionInput[] = [
+  TICKET_WORKFLOW,
+  TICKET_IT_WORKFLOW,
+  HR_REQUEST_WORKFLOW,
+];

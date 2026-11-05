@@ -22,6 +22,8 @@ import {
 import { AssignTaskDialog } from './AssignTaskDialog';
 import { TaskDialog } from './TaskDialog';
 import { OPEN, TONE_BADGE, TONE_CLASS, taskTone, useTasks, useTeam, type Task } from './_data';
+import { Link } from 'react-router';
+import { ticketTone, useTickets } from '../tickets/_data';
 
 const COLUMNS: TaskStatus[] = ['new', 'in_progress', 'waiting_review', 'late', 'done'];
 
@@ -48,6 +50,7 @@ export function BoardPage() {
     dueTo: dueTo ? `${dueTo}T23:59:59+03:00` : undefined,
     status: status || undefined,
   });
+  const ticketQueue = useTickets({ view: 'department', open: true, limit: 100 });
   const workload = useQuery({
     queryKey: ['workload'],
     queryFn: () =>
@@ -165,6 +168,30 @@ export function BoardPage() {
       ) : (
         <div className="grid gap-4 lg:grid-cols-[1fr_280px]">
           <div className="space-y-4">
+            <Card
+              title={`${t('tickets.departmentQueue')} (${ticketQueue.data?.items.filter((x) => !x.assigneeId).length ?? 0})`}
+            >
+              {ticketQueue.isError ? (
+                <p className="text-xs text-slate-500">{t('tickets.queueUnavailable')}</p>
+              ) : !ticketQueue.data?.items.length ? (
+                <p className="text-sm text-slate-500">{t('tickets.queueEmpty')}</p>
+              ) : (
+                <ul className="divide-y divide-slate-100 text-sm">
+                  {ticketQueue.data.items.map((x) => (
+                    <li key={x._id} className="flex flex-wrap items-center justify-between gap-2 py-2">
+                      <Link to={`/tickets/${x._id}`} className="font-medium text-brand-800 hover:underline">
+                        {x.number} · {x.subject}
+                      </Link>
+                      <span className="flex items-center gap-2 text-xs text-slate-500">
+                        <span>{x.requesterName}</span>
+                        <Badge tone={ticketTone[x.state]}>{t(`tickets.states.${x.state}`)}</Badge>
+                        {!x.assigneeId && <Badge tone="amber">{t('tickets.unassigned')}</Badge>}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Card>
             <Card title={`${t('tasks.queue')} (${queue.length})`}>
               {queue.length ? (
                 <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">{queue.map(card)}</div>

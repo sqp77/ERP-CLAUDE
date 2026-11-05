@@ -1,4 +1,5 @@
 import { registerHrSubscribers } from './modules/hr/events';
+import { registerTicketSubscribers } from './modules/tickets';
 
 let registered = false;
 /**
@@ -10,4 +11,5 @@ export function registerSubscribers(): void {
   if (registered) return;
   registered = true;
   registerHrSubscribers();
+  registerTicketSubscribers();
 }

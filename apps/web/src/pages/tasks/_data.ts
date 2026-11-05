@@ -43,6 +43,7 @@ export interface TeamMember {
   openTasks: number;
   lateTasks: number;
   pendingRequests: number;
+  openTickets?: number;
   awayKind?: 'on_leave' | 'seconded' | null;
   awayUntil?: string | null;
   secondment: null | {

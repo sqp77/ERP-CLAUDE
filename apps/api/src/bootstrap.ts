@@ -9,6 +9,7 @@ import { runDocumentExpiryAlerts } from './core/documents/service';
 import { registerExportResource } from './core/export/service';
 import { User } from './core/auth/model';
 import { registerHrModule } from './modules/hr';
+import { registerTicketsModule } from './modules/tickets';
 import { backfillIdentityHashes } from './modules/hr/service';
 import { registerSubscribers } from './subscribers';
 
@@ -27,6 +28,7 @@ export function registerModules(): void {
   registerJob('calendar.reminders', (now) => runEventReminders(now));
   registerJob('documents.expiry', (now) => runDocumentExpiryAlerts(now));
   registerHrModule();
+  registerTicketsModule();
 
   registerExportResource({
     resource: 'users',

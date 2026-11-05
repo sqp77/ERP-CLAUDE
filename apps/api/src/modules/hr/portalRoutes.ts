@@ -23,6 +23,7 @@ import { effectivePermission } from '../../core/rbac/service';
 import { Task } from '../../core/tasks/model';
 import { riyadhDate } from '../../core/dates/businessDays';
 import { summarizeWorkload } from '../../core/tasks/service';
+import { openTicketCounts } from '../tickets/service';
 import { HrRequest } from './requests.model';
 import { OPEN_TASK_STATUSES, type RoleAssignment } from '@eayni/shared';
 import { withTransaction } from '../../db';
@@ -327,6 +328,7 @@ portalRouter.get(
       if (!leaveUntil.get(k) || leaveUntil.get(k)! < end) leaveUntil.set(k, end);
     }
     const tasksBy = new Map(summarizeWorkload(taskDocs, now).items.map((r) => [r.userId, r]));
+    const ticketsBy = await openTicketCounts(userIds);
     const reqBy = new Map<string, number>();
     for (const r of requestDocs)
       reqBy.set(String(r.requesterUserId), (reqBy.get(String(r.requesterUserId)) ?? 0) + 1);
@@ -353,6 +355,7 @@ portalRouter.get(
         openTasks: tasksBy.get(String(r.userId))?.open ?? 0,
         lateTasks: tasksBy.get(String(r.userId))?.late ?? 0,
         pendingRequests: reqBy.get(String(r.userId)) ?? 0,
+        openTickets: ticketsBy.get(String(r.userId)) ?? 0,
         secondment: r.secondment?.destination
           ? {
               destination: r.secondment.destination,

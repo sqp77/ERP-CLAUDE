@@ -40,6 +40,7 @@ export const CORE_ROLES: RoleDefinition[] = [
       { resource: 'drafts', actions: ALL_ACTIONS, scope: 'own' },
       { resource: 'exports', actions: ['view', 'create'], scope: 'all' },
       { resource: 'hr.employees', actions: ['view'], scope: 'all' },
+      { resource: 'tickets', actions: ['view', 'edit'], scope: 'all' },
     ],
     // FIN §12: the system admin has no automatic financial approval right. Finance resources are
     // granted to finance roles only when the Finance module arrives; nothing here gives approve on them.
@@ -68,6 +69,7 @@ export const CORE_ROLES: RoleDefinition[] = [
       { resource: 'hr.custody', actions: ['view'], scope: 'own' },
       { resource: 'hr.profile_changes', actions: ['view', 'create'], scope: 'own' },
       { resource: 'hr.requests', actions: ['view', 'create'], scope: 'own' },
+      { resource: 'tickets', actions: ['view', 'create'], scope: 'own' },
     ],
     fieldRules: [],
   },
@@ -84,6 +86,7 @@ export const CORE_ROLES: RoleDefinition[] = [
       { resource: 'exports', actions: ['view', 'create'], scope: 'department' },
       { resource: 'hr.employees', actions: ['view'], scope: 'department' },
       { resource: 'hr.requests', actions: ['view'], scope: 'department' },
+      { resource: 'tickets', actions: ['view', 'edit', 'approve'], scope: 'department' },
     ],
     fieldRules: [HIDE_SENSITIVE],
   },
@@ -201,6 +204,7 @@ export const CORE_ROLES: RoleDefinition[] = [
       { resource: 'audit', actions: ['view'], scope: 'all' },
       { resource: 'hr.employees', actions: ['view'], scope: 'all' },
       { resource: 'hr.requests', actions: ['view', 'approve'], scope: 'all' },
+      { resource: 'tickets', actions: ['view'], scope: 'all' },
     ],
     fieldRules: [HIDE_SENSITIVE],
   },

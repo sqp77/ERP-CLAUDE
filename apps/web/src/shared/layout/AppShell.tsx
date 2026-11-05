@@ -22,6 +22,7 @@ import {
   ShieldCheck,
   Users,
   Workflow,
+  Ticket,
   X,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
@@ -58,6 +59,7 @@ export function AppShell() {
     { to: '/', label: t('nav.dashboard'), icon: Home, show: true },
     { to: '/me/profile', label: t('nav.profile'), icon: UserRound, show: true },
     { to: '/me/requests', label: t('nav.myRequests'), icon: Send, show: can('hr.requests', 'create') },
+    { to: '/me/tickets', label: t('nav.myTickets'), icon: Ticket, show: can('tickets', 'view') },
     { to: '/manager/requests', label: t('nav.teamRequests'), icon: Inbox, show: !!inbox.data?.total },
     { to: '/manager/team', label: t('nav.team'), icon: Users, show: !!team.data?.items.length },
     { to: '/tasks', label: t('nav.tasks'), icon: ClipboardList, show: can('tasks', 'view') },

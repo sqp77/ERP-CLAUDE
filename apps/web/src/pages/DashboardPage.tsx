@@ -45,6 +45,11 @@ export function DashboardPage() {
     queryFn: () => get<Paged<unknown>>('/tasks?mine=true&limit=1'),
     enabled: can('tasks', 'view'),
   });
+  const myTickets = useQuery({
+    queryKey: ['tickets', 'mine', 'open'],
+    queryFn: () => get<Paged<unknown>>('/tickets?view=mine&open=true&limit=1'),
+    enabled: can('tickets', 'view'),
+  });
   const myReq = useQuery({
     queryKey: ['hr-requests', 'mine', 'open'],
     queryFn: () => get<Paged<unknown>>('/hr/requests?view=mine&open=true&limit=1'),
@@ -129,6 +134,12 @@ export function DashboardPage() {
           Ticket,
           t('dashboard.sections.requests'),
           `${myReq.data?.total ?? 0} ${t('dashboard.openRequests')}`,
+        )}
+        {tile(
+          '/me/tickets',
+          Ticket,
+          t('dashboard.sections.tickets'),
+          `${myTickets.data?.total ?? 0} ${t('dashboard.openTickets')}`,
         )}
         {tile(
           '/tasks',

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { DEFAULT_HR_REQUEST_ROUTES, hrRequestRoutesSchema } from './schemas/hrRequests';
+import { DEFAULT_TICKET_DEPARTMENT_FIELDS, ticketDepartmentFieldsSchema } from './schemas/tickets';
 
 /**
  * Settings registry: everything the specs want configurable lives here with a default and a schema
@@ -120,6 +121,27 @@ export const SETTING_DEFINITIONS = {
     group: 'notifications',
     schema: z.number().int().min(1),
     default: 1, // EP §16: the manager distributes department work
+  }),
+  'tickets.hiddenTargets': def({
+    key: 'tickets.hiddenTargets',
+    labelAr: 'أقسام لا تظهر كوجهة للتذاكر حتى تُبنى وحداتها (المالية والمشتريات)',
+    group: 'tickets',
+    schema: z.array(z.string()),
+    default: ['finance', 'procurement'], // DECISIONS §8: same record as FIN §3 / PRC §2 once those modules exist
+  }),
+  'tickets.managersOnlyTargets': def({
+    key: 'tickets.managersOnlyTargets',
+    labelAr: 'أقسام تظهر كوجهة لمديري الأقسام فقط',
+    group: 'tickets',
+    schema: z.array(z.string()),
+    default: ['finance', 'procurement'], // EP §9.1 note
+  }),
+  'tickets.departmentFields': def({
+    key: 'tickets.departmentFields',
+    labelAr: 'حقول التذاكر الخاصة بكل قسم (نوع، تسميات الأولوية…)',
+    group: 'tickets',
+    schema: ticketDepartmentFieldsSchema,
+    default: DEFAULT_TICKET_DEPARTMENT_FIELDS, // IT §7.1
   }),
   'tickets.remindAfterBusinessDays': def({
     key: 'tickets.remindAfterBusinessDays',

@@ -30,6 +30,14 @@ export const NOTIFICATION_TYPES = [
   'task.returned',
   'task.reassigned',
   'task.unassigned_reminder',
+  // tickets [EP §9]
+  'ticket.assigned',
+  'ticket.info_requested',
+  'ticket.resolved',
+  'ticket.confirm_reminder',
+  'ticket.auto_closed',
+  'ticket.reopened',
+  'ticket.closed',
   'generic',
 ] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
@@ -63,5 +71,12 @@ export const NOTIFICATION_TITLES_AR: Record<NotificationType, string> = {
   'task.returned': 'أُعيدت إليك مهمة للاستكمال',
   'task.reassigned': 'أُعيد إسناد مهمة',
   'task.unassigned_reminder': 'مهام في قائمة القسم بلا مكلّف',
+  'ticket.assigned': 'أُسندت إليك تذكرة',
+  'ticket.info_requested': 'تذكرتك بحاجة إلى معلومات إضافية',
+  'ticket.resolved': 'تم حل تذكرتك — يرجى التأكيد أو إعادة الفتح',
+  'ticket.confirm_reminder': 'تذكير: تذكرتك بانتظار تأكيدك',
+  'ticket.auto_closed': 'أُغلقت تذكرتك تلقائيًا',
+  'ticket.reopened': 'أُعيد فتح تذكرة',
+  'ticket.closed': 'أُغلقت التذكرة',
   generic: 'إشعار',
 };

@@ -31,6 +31,7 @@ export const CORE_RESOURCES = [
   'comments',
   'drafts',
   'exports',
+  'tickets',
 ] as const;
 export type CoreResource = (typeof CORE_RESOURCES)[number];
 /** Any resource id (core or module). */
