@@ -260,9 +260,44 @@ portalRouter.post(
         type: 'generic',
         titleAr: 'تم رفع تقرير انتداب',
         bodyAr: `${e.fullNameAr} رفع تقرير الانتداب إلى ${e.secondment.destination}`,
-        link: `/hr/employees/${e._id}`,
+        link: '/manager/team', // the direct manager's team page (review C18)
       });
     res.json({ ok: true });
+  }),
+);
+
+/** My direct reports [HR §6.2 "المدير المباشر"]: status and secondment report at a glance (review C18). */
+portalRouter.get(
+  '/team',
+  requireAuth(),
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const me = await Employee.findOne({ userId: req.auth.user._id, deletedAt: null }).select('_id').lean();
+    if (!me) return res.json({ items: [] });
+    const reports = await Employee.find({ directManagerId: me._id, deletedAt: null })
+      .select('fullNameAr employeeNumber positionId departmentId status secondment workEmail mobile')
+      .sort({ fullNameAr: 1 })
+      .lean();
+    res.json({
+      items: reports.map((r) => ({
+        _id: r._id,
+        fullNameAr: r.fullNameAr,
+        employeeNumber: r.employeeNumber,
+        positionId: r.positionId,
+        departmentId: r.departmentId,
+        status: r.status,
+        workEmail: r.workEmail,
+        mobile: r.mobile,
+        secondment: r.secondment?.destination
+          ? {
+              destination: r.secondment.destination,
+              startDate: r.secondment.startDate,
+              endDate: r.secondment.endDate,
+              reportedAt: r.secondment.reportedAt,
+              reportAttachmentId: r.secondment.reportAttachmentId,
+            }
+          : null,
+      })),
+    });
   }),
 );
 

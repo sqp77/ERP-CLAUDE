@@ -21,7 +21,7 @@ export function UnitsPage() {
       title={t('admin.org.units')}
       newLabel={t('admin.org.newUnit')}
       endpoint="/org/units"
-      queryKey="units"
+      lookup="units"
       columns={[
         { label: t('common.name'), render: (u) => <span className="font-medium">{u.nameAr}</span> },
         { label: t('admin.users.department'), render: (u) => name(u.departmentId) },

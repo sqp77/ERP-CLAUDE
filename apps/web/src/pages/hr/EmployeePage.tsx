@@ -24,10 +24,14 @@ import {
   Td,
   Textarea,
   cx,
+  QueryError,
 } from '@/shared/ui';
 import { useToast } from '@/shared/ui/Toast';
 import { FileUploader, downloadAttachment } from '@/shared/files/FileUploader';
 import { sar, useHrLookups, type EmployeeFull } from './_data';
+import { riyadhToday } from '@/lib/dates';
+
+const CUSTODY_CONDITIONS = ['good', 'damaged', 'lost'] as const;
 import { statusTone } from './EmployeesPage';
 
 type Tab = 'data' | 'job' | 'contracts' | 'documents' | 'custody';
@@ -100,7 +104,7 @@ function Row({ label, value, dir }: { label: string; value?: ReactNode; dir?: 'l
   return (
     <div className="grid grid-cols-[140px_1fr] gap-2 py-1.5 text-sm">
       <dt className="text-slate-500">{label}</dt>
-      <dd dir={dir} className={cx('text-slate-900', dir === 'ltr' && 'text-start')}>
+      <dd dir={dir} className={cx('text-slate-900', dir === 'ltr' && 'break-all text-start')}>
         {value || '—'}
       </dd>
     </div>
@@ -230,7 +234,7 @@ function DataTab({ e, canEdit }: { e: EmployeeFull; canEdit: boolean }) {
                     e.address.postalCode,
                   ]
                     .filter(Boolean)
-                    .join('، ')
+                    .join(t('common.listSeparator'))
                 : undefined
             }
           />
@@ -246,12 +250,14 @@ function DataTab({ e, canEdit }: { e: EmployeeFull; canEdit: boolean }) {
             label={t('hr.allowances')}
             value={
               e.allowances?.length
-                ? e.allowances.map((a) => `${a.type}: ${sar(a.amountHalalas)}`).join('، ')
+                ? e.allowances
+                    .map((a) => `${a.type}: ${sar(a.amountHalalas)}`)
+                    .join(t('common.listSeparator'))
                 : undefined
             }
           />
           <Row label={t('hr.bank')} value={e.bank?.bankName} />
-          <Row label="IBAN" value={e.bank?.iban ?? e.bank?.ibanMasked} dir="ltr" />
+          <Row label={t('hr.iban')} value={e.bank?.iban ?? e.bank?.ibanMasked} dir="ltr" />
           <Row
             label={t('hr.medicalInsurance')}
             value={e.medicalInsurance ? t('common.yes') : t('common.no')}
@@ -301,7 +307,7 @@ function DataTab({ e, canEdit }: { e: EmployeeFull; canEdit: boolean }) {
             <Field label={t('hr.bank')}>
               <Input {...form.register('bankName')} />
             </Field>
-            <Field label="IBAN">
+            <Field label={t('hr.iban')}>
               <Input dir="ltr" {...form.register('iban')} />
             </Field>
           </div>
@@ -399,7 +405,7 @@ function JobTab({ e, canEdit }: { e: EmployeeFull; canEdit: boolean }) {
   });
   const open = (d: typeof dialog) => {
     form.reset({
-      effectiveDate: new Date().toISOString().slice(0, 10),
+      effectiveDate: riyadhToday(),
       departmentId: e.departmentId,
       unitId: e.unitId ?? '',
       branchId: e.branchId ?? '',
@@ -502,7 +508,9 @@ function JobTab({ e, canEdit }: { e: EmployeeFull; canEdit: boolean }) {
         </dl>
       </Card>
       <Card title={t('hr.history')}>
-        {history.isLoading ? (
+        {history.isError ? (
+          <QueryError error={history.error} onRetry={() => history.refetch()} />
+        ) : history.isLoading ? (
           <Spinner />
         ) : !history.data?.items.length ? (
           <EmptyState title={t('common.empty')} />
@@ -517,7 +525,7 @@ function JobTab({ e, canEdit }: { e: EmployeeFull; canEdit: boolean }) {
                 <div className="text-sm font-medium">{t(`hr.events.${h.type}`)}</div>
                 <div className="text-xs text-slate-600">
                   {h.type === 'updated'
-                    ? h.changedFields.map((f) => t(`hr.fields.${f}`, f)).join('، ')
+                    ? h.changedFields.map((f) => t(`hr.fields.${f}`, f)).join(t('common.listSeparator'))
                     : describe(h)}
                 </div>
                 {h.reason && (
@@ -699,7 +707,9 @@ function ContractsTab({ e }: { e: EmployeeFull }) {
         can('hr.contracts', 'create') && <Button onClick={() => setOpen('new')}>{t('hr.newContract')}</Button>
       }
     >
-      {q.isLoading ? (
+      {q.isError ? (
+        <QueryError error={q.error} onRetry={() => q.refetch()} />
+      ) : q.isLoading ? (
         <Spinner />
       ) : !q.data?.items.length ? (
         <EmptyState title={t('common.empty')} />
@@ -894,7 +904,9 @@ function DocumentsTab({ e }: { e: EmployeeFull }) {
         </>
       }
     >
-      {q.isLoading ? (
+      {q.isError ? (
+        <QueryError error={q.error} onRetry={() => q.refetch()} />
+      ) : q.isLoading ? (
         <Spinner />
       ) : !q.data?.items.length ? (
         <EmptyState title={t('common.empty')} />
@@ -989,16 +1001,22 @@ function CustodyTab({ e }: { e: EmployeeFull }) {
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string>();
   const form = useForm<Record<string, string>>({
-    defaultValues: { issuedAt: new Date().toISOString().slice(0, 10) },
+    defaultValues: { issuedAt: riyadhToday() },
   });
   const invalidate = () => qc.invalidateQueries({ queryKey: ['employee', e._id, 'custody'] });
+  // Return with a selectable condition (review C19); the code is stored, the label translated.
+  const [returning, setReturning] = useState<string | null>(null);
+  const [condition, setCondition] = useState<string>('good');
   const ret = useMutation({
     mutationFn: (id: string) =>
       post(`/hr/employees/${e._id}/custody/${id}/return`, {
         returnedAt: new Date().toISOString(),
-        condition: 'سليم',
+        condition,
       }),
-    onSuccess: invalidate,
+    onSuccess: () => {
+      invalidate();
+      setReturning(null);
+    },
     onError: (err) => toast(errorMessage(err), 'error'),
   });
   const submit = form.handleSubmit(async (v) => {
@@ -1013,7 +1031,7 @@ function CustodyTab({ e }: { e: EmployeeFull }) {
       invalidate();
       toast(t('actions.save'));
       setOpen(false);
-      form.reset({ issuedAt: new Date().toISOString().slice(0, 10) });
+      form.reset({ issuedAt: riyadhToday() });
     } catch (err) {
       setError(errorMessage(err));
     }
@@ -1025,7 +1043,9 @@ function CustodyTab({ e }: { e: EmployeeFull }) {
         can('hr.custody', 'create') && <Button onClick={() => setOpen(true)}>{t('hr.newCustody')}</Button>
       }
     >
-      {q.isLoading ? (
+      {q.isError ? (
+        <QueryError error={q.error} onRetry={() => q.refetch()} />
+      ) : q.isLoading ? (
         <Spinner />
       ) : !q.data?.items.length ? (
         <EmptyState title={t('common.empty')} />
@@ -1040,14 +1060,14 @@ function CustodyTab({ e }: { e: EmployeeFull }) {
               <Td className="tabular">{formatDate(c.issuedAt)}</Td>
               <Td className="tabular">
                 {c.returnedAt ? (
-                  `${formatDate(c.returnedAt)} (${c.condition ?? ''})`
+                  `${formatDate(c.returnedAt)} (${t(`hr.custodyConditions.${c.condition}`, c.condition ?? '')})`
                 ) : (
                   <Badge tone="amber">{t('hr.inCustody')}</Badge>
                 )}
               </Td>
               <Td>
                 {!c.returnedAt && can('hr.custody', 'edit') && (
-                  <Button variant="ghost" onClick={() => ret.mutate(c._id)}>
+                  <Button variant="ghost" onClick={() => setReturning(c._id)}>
                     {t('hr.returnItem')}
                   </Button>
                 )}
@@ -1085,6 +1105,27 @@ function CustodyTab({ e }: { e: EmployeeFull }) {
             </Button>
           </div>
         </form>
+      </Dialog>
+      <Dialog open={!!returning} onClose={() => setReturning(null)} title={t('hr.returnCustody')}>
+        <div className="space-y-3">
+          <Field label={t('hr.custodyCondition')} required>
+            <Select value={condition} onChange={(ev) => setCondition(ev.target.value)}>
+              {CUSTODY_CONDITIONS.map((c) => (
+                <option key={c} value={c}>
+                  {t(`hr.custodyConditions.${c}`)}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" onClick={() => setReturning(null)}>
+              {t('actions.cancel')}
+            </Button>
+            <Button loading={ret.isPending} onClick={() => returning && ret.mutate(returning)}>
+              {t('actions.confirm')}
+            </Button>
+          </div>
+        </div>
       </Dialog>
     </Card>
   );

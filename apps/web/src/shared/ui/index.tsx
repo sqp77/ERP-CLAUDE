@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next';
+import { queryErrorMessage } from '@/lib/errors';
 import {
   forwardRef,
   type ButtonHTMLAttributes,
@@ -281,6 +283,21 @@ export function Dialog({
         <h2 className="mb-4 text-lg font-semibold">{title}</h2>
         {children}
       </div>
+    </div>
+  );
+}
+
+/** Failed-query state (review C19): says "no permission" / "not found" / "error" instead of "no data", with a retry. */
+export function QueryError({ error, onRetry }: { error: unknown; onRetry?: () => void }) {
+  const { t } = useTranslation();
+  return (
+    <div className="space-y-2">
+      <Alert kind="error">{queryErrorMessage(error)}</Alert>
+      {onRetry && (
+        <Button variant="secondary" onClick={onRetry}>
+          {t('actions.retry')}
+        </Button>
+      )}
     </div>
   );
 }

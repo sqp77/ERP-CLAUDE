@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { get, type Paged } from '@/lib/api';
 import { usePrefs } from '@/lib/preferences';
-import { Badge, Button, Card, Input, PageHeader, Spinner, Table, Td } from '@/shared/ui';
+import { Badge, Button, Card, Input, PageHeader, Spinner, Table, Td, QueryError } from '@/shared/ui';
 
 interface Row {
   _id: string;
@@ -46,7 +46,9 @@ export function AuditPage() {
             }}
           />
         </div>
-        {q.isLoading ? (
+        {q.isError ? (
+          <QueryError error={q.error} onRetry={() => q.refetch()} />
+        ) : q.isLoading ? (
           <Spinner />
         ) : (
           <Table
@@ -68,7 +70,7 @@ export function AuditPage() {
                   <Badge tone={r.action === 'delete' ? 'red' : r.action === 'create' ? 'green' : 'blue'}>
                     {r.action}
                   </Badge>
-                  {r.sensitive && <Badge tone="amber">حساس</Badge>}
+                  {r.sensitive && <Badge tone="amber">{t('audit.sensitive')}</Badge>}
                 </Td>
                 <Td dir="ltr" className="text-xs">
                   <code>{r.resource}</code> <span className="text-slate-400">{r.resourceId}</span>

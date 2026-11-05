@@ -4,7 +4,8 @@ import { useForm, type FieldValues, type UseFormReturn } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { del, get, patch, post } from '@/lib/api';
 import { errorMessage } from '@/lib/errors';
-import { Alert, Badge, Button, Card, Dialog, PageHeader, Spinner, Table, Td } from '@/shared/ui';
+import { lookupKeys } from '@/lib/lookups';
+import { Alert, Badge, Button, Card, Dialog, PageHeader, Spinner, Table, Td, QueryError } from '@/shared/ui';
 import { useToast } from '@/shared/ui/Toast';
 
 export interface Column<T> {
@@ -16,7 +17,7 @@ interface Props<T extends { _id: string; active?: boolean }, F extends FieldValu
   title: string;
   newLabel: string;
   endpoint: string;
-  queryKey: string;
+  lookup: 'units' | 'positions';
   columns: Column<T>[];
   toForm: (row: T | null) => F;
   toBody: (values: F, isNew: boolean) => Record<string, unknown>;
@@ -28,7 +29,7 @@ export function MasterDataPage<T extends { _id: string; active?: boolean }, F ex
   title,
   newLabel,
   endpoint,
-  queryKey,
+  lookup,
   columns,
   toForm,
   toBody,
@@ -37,11 +38,14 @@ export function MasterDataPage<T extends { _id: string; active?: boolean }, F ex
   const { t } = useTranslation();
   const toast = useToast();
   const qc = useQueryClient();
-  const q = useQuery({ queryKey: [queryKey], queryFn: () => get<{ items: T[] }>(`${endpoint}?all=true`) });
+  const q = useQuery({
+    queryKey: lookupKeys[lookup],
+    queryFn: () => get<{ items: T[] }>(`${endpoint}?all=true`),
+  });
   const [editing, setEditing] = useState<T | null | 'new'>(null);
   const [error, setError] = useState<string>();
   const form = useForm<F>();
-  const invalidate = () => qc.invalidateQueries({ queryKey: [queryKey] });
+  const invalidate = () => qc.invalidateQueries({ queryKey: lookupKeys[lookup] });
   const remove = useMutation({
     mutationFn: (id: string) => del(`${endpoint}/${id}`),
     onSuccess: invalidate,
@@ -67,7 +71,9 @@ export function MasterDataPage<T extends { _id: string; active?: boolean }, F ex
     <>
       <PageHeader title={title} actions={<Button onClick={() => open('new')}>{newLabel}</Button>} />
       <Card>
-        {q.isLoading ? (
+        {q.isError ? (
+          <QueryError error={q.error} onRetry={() => q.refetch()} />
+        ) : q.isLoading ? (
           <Spinner />
         ) : (
           <Table head={[...columns.map((c) => c.label), t('common.status'), '']}>
@@ -90,7 +96,7 @@ export function MasterDataPage<T extends { _id: string; active?: boolean }, F ex
                     </Button>
                     <Button
                       variant="ghost"
-                      onClick={() => confirm(t('actions.delete') + '؟') && remove.mutate(row._id)}
+                      onClick={() => confirm(t('common.deleteConfirm')) && remove.mutate(row._id)}
                     >
                       {t('actions.delete')}
                     </Button>

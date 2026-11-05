@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/lib/auth';
 import { get, put } from '@/lib/api';
 import { errorMessage } from '@/lib/errors';
-import { Badge, Button, Card, Input, PageHeader, Spinner } from '@/shared/ui';
+import { Badge, Button, Card, Input, PageHeader, Spinner, QueryError } from '@/shared/ui';
 import { useToast } from '@/shared/ui/Toast';
 
 interface Row {
@@ -45,7 +45,9 @@ export function SettingsPage() {
   return (
     <>
       <PageHeader title={t('admin.settings.title')} subtitle={t('admin.settings.hint')} />
-      {q.isLoading ? (
+      {q.isError ? (
+        <QueryError error={q.error} onRetry={() => q.refetch()} />
+      ) : q.isLoading ? (
         <Spinner />
       ) : (
         <div className="space-y-4">

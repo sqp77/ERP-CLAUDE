@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import type { CurrentUser } from '@eayni/shared';
-import { ApiError, get, post } from './api';
+import { ApiError, get, post, setUnauthorizedHandler } from './api';
 
 export type MfaState = 'none' | 'required' | 'enroll_required';
 
@@ -43,6 +43,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  // A lost session anywhere → drop cached data (salaries, IBANs…) and fall back to the login page (review C16).
+  useEffect(() => {
+    setUnauthorizedHandler(() => {
+      qc.clear();
+      setMe(null);
+    });
+    return () => setUnauthorizedHandler(undefined);
+  }, [qc]);
 
   const login = useCallback(
     async (email: string, password: string) => {

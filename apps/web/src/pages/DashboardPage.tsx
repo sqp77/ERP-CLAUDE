@@ -17,6 +17,7 @@ import { useAuth } from '@/lib/auth';
 import { usePrefs } from '@/lib/preferences';
 import { get, type Paged } from '@/lib/api';
 import { Alert, Badge, Card, PageHeader } from '@/shared/ui';
+import { isBirthdayToday } from '@/lib/dates';
 import { sar } from './hr/_data';
 
 interface MyProfile {
@@ -64,10 +65,7 @@ export function DashboardPage() {
     enabled: can('calendar', 'view'),
   });
   const p = me.data;
-  const isBirthday =
-    p?.birthDate &&
-    new Date(p.birthDate).getMonth() === now.getMonth() &&
-    new Date(p.birthDate).getDate() === now.getDate();
+  const isBirthday = isBirthdayToday(p?.birthDate, now);
 
   const tile = (to: string, Icon: typeof Bell, title: string, body: React.ReactNode, soon = false) => (
     <Link

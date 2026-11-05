@@ -38,7 +38,8 @@ export function requireAuth(opts: RequireAuthOptions = {}): RequestHandler {
     const token = extractToken(r);
     if (!token) return next(unauthorized('يلزم تسجيل الدخول'));
     (async () => {
-      const loaded = await loadSession(token);
+      const background = String(req.headers['x-background'] ?? '') === '1';
+      const loaded = await loadSession(token, new Date(), { touch: !background });
       if (!loaded.session) {
         const map = {
           invalid: 'invalid_session',

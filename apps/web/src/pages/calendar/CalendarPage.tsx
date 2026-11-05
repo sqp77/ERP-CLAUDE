@@ -8,6 +8,7 @@ import { useAuth } from '@/lib/auth';
 import { usePrefs } from '@/lib/preferences';
 import { get, post } from '@/lib/api';
 import { errorMessage } from '@/lib/errors';
+import { addDays, localInputToIso, sameRiyadhDay, startOfRiyadhWeek } from '@/lib/dates';
 import {
   Alert,
   Badge,
@@ -21,6 +22,7 @@ import {
   Select,
   Spinner,
   cx,
+  QueryError,
 } from '@/shared/ui';
 import { useToast } from '@/shared/ui/Toast';
 
@@ -57,12 +59,10 @@ export function CalendarPage() {
   const [offset, setOffset] = useState(0);
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string>();
+  // Week boundaries in Riyadh (review C13); weeks start on Sunday.
   const range = useMemo(() => {
-    const start = new Date();
-    start.setHours(0, 0, 0, 0);
-    start.setDate(start.getDate() - ((start.getDay() + 7) % 7) + offset * 7); // weeks start Sunday
-    const end = new Date(start.getTime() + 7 * 86_400_000);
-    return { start, end };
+    const start = startOfRiyadhWeek(offset);
+    return { start, end: addDays(start, 7) };
   }, [offset]);
   const q = useQuery({
     queryKey: ['calendar', range.start.toISOString()],
@@ -71,7 +71,7 @@ export function CalendarPage() {
         `/calendar/events?from=${range.start.toISOString()}&to=${range.end.toISOString()}`,
       ),
   });
-  const days = Array.from({ length: 7 }, (_, i) => new Date(range.start.getTime() + i * 86_400_000));
+  const days = Array.from({ length: 7 }, (_, i) => addDays(range.start, i));
   const form = useForm<{
     title: string;
     type: EventType;
@@ -84,6 +84,8 @@ export function CalendarPage() {
     try {
       await post('/calendar/events', {
         ...v,
+        startAt: localInputToIso(v.startAt),
+        endAt: localInputToIso(v.endAt),
         meetingUrl: v.meetingUrl || undefined,
         location: v.location || undefined,
       });
@@ -125,15 +127,15 @@ export function CalendarPage() {
           </>
         }
       />
-      {q.isLoading ? (
+      {q.isError ? (
+        <QueryError error={q.error} onRetry={() => q.refetch()} />
+      ) : q.isLoading ? (
         <Spinner />
       ) : (
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           {days.map((d) => {
-            const items = (q.data?.items ?? []).filter(
-              (e) => new Date(e.startAt).toDateString() === d.toDateString(),
-            );
-            const today = d.toDateString() === new Date().toDateString();
+            const items = (q.data?.items ?? []).filter((e) => sameRiyadhDay(e.startAt, d));
+            const today = sameRiyadhDay(d);
             return (
               <Card key={d.toISOString()} className={cx(today && 'ring-2 ring-brand-500')}>
                 <div className="mb-2 text-sm font-semibold">

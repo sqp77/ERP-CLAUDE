@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate, useParams } from 'react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
@@ -7,6 +8,7 @@ import { useAuth } from '@/lib/auth';
 import { usePrefs } from '@/lib/preferences';
 import { get, patch, post, type Paged } from '@/lib/api';
 import { errorMessage } from '@/lib/errors';
+import { localInputToIso } from '@/lib/dates';
 import {
   Alert,
   Badge,
@@ -17,6 +19,7 @@ import {
   Field,
   Input,
   PageHeader,
+  QueryError,
   Select,
   Spinner,
   Table,
@@ -65,6 +68,14 @@ export function TasksPage() {
     queryKey: ['tasks', mine],
     queryFn: () => get<Paged<Task>>(`/tasks?limit=100${mine ? '&mine=true' : ''}`),
   });
+  // /tasks/:id (notification links, review C18): show that task in a dialog on top of the list.
+  const { id: openId } = useParams();
+  const nav = useNavigate();
+  const one = useQuery({
+    queryKey: ['task', openId],
+    queryFn: () => get<Task & { description?: string; createdAt: string }>(`/tasks/${openId}`),
+    enabled: !!openId,
+  });
   const users = useQuery({
     queryKey: ['users', 'picker'],
     queryFn: () => get<Paged<UserRow>>('/users?limit=200'),
@@ -73,7 +84,10 @@ export function TasksPage() {
   const invalidate = () => qc.invalidateQueries({ queryKey: ['tasks'] });
   const update = useMutation({
     mutationFn: ({ id, body }: { id: string; body: Partial<Task> }) => patch(`/tasks/${id}`, body),
-    onSuccess: invalidate,
+    onSuccess: () => {
+      invalidate();
+      qc.invalidateQueries({ queryKey: ['task'] });
+    },
   });
   const form = useForm<{
     title: string;
@@ -84,7 +98,7 @@ export function TasksPage() {
   }>({ defaultValues: { priority: 'medium', assigneeId: user?.id } });
   const create = form.handleSubmit(async (v) => {
     try {
-      await post('/tasks', { ...v, dueAt: v.dueAt || undefined });
+      await post('/tasks', { ...v, dueAt: localInputToIso(v.dueAt) });
       toast(t('actions.save'));
       setOpen(false);
       form.reset();
@@ -109,13 +123,22 @@ export function TasksPage() {
         }
       />
       <Card>
-        {tasks.isLoading ? (
+        {tasks.isError ? (
+          <QueryError error={tasks.error} onRetry={() => tasks.refetch()} />
+        ) : tasks.isLoading ? (
           <Spinner />
         ) : !tasks.data?.items.length ? (
           <EmptyState title={t('common.empty')} />
         ) : (
           <Table
-            head={['#', t('tasks.taskTitle'), t('tasks.priority'), t('tasks.dueAt'), t('common.status'), '']}
+            head={[
+              t('common.number'),
+              t('tasks.taskTitle'),
+              t('tasks.priority'),
+              t('tasks.dueAt'),
+              t('common.status'),
+              '',
+            ]}
           >
             {tasks.data.items.map((task) => (
               <tr key={task._id}>
@@ -151,6 +174,49 @@ export function TasksPage() {
           </Table>
         )}
       </Card>
+      <Dialog
+        open={!!openId}
+        onClose={() => nav('/tasks')}
+        title={one.data ? `${one.data.number} · ${one.data.title}` : t('tasks.details')}
+      >
+        {one.isError ? (
+          <QueryError error={one.error} />
+        ) : !one.data ? (
+          <Spinner />
+        ) : (
+          <dl className="space-y-2 text-sm">
+            <div className="grid grid-cols-[120px_1fr] gap-2">
+              <dt className="text-slate-500">{t('common.status')}</dt>
+              <dd>
+                <Badge tone={statusTone[one.data.status]}>{t(`tasks.status.${one.data.status}`)}</Badge>
+              </dd>
+              <dt className="text-slate-500">{t('tasks.priority')}</dt>
+              <dd>{t(`tasks.priorities.${one.data.priority}`)}</dd>
+              <dt className="text-slate-500">{t('tasks.dueAt')}</dt>
+              <dd className="tabular">{formatDate(one.data.dueAt) || '—'}</dd>
+              <dt className="text-slate-500">{t('tasks.description')}</dt>
+              <dd className="whitespace-pre-wrap">{one.data.description || '—'}</dd>
+            </div>
+            {one.data.assigneeId === user?.id &&
+              one.data.status !== 'done' &&
+              one.data.status !== 'cancelled' && (
+                <div className="flex justify-end gap-2 pt-2">
+                  {one.data.status === 'new' && (
+                    <Button
+                      variant="secondary"
+                      onClick={() => update.mutate({ id: one.data!._id, body: { status: 'in_progress' } })}
+                    >
+                      {t('tasks.startWork')}
+                    </Button>
+                  )}
+                  <Button onClick={() => update.mutate({ id: one.data!._id, body: { status: 'done' } })}>
+                    {t('tasks.markDone')}
+                  </Button>
+                </div>
+              )}
+          </dl>
+        )}
+      </Dialog>
       <Dialog open={open} onClose={() => setOpen(false)} title={t('tasks.new')}>
         <form onSubmit={create} className="space-y-3" noValidate>
           {error && <Alert kind="error">{error}</Alert>}
@@ -167,7 +233,11 @@ export function TasksPage() {
                 ))}
               </Select>
             ) : (
-              <Input dir="ltr" {...form.register('assigneeId', { required: true })} placeholder="user id" />
+              <Input
+                dir="ltr"
+                {...form.register('assigneeId', { required: true })}
+                placeholder={t('tasks.assigneeId')}
+              />
             )}
           </Field>
           <div className="grid grid-cols-2 gap-3">

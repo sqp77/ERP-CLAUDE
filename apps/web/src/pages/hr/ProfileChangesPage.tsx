@@ -18,6 +18,7 @@ import {
   Table,
   Td,
   Textarea,
+  QueryError,
 } from '@/shared/ui';
 import { useToast } from '@/shared/ui/Toast';
 import { downloadAttachment } from '@/shared/files/FileUploader';
@@ -88,7 +89,9 @@ export function ProfileChangesPage() {
         }
       />
       <Card>
-        {q.isLoading ? (
+        {q.isError ? (
+          <QueryError error={q.error} onRetry={() => q.refetch()} />
+        ) : q.isLoading ? (
           <Spinner />
         ) : !q.data?.items.length ? (
           <EmptyState title={t('common.empty')} />

@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { get } from '@/lib/api';
 import { usePrefs } from '@/lib/preferences';
-import { Badge, Card, EmptyState, PageHeader, Spinner, Table, Td } from '@/shared/ui';
+import { Badge, Card, EmptyState, PageHeader, Spinner, Table, Td, QueryError } from '@/shared/ui';
 import { downloadAttachment } from '@/shared/files/FileUploader';
 import { useHrLookups } from './_data';
 
@@ -45,7 +45,9 @@ export function SecondmentsPage() {
         }
       />
       <Card>
-        {q.isLoading ? (
+        {q.isError ? (
+          <QueryError error={q.error} onRetry={() => q.refetch()} />
+        ) : q.isLoading ? (
           <Spinner />
         ) : !q.data?.items.length ? (
           <EmptyState title={t('common.empty')} />

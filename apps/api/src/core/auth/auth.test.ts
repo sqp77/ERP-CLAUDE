@@ -162,4 +162,26 @@ describe('auth [EP §3, DECISIONS §2]', () => {
       .send({ code: debugCurrentTotp(user!) });
     expect(disable.status).toBe(403);
   });
+  it('C14: background polling does not count as activity for the idle timeout', async () => {
+    await makeUser('poll@eayni.local');
+    const token = await loginAs('poll@eayni.local');
+    const old = new Date(Date.now() - 5 * 60_000);
+    await Session.updateMany({}, { $set: { lastSeenAt: old } });
+    const bg = await request(app())
+      .get('/api/v1/notifications?limit=1')
+      .set(auth(token))
+      .set('x-background', '1');
+    expect(bg.status).toBe(200);
+    expect((await Session.findOne({}))!.lastSeenAt.getTime()).toBe(old.getTime());
+    const fg = await request(app()).get('/api/v1/notifications?limit=1').set(auth(token));
+    expect(fg.status).toBe(200);
+    expect((await Session.findOne({}))!.lastSeenAt.getTime()).toBeGreaterThan(old.getTime());
+    // Background polls alone let the session go idle.
+    await Session.updateMany({}, { $set: { lastSeenAt: new Date(Date.now() - 31 * 60_000) } });
+    const idle = await request(app())
+      .get('/api/v1/notifications?limit=1')
+      .set(auth(token))
+      .set('x-background', '1');
+    expect(idle.status).toBe(401);
+  });
 });

@@ -20,6 +20,7 @@ import {
   Spinner,
   Table,
   Td,
+  QueryError,
 } from '@/shared/ui';
 import { useToast } from '@/shared/ui/Toast';
 import { useDepartments, useRoles } from './_shared';
@@ -121,7 +122,9 @@ export function UsersPage() {
         <div className="mb-3 max-w-sm">
           <Input placeholder={t('actions.search')} value={q} onChange={(e) => setQ(e.target.value)} />
         </div>
-        {users.isLoading ? (
+        {users.isError ? (
+          <QueryError error={users.error} onRetry={() => users.refetch()} />
+        ) : users.isLoading ? (
           <Spinner />
         ) : (
           <Table

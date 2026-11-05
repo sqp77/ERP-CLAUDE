@@ -123,7 +123,7 @@ export function SecurityPage() {
       </div>
 
       <Card title={t('auth.sessions')} className="mt-4">
-        <Table head={[t('auth.lastSeen'), 'IP', 'الجهاز', '']}>
+        <Table head={[t('auth.lastSeen'), t('auth.ip'), t('auth.device'), '']}>
           {sessions.data?.items.map((s) => (
             <tr key={s._id}>
               <Td className="tabular">

@@ -219,7 +219,7 @@ export async function resetMfaByAdmin(target: UserDoc, actor: Actor, meta: Clien
   });
   await notifySystemAdmins({
     bodyAr: `تمت إعادة تعيين المصادقة الثنائية للمستخدم ${target.email} بواسطة ${actor.email ?? 'النظام'}`,
-    link: `/admin/users/${target._id}`,
+    link: '/admin/users',
     excludeUserId: actor.userId,
   });
 }

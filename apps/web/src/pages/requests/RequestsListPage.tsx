@@ -5,7 +5,18 @@ import { useTranslation } from 'react-i18next';
 import { HR_REQUEST_TYPES } from '@eayni/shared';
 import { get, type Paged } from '@/lib/api';
 import { usePrefs } from '@/lib/preferences';
-import { Badge, Button, Card, EmptyState, PageHeader, Select, Spinner, Table, Td } from '@/shared/ui';
+import {
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  PageHeader,
+  Select,
+  Spinner,
+  Table,
+  Td,
+  QueryError,
+} from '@/shared/ui';
 import { NewRequestDialog } from './NewRequestDialog';
 import { stateTone, type HrRequestRow } from './_data';
 
@@ -76,7 +87,9 @@ export function RequestsListPage({ view }: { view: View }) {
             </Select>
           )}
         </div>
-        {q.isLoading ? (
+        {q.isError ? (
+          <QueryError error={q.error} onRetry={() => q.refetch()} />
+        ) : q.isLoading ? (
           <Spinner />
         ) : !q.data?.items.length ? (
           <EmptyState title={t('requests.empty')} />

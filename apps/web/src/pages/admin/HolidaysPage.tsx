@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { del, get, post } from '@/lib/api';
 import { errorMessage } from '@/lib/errors';
 import { usePrefs } from '@/lib/preferences';
-import { Button, Card, Field, Input, PageHeader, Spinner, Table, Td } from '@/shared/ui';
+import { Button, Card, Field, Input, PageHeader, Spinner, Table, Td, QueryError } from '@/shared/ui';
 import { useToast } from '@/shared/ui/Toast';
 
 interface H {
@@ -50,10 +50,12 @@ export function HolidaysPage() {
           </form>
         </Card>
         <Card>
-          {q.isLoading ? (
+          {q.isError ? (
+            <QueryError error={q.error} onRetry={() => q.refetch()} />
+          ) : q.isLoading ? (
             <Spinner />
           ) : (
-            <Table head={[t('common.date'), 'هجري', t('common.name'), '']}>
+            <Table head={[t('common.date'), t('common.calendarH'), t('common.name'), '']}>
               {q.data?.items.map((h) => (
                 <tr key={h._id}>
                   <Td className="tabular" dir="ltr">

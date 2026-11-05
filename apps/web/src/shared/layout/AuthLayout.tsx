@@ -9,7 +9,7 @@ export function AuthLayout({ title, children }: { title: string; children: React
       <div className="w-full max-w-md">
         <div className="mb-6 text-center">
           <div className="mx-auto mb-3 flex size-16 items-center justify-center rounded-2xl bg-brand-700 text-2xl font-bold text-white shadow">
-            عيني
+            {t('app.shortName')}
           </div>
           <div className="text-lg font-bold text-slate-900">{t('app.org')}</div>
           <div className="text-sm text-slate-600">{t('app.tagline')}</div>

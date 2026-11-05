@@ -30,6 +30,7 @@ export async function createSession(
 export async function loadSession(
   token: string,
   now = new Date(),
+  opts: { touch?: boolean } = {},
 ): Promise<
   | { session: SessionDoc; reason?: never }
   | { session?: never; reason: 'invalid' | 'revoked' | 'expired' | 'idle' }
@@ -46,7 +47,8 @@ export async function loadSession(
     await revokeSession(session, 'idle');
     return { reason: 'idle' };
   }
-  if (now.getTime() - session.lastSeenAt.getTime() > 60_000) {
+  // Background polling (x-background: 1) must not keep an idle session alive (review C14).
+  if (opts.touch !== false && now.getTime() - session.lastSeenAt.getTime() > 60_000) {
     session.lastSeenAt = now;
     await session.save();
   }

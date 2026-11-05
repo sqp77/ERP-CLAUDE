@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { get, post } from '@/lib/api';
 import { usePrefs } from '@/lib/preferences';
-import { Button, Card, EmptyState, PageHeader, Spinner, cx } from '@/shared/ui';
+import { Button, Card, EmptyState, PageHeader, Spinner, cx, QueryError } from '@/shared/ui';
 
 interface N {
   _id: string;
@@ -50,7 +50,9 @@ export function NotificationsPage() {
         }
       />
       <Card>
-        {q.isLoading ? (
+        {q.isError ? (
+          <QueryError error={q.error} onRetry={() => q.refetch()} />
+        ) : q.isLoading ? (
           <Spinner />
         ) : !q.data?.items.length ? (
           <EmptyState title={t('notifications.empty')} />

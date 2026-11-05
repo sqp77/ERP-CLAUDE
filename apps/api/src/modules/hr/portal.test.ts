@@ -313,3 +313,64 @@ describe('secondment report after the mission [EP §5.3, EP §15.14, DECISIONS �
     expect(profile.body.secondment.destination).toBe('فرع جدة');
   });
 });
+
+describe('C18 — the manager can act on the secondment-report notification', () => {
+  it('links the manager to the team page, which lists the report, and lets the manager download it', async () => {
+    const { setSetting } = await import('../../core/settings/service');
+    const { SYSTEM_ACTOR } = await import('../../core/http/context');
+    await setSetting('auth.mfaRequiredRoles', [], SYSTEM_ACTOR);
+    const ops = await makeDepartment('ops3', 'التشغيل');
+    await makeUser('hr3@eayni.local', [{ role: 'employee' }, { role: 'hr_officer' }]);
+    const hr = await loginAs('hr3@eayni.local');
+    const mk = (over: Record<string, unknown>) =>
+      request(app())
+        .post('/api/v1/hr/employees')
+        .set(auth(hr))
+        .send({
+          firstNameAr: 'ندى',
+          lastNameAr: 'الحربي',
+          gender: 'female',
+          nationality: 'سعودي',
+          hireDate: '2025-01-10',
+          departmentId: String(ops._id),
+          ...over,
+        });
+    const boss = await mk({
+      workEmail: 'boss3@eayni.local',
+      identity: { type: 'national_id', number: '1000000031' },
+    });
+    const staff = await mk({
+      workEmail: 'nada@eayni.local',
+      identity: { type: 'national_id', number: '1000000032' },
+      directManagerId: boss.body._id,
+    });
+    const mgr = await activateAccount('boss3@eayni.local', boss.body.temporaryPassword);
+    const me = await activateAccount('nada@eayni.local', staff.body.temporaryPassword);
+    await request(app())
+      .post(`/api/v1/hr/employees/${staff.body._id}/status`)
+      .set(auth(hr))
+      .send({
+        status: 'seconded',
+        effectiveDate: '2026-11-01',
+        reason: 'انتداب',
+        secondment: { destination: 'فرع الدمام', startDate: '2026-11-01', endDate: '2026-11-03' },
+      });
+    const pdf = await uploadProof(me);
+    await request(app()).post('/api/v1/hr/me/secondment-report').set(auth(me)).send({ attachmentId: pdf });
+    const n = await Notification.findOne({ userId: boss.body.userId, titleAr: 'تم رفع تقرير انتداب' }).lean();
+    expect(n?.link).toBe('/manager/team');
+    const team = await request(app()).get('/api/v1/hr/team').set(auth(mgr));
+    expect(team.status).toBe(200);
+    expect(team.body.items).toHaveLength(1);
+    expect(team.body.items[0]).toMatchObject({
+      fullNameAr: 'ندى الحربي',
+      secondment: { destination: 'فرع الدمام', reportAttachmentId: pdf },
+    });
+    // The manager may read the report (team access), an unrelated employee may not.
+    expect((await request(app()).get(`/api/v1/files/${pdf}/url`).set(auth(mgr))).status).toBe(200);
+    await makeUser('nobody@eayni.local');
+    const nobody = await loginAs('nobody@eayni.local');
+    expect((await request(app()).get(`/api/v1/files/${pdf}/url`).set(auth(nobody))).status).toBe(403);
+    expect((await request(app()).get('/api/v1/hr/team').set(auth(nobody))).body.items).toEqual([]);
+  });
+});

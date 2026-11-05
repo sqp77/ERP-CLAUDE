@@ -67,7 +67,7 @@ async function announceRoleChange(
   ].filter(Boolean);
   await notifySystemAdmins({
     bodyAr: `تغيير أدوار ${target.email} بواسطة ${req.auth.user.email} — ${parts.join(' / ')}`,
-    link: `/admin/users/${target._id}`,
+    link: '/admin/users',
     data: { userId: String(target._id), ...diff },
     excludeUserId: String(req.auth.user._id),
   });

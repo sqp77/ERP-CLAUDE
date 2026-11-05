@@ -31,7 +31,7 @@ export function PositionsPage() {
       title={t('admin.org.positions')}
       newLabel={t('admin.org.newPosition')}
       endpoint="/org/positions"
-      queryKey="positions"
+      lookup="positions"
       columns={[
         { label: t('common.code'), render: (p) => <code className="text-xs">{p.code}</code> },
         { label: t('hr.position'), render: (p) => <span className="font-medium">{p.titleAr}</span> },

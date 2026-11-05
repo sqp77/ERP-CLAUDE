@@ -4,6 +4,8 @@ import { Paperclip, Loader2 } from 'lucide-react';
 import { ALLOWED_MIME_TYPES, MAX_FILE_BYTES } from '@eayni/shared';
 import { get, post } from '@/lib/api';
 import { errorMessage } from '@/lib/errors';
+import { openSignedUrl } from '@/lib/download';
+import i18n from '@/i18n';
 import { cx } from '@/shared/ui';
 
 interface Props {
@@ -21,8 +23,9 @@ export async function uploadFile(
   opts: { ownerType?: string; ownerId?: string; sensitive?: boolean } = {},
 ): Promise<{ attachmentId: string; fileName: string }> {
   if (!(ALLOWED_MIME_TYPES as readonly string[]).includes(file.type))
-    throw new Error('نوع الملف غير مسموح (PDF أو صورة أو Excel أو Word)');
-  if (file.size > MAX_FILE_BYTES) throw new Error('حجم الملف يتجاوز 25 ميغابايت');
+    throw new Error(i18n.t('files.typeNotAllowed'));
+  if (file.size > MAX_FILE_BYTES)
+    throw new Error(i18n.t('files.tooLarge', { mb: MAX_FILE_BYTES / 1024 / 1024 }));
   const pre = await post<{
     attachmentId: string;
     upload: { url: string; method: string; headers: Record<string, string> };
@@ -32,13 +35,14 @@ export async function uploadFile(
     size: file.size,
     ...opts,
   });
+  // The presigned URL carries its own authorization; cookies must not be sent to the bucket (review C15).
   const put = await fetch(pre.upload.url, {
     method: pre.upload.method,
     headers: pre.upload.headers,
     body: file,
-    credentials: 'include',
+    credentials: 'omit',
   });
-  if (!put.ok) throw new Error('فشل رفع الملف');
+  if (!put.ok) throw new Error(i18n.t('files.uploadFailed'));
   await post(`/files/${pre.attachmentId}/complete`);
   return { attachmentId: pre.attachmentId, fileName: file.name };
 }
@@ -86,8 +90,7 @@ export function FileUploader({ onUploaded, label, className, ...opts }: Props) {
   );
 }
 
-/** Open a signed download URL for an attachment. */
-export async function downloadAttachment(id: string) {
-  const r = await get<{ url: string }>(`/files/${id}/url`);
-  window.open(r.url, '_blank', 'noopener');
+/** Open a signed download URL for an attachment (tab opened before the await — iPhone Safari, review C19). */
+export function downloadAttachment(id: string) {
+  return openSignedUrl(() => get<{ url: string }>(`/files/${id}/url`).then((r) => r.url));
 }

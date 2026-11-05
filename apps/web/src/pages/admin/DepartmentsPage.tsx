@@ -17,6 +17,7 @@ import {
   Spinner,
   Table,
   Td,
+  QueryError,
 } from '@/shared/ui';
 import { useToast } from '@/shared/ui/Toast';
 import { useDepartments, type Dept } from './_shared';
@@ -30,7 +31,7 @@ export function DepartmentsPage() {
   const [editing, setEditing] = useState<Dept | null | 'new'>(null);
   const [error, setError] = useState<string>();
   const form = useForm<{ code: string; nameAr: string; parentId?: string; active: boolean }>();
-  const invalidate = () => qc.invalidateQueries({ queryKey: ['departments'] });
+  const invalidate = () => qc.invalidateQueries({ queryKey: ['lookup', 'departments'] });
   const remove = useMutation({
     mutationFn: (id: string) => del(`/org/departments/${id}`),
     onSuccess: invalidate,
@@ -71,7 +72,9 @@ export function DepartmentsPage() {
         actions={<Button onClick={openNew}>{t('admin.org.newDepartment')}</Button>}
       />
       <Card>
-        {depts.isLoading ? (
+        {depts.isError ? (
+          <QueryError error={depts.error} onRetry={() => depts.refetch()} />
+        ) : depts.isLoading ? (
           <Spinner />
         ) : (
           <Table head={[t('common.code'), t('common.name'), t('admin.org.parent'), t('common.status'), '']}>
@@ -96,7 +99,7 @@ export function DepartmentsPage() {
                     </Button>
                     <Button
                       variant="ghost"
-                      onClick={() => confirm(t('actions.delete') + '؟') && remove.mutate(d._id)}
+                      onClick={() => confirm(t('common.deleteConfirm')) && remove.mutate(d._id)}
                     >
                       {t('actions.delete')}
                     </Button>
@@ -114,7 +117,7 @@ export function DepartmentsPage() {
       >
         <form onSubmit={submit} className="space-y-3" noValidate>
           {error && <Alert kind="error">{error}</Alert>}
-          <Field label={t('common.code')} required hint="أحرف إنجليزية صغيرة وأرقام و _">
+          <Field label={t('common.code')} required hint={t('admin.org.codeHint')}>
             <Input dir="ltr" disabled={editing !== 'new'} {...form.register('code', { required: true })} />
           </Field>
           <Field label={t('common.name')} required>

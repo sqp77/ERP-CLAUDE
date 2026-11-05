@@ -28,6 +28,7 @@ import {
   Spinner,
   Table,
   Td,
+  QueryError,
 } from '@/shared/ui';
 import { useToast } from '@/shared/ui/Toast';
 import { useHrLookups, type EmployeeRow } from './_data';
@@ -90,7 +91,7 @@ export function EmployeesPage() {
   const form = useForm<NewEmployee>({
     defaultValues: {
       gender: 'male',
-      nationality: 'سعودي',
+      nationality: t('hr.defaults.nationality'),
       identityType: 'national_id',
       employmentType: 'full_time',
       createAccount: true,
@@ -165,7 +166,9 @@ export function EmployeesPage() {
             ))}
           </Select>
         </div>
-        {list.isLoading ? (
+        {list.isError ? (
+          <QueryError error={list.error} onRetry={() => list.refetch()} />
+        ) : list.isLoading ? (
           <Spinner />
         ) : !list.data?.items.length ? (
           <EmptyState title={t('common.empty')} />
@@ -188,7 +191,7 @@ export function EmployeesPage() {
                   <Link to={`/hr/employees/${e._id}`} className="font-medium text-brand-800 hover:underline">
                     {e.fullNameAr}
                   </Link>
-                  <div className="text-xs text-slate-500" dir="ltr">
+                  <div className="break-all text-xs text-slate-500" dir="ltr">
                     {e.workEmail}
                   </div>
                 </Td>

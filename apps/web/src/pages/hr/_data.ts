@@ -1,15 +1,19 @@
 import { useQuery } from '@tanstack/react-query';
 import type { EmployeeStatus } from '@eayni/shared';
 import { get, type Paged } from '@/lib/api';
+import i18n from '@/i18n';
+import {
+  lookupKeys,
+  lookupName,
+  useBranches,
+  useDepartments,
+  usePositions,
+  useSites,
+  useUnits,
+  type Lookup,
+} from '@/lib/lookups';
 
-export interface Lookup {
-  _id: string;
-  nameAr?: string;
-  titleAr?: string;
-  code?: string;
-  departmentId?: string;
-  branchId?: string;
-}
+export type { Lookup };
 export interface EmployeeRow {
   _id: string;
   employeeNumber: string;
@@ -48,49 +52,35 @@ export interface EmployeeFull extends EmployeeRow {
   statusAr: string;
 }
 
-const list = <T>(path: string) => get<{ items: T[] }>(path).then((r) => r.items);
-
-/** Lookup tables used across HR screens. */
+/** Lookup tables used across HR screens — all from the shared lookup hooks (review C12). */
 export function useHrLookups() {
-  const departments = useQuery({
-    queryKey: ['departments', true],
-    queryFn: () => list<Lookup>('/org/departments?all=true'),
-  });
-  const units = useQuery({ queryKey: ['units'], queryFn: () => list<Lookup>('/org/units?all=true') });
-  const positions = useQuery({
-    queryKey: ['positions'],
-    queryFn: () => list<Lookup>('/org/positions?all=true'),
-  });
-  const branches = useQuery({
-    queryKey: ['branches'],
-    queryFn: () => list<Lookup>('/org/branches?all=true'),
-  });
-  const sites = useQuery({ queryKey: ['sites'], queryFn: () => list<Lookup>('/org/sites?all=true') });
+  const departments = useDepartments(true);
+  const units = useUnits();
+  const positions = usePositions();
+  const branches = useBranches();
+  const sites = useSites();
   const employees = useQuery({
-    queryKey: ['employees', 'all'],
-    queryFn: () => get<Paged<EmployeeRow>>('/hr/employees?limit=200').then((r) => r.items),
+    queryKey: lookupKeys.employeesAll,
+    queryFn: () => get<Paged<EmployeeRow>>('/hr/employees?limit=200'),
+    staleTime: 60_000,
   });
-  const name = (items: Lookup[] | undefined, id?: string | null) => {
-    const x = items?.find((i) => i._id === id);
-    return x?.nameAr ?? x?.titleAr ?? '';
-  };
   return {
-    departments: departments.data ?? [],
-    units: units.data ?? [],
-    positions: positions.data ?? [],
-    branches: branches.data ?? [],
-    sites: sites.data ?? [],
-    employees: employees.data ?? [],
-    deptName: (id?: string | null) => name(departments.data, id),
-    unitName: (id?: string | null) => name(units.data, id),
-    positionName: (id?: string | null) => name(positions.data, id),
-    branchName: (id?: string | null) => name(branches.data, id),
-    siteName: (id?: string | null) => name(sites.data, id),
-    employeeName: (id?: string | null) => employees.data?.find((e) => e._id === id)?.fullNameAr ?? '',
+    departments: departments.data?.items ?? [],
+    units: units.data?.items ?? [],
+    positions: positions.data?.items ?? [],
+    branches: branches.data?.items ?? [],
+    sites: sites.data?.items ?? [],
+    employees: employees.data?.items ?? [],
+    deptName: (id?: string | null) => lookupName(departments.data?.items, id),
+    unitName: (id?: string | null) => lookupName(units.data?.items, id),
+    positionName: (id?: string | null) => lookupName(positions.data?.items, id),
+    branchName: (id?: string | null) => lookupName(branches.data?.items, id),
+    siteName: (id?: string | null) => lookupName(sites.data?.items, id),
+    employeeName: (id?: string | null) => employees.data?.items.find((e) => e._id === id)?.fullNameAr ?? '',
   };
 }
 
 export const sar = (halalas?: number) =>
   typeof halalas === 'number'
-    ? `${(halalas / 100).toLocaleString('ar-SA-u-nu-latn', { minimumFractionDigits: 2 })} ر.س`
+    ? `${(halalas / 100).toLocaleString('ar-SA-u-nu-latn', { minimumFractionDigits: 2 })} ${i18n.t('common.currency')}`
     : '—';

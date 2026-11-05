@@ -2,7 +2,8 @@
   "app": {
     "name": "عيني ERP",
     "org": "جمعية عيني لإعادة التدوير التعاونية",
-    "tagline": "بوابة الموظفين"
+    "tagline": "بوابة الموظفين",
+    "shortName": "عيني"
   },
   "actions": {
     "login": "تسجيل الدخول",
@@ -46,7 +47,11 @@
     "secondments": "الانتدابات",
     "myRequests": "طلباتي",
     "teamRequests": "طلبات فريقي",
-    "hrRequests": "طلبات الموظفين"
+    "hrRequests": "طلبات الموظفين",
+    "mainMenu": "القائمة الرئيسية",
+    "openMenu": "فتح القائمة",
+    "calendarKind": "نوع التقويم",
+    "team": "فريقي"
   },
   "auth": {
     "email": "البريد الإلكتروني الوظيفي",
@@ -77,7 +82,9 @@
     "currentSession": "الجلسة الحالية",
     "lastSeen": "آخر نشاط",
     "changePassword": "تغيير كلمة المرور",
-    "passwordChanged": "تم تغيير كلمة المرور."
+    "passwordChanged": "تم تغيير كلمة المرور.",
+    "ip": "عنوان IP",
+    "device": "الجهاز"
   },
   "dashboard": {
     "welcome": "مرحبًا، {{name}}",
@@ -124,7 +131,11 @@
     "page": "صفحة {{page}} من {{pages}}",
     "prev": "السابق",
     "next": "التالي",
-    "requiredField": "هذا الحقل مطلوب"
+    "requiredField": "هذا الحقل مطلوب",
+    "currency": "ر.س",
+    "listSeparator": "، ",
+    "number": "#",
+    "deleteConfirm": "هل تريد الحذف؟"
   },
   "tasks": {
     "title": "المهام",
@@ -152,7 +163,9 @@
     },
     "mine": "المسندة إليّ",
     "startWork": "بدء التنفيذ",
-    "markDone": "إكمال"
+    "markDone": "إكمال",
+    "assigneeId": "معرّف المستخدم",
+    "details": "تفاصيل المهمة"
   },
   "calendar": {
     "title": "التقويم",
@@ -223,7 +236,9 @@
       "units": "الوحدات التنظيمية",
       "newUnit": "وحدة جديدة",
       "positions": "المسميات الوظيفية",
-      "newPosition": "مسمى وظيفي جديد"
+      "newPosition": "مسمى وظيفي جديد",
+      "codeHint": "أحرف إنجليزية صغيرة وأرقام و _",
+      "coordinates": "الإحداثيات"
     },
     "holidays": {
       "title": "العطل الرسمية",
@@ -267,7 +282,12 @@
       "title": "مسارات العمل",
       "states": "الحالات",
       "transitions": "الانتقالات",
-      "sla": "المهلة (أيام عمل)"
+      "sla": "المهلة (أيام عمل)",
+      "transition": "الإجراء",
+      "from": "من",
+      "to": "إلى",
+      "who": "من يستطيع",
+      "requiredFields": "حقول مطلوبة"
     }
   },
   "errors": {
@@ -280,13 +300,26 @@
     "mfa_invalid": "رمز التحقق غير صحيح",
     "forbidden": "ليست لديك صلاحية لهذا الإجراء",
     "validation_error": "بيانات غير صالحة",
-    "network": "تعذر الاتصال بالخادم"
+    "network": "تعذر الاتصال بالخادم",
+    "not_found": "السجل غير موجود",
+    "server": "حدث خطأ في الخادم، حاول مرة أخرى",
+    "password_change_required": "يلزم تغيير كلمة المرور المؤقتة أولًا",
+    "temporary_password_expired": "انتهت صلاحية كلمة المرور المؤقتة، اطلب كلمة مرور جديدة من مدير النظام",
+    "mfa_required": "يلزم إدخال رمز التحقق أولًا",
+    "mfa_locked": "تم إنهاء الجلسة بعد محاولات تحقق فاشلة متكررة، سجّل الدخول مجددًا",
+    "mfa_replayed": "هذا الرمز استُخدم للتو، انتظر الرمز التالي",
+    "role_not_grantable": "ليست لديك صلاحية منح أو سحب هذا الدور",
+    "conflict": "تغيّر السجل من مستخدم آخر، حدّث الصفحة وأعد المحاولة",
+    "rate_limited": "محاولات كثيرة، حاول بعد قليل"
   },
   "files": {
     "choose": "اختر ملفًا…",
     "attachment": "المرفق",
     "download": "تنزيل",
-    "required": "المرفق مطلوب"
+    "required": "المرفق مطلوب",
+    "typeNotAllowed": "نوع الملف غير مسموح (PDF أو صورة أو Excel أو Word)",
+    "tooLarge": "حجم الملف يتجاوز {{mb}} ميغابايت",
+    "uploadFailed": "فشل رفع الملف"
   },
   "hr": {
     "directory": "دليل الموظفين",
@@ -451,7 +484,19 @@
     "issuedAt": "تاريخ التسليم",
     "returnedAt": "تاريخ الاسترداد",
     "inCustody": "بعهدة الموظف",
-    "returnItem": "استرداد"
+    "returnItem": "استرداد",
+    "iban": "رقم الآيبان (IBAN)",
+    "ibanPlaceholder": "SA…",
+    "custodyCondition": "حالة العهدة عند الإرجاع",
+    "returnCustody": "إرجاع العهدة",
+    "custodyConditions": {
+      "good": "سليمة",
+      "damaged": "تالفة",
+      "lost": "مفقودة"
+    },
+    "defaults": {
+      "nationality": "سعودي"
+    }
   },
   "profile": {
     "title": "ملفي الشخصي",
@@ -621,6 +666,25 @@
       "finance_manager": "مدير المالية",
       "finance_staff": "المالية",
       "executive": "الإدارة التنفيذية"
-    }
+    },
+    "editAndResubmit": "تعديل وإعادة الإرسال",
+    "currentAttachments": "المرفقات الحالية: {{count}} — تُحفظ وتُضاف إليها ما ترفعه هنا",
+    "reasonTooShort": "السبب قصير جدًا"
+  },
+  "audit": {
+    "sensitive": "حساس"
+  },
+  "team": {
+    "title": "فريقي",
+    "hint": "الموظفون الذين تتولى إدارتهم مباشرة: حالتهم وتقارير انتدابهم",
+    "empty": "لا يوجد موظفون تحت إدارتك المباشرة",
+    "secondment": "الانتداب",
+    "report": "تقرير الانتداب",
+    "noSecondment": "—"
+  },
+  "routeError": {
+    "title": "تعذر عرض هذه الصفحة",
+    "body": "حدث خطأ غير متوقع أثناء عرض الصفحة. أعد المحاولة أو ارجع إلى الرئيسية؛ إن تكرر الخطأ فأبلغ التقنية.",
+    "home": "الرئيسية"
   }
 }

@@ -63,8 +63,11 @@ resources:
         CorsConfiguration:
           CorsRules:
             - AllowedMethods: [PUT, GET]
-              AllowedOrigins: ['*']
-              AllowedHeaders: ['*']
+              # Only the web app origin may talk to the bucket (review C15); presigned URLs carry the auth.
+              AllowedOrigins:
+                - ${ssm:/eayni/${self:provider.stage}/app-url}
+              AllowedHeaders: [Content-Type, Content-Length]
+              MaxAge: 3000
 
 build:
   esbuild:

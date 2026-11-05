@@ -28,92 +28,104 @@ import { ProfileChangesPage } from './pages/hr/ProfileChangesPage';
 import { SecondmentsPage } from './pages/hr/SecondmentsPage';
 import { RequestsListPage } from './pages/requests/RequestsListPage';
 import { RequestDetailPage } from './pages/requests/RequestDetailPage';
+import { TeamPage } from './pages/manager/TeamPage';
+import { RouteError } from './shared/layout/RouteError';
 
 export const router = createBrowserRouter([
   {
-    element: <RequireGuest />,
+    // Arabic error boundary for every route (review C12).
+    errorElement: <RouteError />,
     children: [
-      { path: '/login', element: <LoginPage /> },
-      { path: '/forgot-password', element: <ForgotPasswordPage /> },
-      { path: '/reset-password', element: <ResetPasswordPage /> },
-    ],
-  },
-  {
-    element: <RequireAuth />,
-    children: [
-      { path: '/mfa', element: <MfaPage /> },
-      { path: '/change-password', element: <ChangePasswordPage /> },
       {
-        element: <AppShell />,
+        element: <RequireGuest />,
         children: [
-          { path: '/', element: <DashboardPage /> },
-          { path: '/notifications', element: <NotificationsPage /> },
-          { path: '/me/security', element: <SecurityPage /> },
-          { path: '/me/profile', element: <ProfilePage /> },
-          { path: '/me/requests', element: <RequestsListPage view="mine" /> },
-          { path: '/me/requests/:id', element: <RequestDetailPage /> },
-          { path: '/hr/requests/:id', element: <RequestDetailPage /> },
-          { path: '/manager/requests', element: <RequestsListPage view="inbox" /> },
-          { path: '/hr/requests', element: <RequestsListPage view="queue" /> },
+          { path: '/login', element: <LoginPage /> },
+          { path: '/forgot-password', element: <ForgotPasswordPage /> },
+          { path: '/reset-password', element: <ResetPasswordPage /> },
+        ],
+      },
+      {
+        element: <RequireAuth />,
+        children: [
+          { path: '/mfa', element: <MfaPage /> },
+          { path: '/change-password', element: <ChangePasswordPage /> },
           {
-            element: <RequirePermission resource="tasks" action="view" />,
-            children: [{ path: '/tasks', element: <TasksPage /> }],
-          },
-          {
-            element: <RequirePermission resource="calendar" action="view" />,
-            children: [{ path: '/calendar', element: <CalendarPage /> }],
-          },
-          {
-            element: <RequirePermission resource="users" action="view" />,
-            children: [{ path: '/admin/users', element: <UsersPage /> }],
-          },
-          {
-            element: <RequirePermission resource="roles" action="view" />,
-            children: [{ path: '/admin/roles', element: <RolesPage /> }],
-          },
-          {
-            element: <RequirePermission resource="org.departments" action="edit" />,
-            children: [{ path: '/admin/departments', element: <DepartmentsPage /> }],
-          },
-          {
-            element: <RequirePermission resource="org.branches" action="edit" />,
-            children: [{ path: '/admin/branches', element: <BranchesPage /> }],
-          },
-          {
-            element: <RequirePermission resource="org.units" action="edit" />,
-            children: [{ path: '/admin/units', element: <UnitsPage /> }],
-          },
-          {
-            element: <RequirePermission resource="org.positions" action="edit" />,
-            children: [{ path: '/admin/positions', element: <PositionsPage /> }],
-          },
-          {
-            element: <RequirePermission resource="hr.profile_changes" action="view" />,
-            children: [{ path: '/hr/profile-changes', element: <ProfileChangesPage /> }],
-          },
-          {
-            element: <RequirePermission resource="hr.employees" action="view" />,
+            element: <AppShell />,
             children: [
-              { path: '/hr/employees', element: <EmployeesPage /> },
-              { path: '/hr/employees/:id', element: <EmployeePage /> },
-              { path: '/hr/secondments', element: <SecondmentsPage /> },
+              { path: '/', element: <DashboardPage /> },
+              { path: '/notifications', element: <NotificationsPage /> },
+              { path: '/me/security', element: <SecurityPage /> },
+              { path: '/me/profile', element: <ProfilePage /> },
+              { path: '/me/requests', element: <RequestsListPage view="mine" /> },
+              { path: '/me/requests/:id', element: <RequestDetailPage /> },
+              { path: '/hr/requests/:id', element: <RequestDetailPage /> },
+              { path: '/manager/requests', element: <RequestsListPage view="inbox" /> },
+              { path: '/manager/team', element: <TeamPage /> },
+              { path: '/hr/requests', element: <RequestsListPage view="queue" /> },
+              {
+                element: <RequirePermission resource="tasks" action="view" />,
+                children: [
+                  { path: '/tasks', element: <TasksPage /> },
+                  { path: '/tasks/:id', element: <TasksPage /> },
+                ],
+              },
+              {
+                element: <RequirePermission resource="calendar" action="view" />,
+                children: [{ path: '/calendar', element: <CalendarPage /> }],
+              },
+              {
+                element: <RequirePermission resource="users" action="view" />,
+                children: [{ path: '/admin/users', element: <UsersPage /> }],
+              },
+              {
+                element: <RequirePermission resource="roles" action="view" />,
+                children: [{ path: '/admin/roles', element: <RolesPage /> }],
+              },
+              {
+                element: <RequirePermission resource="org.departments" action="edit" />,
+                children: [{ path: '/admin/departments', element: <DepartmentsPage /> }],
+              },
+              {
+                element: <RequirePermission resource="org.branches" action="edit" />,
+                children: [{ path: '/admin/branches', element: <BranchesPage /> }],
+              },
+              {
+                element: <RequirePermission resource="org.units" action="edit" />,
+                children: [{ path: '/admin/units', element: <UnitsPage /> }],
+              },
+              {
+                element: <RequirePermission resource="org.positions" action="edit" />,
+                children: [{ path: '/admin/positions', element: <PositionsPage /> }],
+              },
+              {
+                element: <RequirePermission resource="hr.profile_changes" action="view" />,
+                children: [{ path: '/hr/profile-changes', element: <ProfileChangesPage /> }],
+              },
+              {
+                element: <RequirePermission resource="hr.employees" action="view" />,
+                children: [
+                  { path: '/hr/employees', element: <EmployeesPage /> },
+                  { path: '/hr/employees/:id', element: <EmployeePage /> },
+                  { path: '/hr/secondments', element: <SecondmentsPage /> },
+                ],
+              },
+              {
+                element: <RequirePermission resource="holidays" action="edit" />,
+                children: [{ path: '/admin/holidays', element: <HolidaysPage /> }],
+              },
+              {
+                element: <RequirePermission resource="workflows" action="view" />,
+                children: [{ path: '/admin/workflows', element: <WorkflowsPage /> }],
+              },
+              {
+                element: <RequirePermission resource="settings" action="view" />,
+                children: [{ path: '/admin/settings', element: <SettingsPage /> }],
+              },
+              {
+                element: <RequirePermission resource="audit" action="view" />,
+                children: [{ path: '/admin/audit', element: <AuditPage /> }],
+              },
             ],
-          },
-          {
-            element: <RequirePermission resource="holidays" action="edit" />,
-            children: [{ path: '/admin/holidays', element: <HolidaysPage /> }],
-          },
-          {
-            element: <RequirePermission resource="workflows" action="view" />,
-            children: [{ path: '/admin/workflows', element: <WorkflowsPage /> }],
-          },
-          {
-            element: <RequirePermission resource="settings" action="view" />,
-            children: [{ path: '/admin/settings', element: <SettingsPage /> }],
-          },
-          {
-            element: <RequirePermission resource="audit" action="view" />,
-            children: [{ path: '/admin/audit', element: <AuditPage /> }],
           },
         ],
       },

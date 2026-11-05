@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient, type UseQueryResult } from '@tanstack/react-query';
+import { lookupKeys, useBranches, useSites } from '@/lib/lookups';
 import { useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
-import { get, post } from '@/lib/api';
+import { post } from '@/lib/api';
 import { errorMessage } from '@/lib/errors';
 import {
   Alert,
@@ -16,6 +17,7 @@ import {
   Spinner,
   Table,
   Td,
+  QueryError,
 } from '@/shared/ui';
 import { useToast } from '@/shared/ui/Toast';
 
@@ -39,14 +41,8 @@ export function BranchesPage() {
   const { t } = useTranslation();
   const toast = useToast();
   const qc = useQueryClient();
-  const branches = useQuery({
-    queryKey: ['branches'],
-    queryFn: () => get<{ items: Branch[] }>('/org/branches?all=true'),
-  });
-  const sites = useQuery({
-    queryKey: ['sites'],
-    queryFn: () => get<{ items: Site[] }>('/org/sites?all=true'),
-  });
+  const branches = useBranches() as unknown as UseQueryResult<{ items: Branch[] }>;
+  const sites = useSites() as unknown as UseQueryResult<{ items: Site[] }>;
   const [dialog, setDialog] = useState<'branch' | 'site' | null>(null);
   const [error, setError] = useState<string>();
   const bf = useForm<{ code: string; nameAr: string; region?: string; city?: string; address?: string }>();
@@ -58,8 +54,8 @@ export function BranchesPage() {
     geofenceRadiusM?: string;
   }>();
   const invalidate = () => {
-    qc.invalidateQueries({ queryKey: ['branches'] });
-    qc.invalidateQueries({ queryKey: ['sites'] });
+    qc.invalidateQueries({ queryKey: lookupKeys.branches });
+    qc.invalidateQueries({ queryKey: lookupKeys.sites });
   };
   const saveBranch = bf.handleSubmit(async (v) => {
     try {
@@ -118,7 +114,9 @@ export function BranchesPage() {
       />
       <div className="grid gap-4 lg:grid-cols-2">
         <Card title={t('admin.org.branches')}>
-          {branches.isLoading ? (
+          {branches.isError ? (
+            <QueryError error={branches.error} onRetry={() => branches.refetch()} />
+          ) : branches.isLoading ? (
             <Spinner />
           ) : (
             <Table head={[t('common.code'), t('common.name'), t('admin.org.region'), t('admin.org.city')]}>
@@ -136,10 +134,19 @@ export function BranchesPage() {
           )}
         </Card>
         <Card title={t('admin.org.sites')}>
-          {sites.isLoading ? (
+          {sites.isError ? (
+            <QueryError error={sites.error} onRetry={() => sites.refetch()} />
+          ) : sites.isLoading ? (
             <Spinner />
           ) : (
-            <Table head={[t('common.name'), t('admin.org.branch'), 'الإحداثيات', t('admin.org.geofence')]}>
+            <Table
+              head={[
+                t('common.name'),
+                t('admin.org.branch'),
+                t('admin.org.coordinates'),
+                t('admin.org.geofence'),
+              ]}
+            >
               {sites.data?.items.map((s) => (
                 <tr key={s._id}>
                   <Td className="font-medium">{s.nameAr}</Td>

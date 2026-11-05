@@ -38,13 +38,20 @@ export function AppShell() {
   const [open, setOpen] = useState(false);
   const inbox = useQuery({
     queryKey: ['hr-requests', 'inbox', 'count'],
-    queryFn: () => get<{ total: number }>('/hr/requests?view=inbox&limit=1'),
+    queryFn: () => get<{ total: number }>('/hr/requests?view=inbox&limit=1', { background: true }),
     refetchInterval: 60_000,
+    refetchIntervalInBackground: false,
   });
   const unread = useQuery({
     queryKey: ['notifications', 'unread'],
-    queryFn: () => get<{ unread: number }>('/notifications?limit=1'),
+    queryFn: () => get<{ unread: number }>('/notifications?limit=1', { background: true }),
     refetchInterval: 30_000,
+    refetchIntervalInBackground: false,
+  });
+  const team = useQuery({
+    queryKey: ['team'],
+    queryFn: () => get<{ items: unknown[] }>('/hr/team'),
+    staleTime: 5 * 60_000,
   });
 
   const items = [
@@ -52,6 +59,7 @@ export function AppShell() {
     { to: '/me/profile', label: t('nav.profile'), icon: UserRound, show: true },
     { to: '/me/requests', label: t('nav.myRequests'), icon: Send, show: can('hr.requests', 'create') },
     { to: '/manager/requests', label: t('nav.teamRequests'), icon: Inbox, show: !!inbox.data?.total },
+    { to: '/manager/team', label: t('nav.team'), icon: Users, show: !!team.data?.items.length },
     { to: '/tasks', label: t('nav.tasks'), icon: ClipboardList, show: can('tasks', 'view') },
     { to: '/calendar', label: t('nav.calendar'), icon: CalendarDays, show: can('calendar', 'view') },
     { to: '/notifications', label: t('nav.notifications'), icon: Bell, show: true },
@@ -129,7 +137,7 @@ export function AppShell() {
   );
 
   const sidebar = (
-    <nav className="flex h-full flex-col gap-1 p-3" aria-label="القائمة الرئيسية">
+    <nav className="flex h-full flex-col gap-1 p-3" aria-label={t('nav.mainMenu')}>
       <div className="mb-3 flex items-center justify-between px-2 py-1">
         <div className="text-lg font-bold text-brand-800">{t('app.name')}</div>
         <button
@@ -186,7 +194,7 @@ export function AppShell() {
           <button
             className="rounded-md p-2 text-slate-600 lg:hidden"
             onClick={() => setOpen(true)}
-            aria-label="فتح القائمة"
+            aria-label={t('nav.openMenu')}
           >
             <Menu className="size-5" />
           </button>
@@ -195,7 +203,7 @@ export function AppShell() {
             <div
               className="flex rounded-lg border border-slate-200 p-0.5 text-xs"
               role="group"
-              aria-label="نوع التقويم"
+              aria-label={t('nav.calendarKind')}
             >
               {(['gregorian', 'hijri'] as const).map((c) => (
                 <button

@@ -24,6 +24,7 @@ import {
 import { useToast } from '@/shared/ui/Toast';
 import { FileUploader, downloadAttachment } from '@/shared/files/FileUploader';
 import { sar, type EmployeeFull } from '../hr/_data';
+import { needsSecondmentReport } from '@/lib/secondment';
 import { statusTone } from '../hr/EmployeesPage';
 
 interface MyProfile extends EmployeeFull {
@@ -66,7 +67,7 @@ function Row({ label, value, dir }: { label: string; value?: ReactNode; dir?: 'l
   return (
     <div className="grid grid-cols-[140px_1fr] gap-2 py-1.5 text-sm">
       <dt className="text-slate-500">{label}</dt>
-      <dd dir={dir} className={cx('text-slate-900', dir === 'ltr' && 'text-start')}>
+      <dd dir={dir} className={cx('text-slate-900', dir === 'ltr' && 'break-all text-start')}>
         {value || '—'}
       </dd>
     </div>
@@ -222,7 +223,7 @@ export function ProfilePage() {
         <Card
           title={t('profile.employmentStatus')}
           actions={
-            e.status === 'seconded' && (
+            needsSecondmentReport(e) && (
               <Button variant="secondary" onClick={() => setReportOpen(true)}>
                 {t('profile.uploadSecondmentReport')}
               </Button>
@@ -295,7 +296,7 @@ export function ProfilePage() {
                       e.address.postalCode,
                     ]
                       .filter(Boolean)
-                      .join('، ')
+                      .join(t('common.listSeparator'))
                   : undefined
               }
             />
@@ -425,10 +426,10 @@ export function ProfilePage() {
         >
           <dl>
             <Row label={t('hr.bank')} value={e.bank?.bankName} />
-            <Row label="IBAN" value={e.bank?.iban} dir="ltr" />
+            <Row label={t('hr.iban')} value={e.bank?.iban} dir="ltr" />
           </dl>
           {changes.data?.items.length ? (
-            <Table head={['#', t('hr.bank'), t('common.status'), t('common.date'), '']}>
+            <Table head={[t('common.number'), t('hr.bank'), t('common.status'), t('common.date'), '']}>
               {changes.data.items.map((r) => (
                 <tr key={r._id}>
                   <Td className="tabular text-xs">{r.number}</Td>
@@ -504,8 +505,12 @@ export function ProfilePage() {
           <Field label={t('hr.bank')} required>
             <Input {...bank.register('bankName', { required: true })} />
           </Field>
-          <Field label="IBAN" required>
-            <Input dir="ltr" placeholder="SA…" {...bank.register('iban', { required: true })} />
+          <Field label={t('hr.iban')} required>
+            <Input
+              dir="ltr"
+              placeholder={t('hr.ibanPlaceholder')}
+              {...bank.register('iban', { required: true })}
+            />
           </Field>
           <Field label={t('profile.proof')} required>
             <FileUploader sensitive onUploaded={(a) => setProofId(a.attachmentId)} />

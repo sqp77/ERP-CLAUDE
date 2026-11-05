@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import { Badge, Card, PageHeader, Spinner } from '@/shared/ui';
+import { Badge, Card, PageHeader, Spinner, QueryError } from '@/shared/ui';
 import { useRoles } from './_shared';
 
 /** Read-only view of the permission matrix (resource × action × scope). Editing arrives with the HR admin screens. */
@@ -9,7 +9,9 @@ export function RolesPage() {
   return (
     <>
       <PageHeader title={t('admin.roles.title')} />
-      {roles.isLoading ? (
+      {roles.isError ? (
+        <QueryError error={roles.error} onRetry={() => roles.refetch()} />
+      ) : roles.isLoading ? (
         <Spinner />
       ) : (
         <div className="grid gap-4 lg:grid-cols-2">

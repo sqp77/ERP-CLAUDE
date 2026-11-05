@@ -1,15 +1,32 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
+import { Paperclip } from 'lucide-react';
+import type { HrRequestType } from '@eayni/shared';
 import { get, post } from '@/lib/api';
 import { usePrefs } from '@/lib/preferences';
-import { errorMessage } from '@/lib/errors';
-import { Alert, Badge, Button, Card, Dialog, Field, PageHeader, Spinner, Textarea, cx } from '@/shared/ui';
+import { errorMessage, fieldErrorsFrom } from '@/lib/errors';
+import { openSignedUrl } from '@/lib/download';
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  Dialog,
+  Field,
+  PageHeader,
+  QueryError,
+  Spinner,
+  Textarea,
+  cx,
+} from '@/shared/ui';
 import { useToast } from '@/shared/ui/Toast';
-import { downloadAttachment } from '@/shared/files/FileUploader';
+import { FileUploader, downloadAttachment } from '@/shared/files/FileUploader';
 import { sar } from '../hr/_data';
 import { stateTone, type HrRequestDetail } from './_data';
+import { RequestFields, detailsFromForm, formFromDetails, type RequestFormValues } from './_form';
 
 /** Request details: fields, action log and stage log [HR §3.5 "سجل الإجراءات"], and the actions open to me. */
 export function RequestDetailPage() {
@@ -22,28 +39,59 @@ export function RequestDetailPage() {
     queryKey: ['hr-request', id],
     queryFn: () => get<HrRequestDetail>(`/hr/requests/${id}`),
   });
-  const [dialog, setDialog] = useState<'reject' | 'return' | null>(null);
+  const [dialog, setDialog] = useState<'reject' | 'return' | 'resubmit' | null>(null);
   const [reason, setReason] = useState('');
+  const [editError, setEditError] = useState<string>();
+  const [newAttachments, setNewAttachments] = useState<{ attachmentId: string; fileName: string }[]>([]);
+  const editForm = useForm<RequestFormValues>();
   const act = useMutation({
-    mutationFn: (body: { transition: string; reason?: string }) =>
-      post(`/hr/requests/${id}/transition`, body),
+    mutationFn: (body: {
+      transition: string;
+      reason?: string;
+      details?: unknown;
+      attachmentIds?: string[];
+    }) => post(`/hr/requests/${id}/transition`, body),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['hr-request', id] });
       qc.invalidateQueries({ queryKey: ['hr-requests'] });
       setDialog(null);
       setReason('');
+      setNewAttachments([]);
       toast(t('actions.save'));
     },
     onError: (e) => toast(errorMessage(e), 'error'),
   });
-  const cert = async () => {
-    const r = await get<{ url: string }>(`/hr/requests/${id}/certificate`);
-    window.open(r.url, '_blank', 'noopener');
+  // The requester fixes the fields and attachments of a returned request, then resubmits (review C19).
+  const openResubmit = (type: HrRequestType, details: Record<string, unknown>) => {
+    editForm.reset(formFromDetails(type, details));
+    setEditError(undefined);
+    setNewAttachments([]);
+    setDialog('resubmit');
   };
+  const cert = () =>
+    openSignedUrl(() => get<{ url: string }>(`/hr/requests/${id}/certificate`).then((r) => r.url)).catch(
+      (e) => toast(errorMessage(e), 'error'),
+    );
 
   if (q.isLoading) return <Spinner />;
+  if (q.isError) return <QueryError error={q.error} onRetry={() => q.refetch()} />;
   if (!q.data) return <Alert kind="error">{t('common.error')}</Alert>;
   const r = q.data;
+  const resubmit = editForm.handleSubmit(async (v) => {
+    setEditError(undefined);
+    try {
+      await act.mutateAsync({
+        transition: 'resubmit',
+        details: detailsFromForm(r.type, v),
+        attachmentIds: [...r.attachmentIds, ...newAttachments.map((a) => a.attachmentId)],
+      });
+    } catch (e) {
+      const fields = fieldErrorsFrom(e);
+      for (const [name, message] of Object.entries(fields))
+        editForm.setError(name, { type: 'server', message });
+      setEditError(errorMessage(e));
+    }
+  });
   const d = r.details as Record<
     string,
     string | number | boolean | { field: string; currentValue?: string; newValue: string }[]
@@ -119,7 +167,7 @@ export function RequestDetailPage() {
               <div className="mt-3 flex flex-wrap gap-2">
                 {r.attachments.map((a) => (
                   <Button key={a._id} variant="secondary" onClick={() => downloadAttachment(a._id)}>
-                    📎 {a.originalName}
+                    <Paperclip className="size-4" aria-hidden /> {a.originalName}
                   </Button>
                 ))}
               </div>
@@ -158,8 +206,8 @@ export function RequestDetailPage() {
                   </Button>
                 )}
                 {r.actions.includes('resubmit') && (
-                  <Button onClick={() => act.mutate({ transition: 'resubmit' })} loading={act.isPending}>
-                    {t('requests.resubmit')}
+                  <Button onClick={() => openResubmit(r.type, r.details)} loading={act.isPending}>
+                    {t('requests.editAndResubmit')}
                   </Button>
                 )}
                 {r.actions.includes('close') && (
@@ -211,7 +259,44 @@ export function RequestDetailPage() {
       </div>
 
       <Dialog
-        open={!!dialog}
+        open={dialog === 'resubmit'}
+        onClose={() => setDialog(null)}
+        title={t('requests.editAndResubmit')}
+      >
+        <form onSubmit={resubmit} className="space-y-3" noValidate>
+          {editError && <Alert kind="error">{editError}</Alert>}
+          {r.decision?.reason && (
+            <Alert kind="warning">
+              <strong>{t('requests.decisionReason')}:</strong> {r.decision.reason}
+            </Alert>
+          )}
+          <RequestFields type={r.type} form={editForm} />
+          <Field
+            label={t('requests.attachments')}
+            hint={t('requests.currentAttachments', { count: r.attachments.length })}
+          >
+            <div className="space-y-1">
+              <FileUploader onUploaded={(a) => setNewAttachments((s) => [...s, a])} />
+              {newAttachments.map((a) => (
+                <div key={a.attachmentId} className="flex items-center gap-1 text-xs text-slate-600">
+                  <Paperclip className="size-3" aria-hidden /> {a.fileName}
+                </div>
+              ))}
+            </div>
+          </Field>
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="secondary" onClick={() => setDialog(null)}>
+              {t('actions.cancel')}
+            </Button>
+            <Button type="submit" loading={act.isPending}>
+              {t('requests.resubmit')}
+            </Button>
+          </div>
+        </form>
+      </Dialog>
+
+      <Dialog
+        open={dialog === 'reject' || dialog === 'return'}
         onClose={() => setDialog(null)}
         title={dialog === 'reject' ? t('requests.reject') : t('requests.return')}
       >
@@ -227,7 +312,7 @@ export function RequestDetailPage() {
               variant={dialog === 'reject' ? 'danger' : 'primary'}
               disabled={reason.trim().length < 2}
               loading={act.isPending}
-              onClick={() => act.mutate({ transition: dialog!, reason })}
+              onClick={() => dialog && act.mutate({ transition: dialog, reason })}
             >
               {dialog === 'reject' ? t('requests.reject') : t('requests.return')}
             </Button>

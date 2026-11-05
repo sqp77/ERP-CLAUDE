@@ -54,7 +54,10 @@ export function registerHrModule(): void {
       { resource: 'hr.employees', action: 'view', ...eff },
       req.auth.user,
     );
-    return !!(await Employee.exists({ _id: ownerId, deletedAt: null, ...filter }));
+    if (await Employee.exists({ _id: ownerId, deletedAt: null, ...filter })) return true;
+    // The direct manager reads their reports' files (secondment reports) — the org chart, not a role [DECISIONS §4].
+    const me = await Employee.findOne({ userId: req.auth.user._id, deletedAt: null }).select('_id').lean();
+    return !!me && !!(await Employee.exists({ _id: ownerId, deletedAt: null, directManagerId: me._id }));
   });
   registerRecordAccess('hr_request', async (req, id) => {
     const eff = await permissionOn(req, 'hr.requests');
