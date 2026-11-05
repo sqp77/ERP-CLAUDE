@@ -123,8 +123,8 @@ export async function seedTickets(): Promise<number> {
     attachmentIds: [],
     fields: {},
   });
-  await act(noura, t3, 'review');
-  await act(noura, t3, 'request_info', { reason: 'يرجى تحديد السنة المطلوب احتساب الرصيد عنها' });
+  const t3r = await act(noura, t3, 'review');
+  await act(noura, t3r, 'request_info', { reason: 'يرجى تحديد السنة المطلوب احتساب الرصيد عنها' });
   n++;
   // 4. resolved, awaiting the requester (ops ticket)
   const t4 = await createTicket(await reqOf(lama), {
@@ -136,8 +136,8 @@ export async function seedTickets(): Promise<number> {
     attachmentIds: [],
     fields: {},
   });
-  await assign(khalid, t4, khalid); // the manager handles it himself
-  await act(khalid, t4, 'resolve', { resolution: 'تم نقل الحاوية إلى الموقف الخلفي.' });
+  const t4a = await assign(khalid, t4, khalid); // the manager handles it himself
+  await act(khalid, t4a, 'resolve', { resolution: 'تم نقل الحاوية إلى الموقف الخلفي.' });
   n++;
   // 5. closed with a rating
   const t5 = await open(dana, {
@@ -145,9 +145,9 @@ export async function seedTickets(): Promise<number> {
     body: 'كلمة المرور لا تُقبل في تطبيق البريد.',
     fields: { itType: 'software' },
   });
-  await assign(faisal, t5, turki);
-  await act(turki, t5, 'resolve', { resolution: 'تمت إعادة تهيئة الحساب على الجوال.' });
-  await act(dana, t5, 'close', { rating: { score: 5, comment: 'سريع ومهذب' } });
+  const t5a = await assign(faisal, t5, turki);
+  const t5r = await act(turki, t5a, 'resolve', { resolution: 'تمت إعادة تهيئة الحساب على الجوال.' });
+  await act(dana, t5r, 'close', { rating: { score: 5, comment: 'سريع ومهذب' } });
   n++;
   // 6. reopened by the requester
   const t6 = await open(hind, {
@@ -156,9 +156,9 @@ export async function seedTickets(): Promise<number> {
     fields: { itType: 'network' },
     priority: 'urgent',
   });
-  await assign(faisal, t6, mohammed);
-  await act(mohammed, t6, 'resolve', { resolution: 'أُعيد تشغيل نقطة الوصول.' });
-  await act(hind, t6, 'reopen', { reason: 'المشكلة عادت في اليوم التالي' });
+  const t6a = await assign(faisal, t6, mohammed);
+  const t6r = await act(mohammed, t6a, 'resolve', { resolution: 'أُعيد تشغيل نقطة الوصول.' });
+  await act(hind, t6r, 'reopen', { reason: 'المشكلة عادت في اليوم التالي' });
   n++;
   // 7. stalled (IT only)
   const t7 = await open(yousef, {
@@ -167,8 +167,8 @@ export async function seedTickets(): Promise<number> {
     fields: { itType: 'fault' },
     priority: 'high',
   });
-  await assign(faisal, t7, turki);
-  await act(turki, t7, 'stall', { reason: 'بانتظار قطعة غيار من المورد' });
+  const t7a = await assign(faisal, t7, turki);
+  await act(turki, t7a, 'stall', { reason: 'بانتظار قطعة غيار من المورد' });
   n++;
   return n;
 }
