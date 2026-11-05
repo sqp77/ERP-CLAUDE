@@ -7,7 +7,7 @@ import type { WorkflowDefinitionInput } from '@eayni/shared';
 export const TICKET_WORKFLOW: WorkflowDefinitionInput = {
   type: 'ticket',
   nameAr: 'تذكرة داخلية',
-  version: 2, // v2: queue → assign → processing, requester-only close, system follow-ups (slice 4)
+  version: 3, // v3: department staff may claim an unassigned ticket (slice 4 review change 1)
   initialState: 'new',
   states: {
     new: { labelAr: 'جديدة', category: 'open', slaBusinessDays: 1, owner: 'department' },
@@ -34,6 +34,13 @@ export const TICKET_WORKFLOW: WorkflowDefinitionInput = {
       to: 'in_progress',
       allow: ['department_manager'],
       requiredFields: ['assigneeId'],
+    },
+    {
+      code: 'claim',
+      labelAr: 'استلام',
+      from: ['new', 'under_review', 'reopened'],
+      to: 'in_progress',
+      allow: ['department_staff'],
     },
     {
       code: 'start',
@@ -96,7 +103,7 @@ export const TICKET_IT_WORKFLOW: WorkflowDefinitionInput = {
   ...TICKET_WORKFLOW,
   type: 'ticket_it',
   nameAr: 'تذكرة تقنية',
-  version: 1,
+  version: 2,
   states: {
     ...TICKET_WORKFLOW.states,
     stalled: { labelAr: 'متعثر', category: 'waiting', owner: 'assignee' },

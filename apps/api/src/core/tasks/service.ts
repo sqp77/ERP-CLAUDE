@@ -52,6 +52,8 @@ let directory: AssigneeDirectory = {
 export function registerAssigneeDirectory(d: AssigneeDirectory): void {
   directory = d;
 }
+/** Employee facts for a user (department, direct manager, on duty) from the registered directory. */
+export const lookupAssignee = (userId: string) => directory.lookup(userId);
 
 /** Source records a task may link to; the owning module registers a resolver (number or id → id + label). */
 export type SourceResolver = (idOrNumber: string) => Promise<{ id: string; label: string } | null>;

@@ -16,6 +16,8 @@ import { authorize } from '../../core/rbac/authorize';
 import { Attachment } from '../../core/files/model';
 import { User } from '../../core/auth/model';
 import { Department } from '../../core/org/model';
+import { effectivePermission } from '../../core/rbac/service';
+import type { RoleAssignment } from '@eayni/shared';
 import { Ticket } from './model';
 import * as svc from './service';
 
@@ -26,7 +28,25 @@ ticketsRouter.get(
   '/targets',
   requireAuth(),
   asyncHandler(async (req: AuthedRequest, res) => {
-    res.json({ items: await svc.targetsFor(req.auth.user) });
+    const dept = await svc.departmentOf(req.auth.user);
+    const scope =
+      (
+        await effectivePermission(
+          req.auth.user.roles as RoleAssignment[],
+          dept?.id,
+          'tickets',
+          'view',
+          String(req.auth.user._id),
+        )
+      )?.scope ?? 'own';
+    res.json({
+      items: await svc.targetsFor(req.auth.user),
+      queue: {
+        departmentCode: dept?.code ?? null,
+        isManager: scope === 'department' || scope === 'all',
+        canView: scope !== 'own' || (!!dept && (await svc.staffQueueEnabled(dept.code))),
+      },
+    });
   }),
 );
 
@@ -48,12 +68,20 @@ ticketsRouter.get(
   asyncHandler(async (req: AuthedRequest, res) => {
     const q = req.query as unknown as z.infer<typeof listTicketsQuerySchema>;
     const user = req.auth.user;
-    const filter: Record<string, unknown> = { deletedAt: null, ...(await svc.visibilityFilter(user, req.authz!)) };
+    const filter: Record<string, unknown> = {
+      deletedAt: null,
+      ...(await svc.visibilityFilter(user, req.authz!)),
+    };
     if (q.view === 'mine') filter.requesterUserId = user._id;
     if (q.view === 'assigned') filter.assigneeId = user._id;
     if (q.view === 'department') {
-      if (req.authz!.scope === 'own') throw forbidden();
       if (req.authz!.scope === 'department') filter.departmentId = { $in: req.authz!.departmentIds };
+      else if (req.authz!.scope !== 'all') {
+        const dept = await svc.departmentOf(user);
+        if (!dept || !(await svc.staffQueueEnabled(dept.code)))
+          throw forbidden('قائمة تذاكر القسم غير متاحة لك');
+        filter.departmentId = dept.id;
+      }
     }
     if (q.state) filter.state = q.state;
     if (q.open) filter.state = { $in: [...OPEN_TICKET_STATES] };
@@ -63,11 +91,24 @@ ticketsRouter.get(
     if (q.assigneeId) filter.assigneeId = q.assigneeId;
     if (q.unassigned) filter.assigneeId = null;
     const [items, total] = await Promise.all([
-      Ticket.find(filter).sort({ lastActivityAt: -1 }).skip((q.page - 1) * q.limit).limit(q.limit).lean(),
+      Ticket.find(filter)
+        .sort({ lastActivityAt: -1 })
+        .skip((q.page - 1) * q.limit)
+        .limit(q.limit)
+        .lean(),
       Ticket.countDocuments(filter),
     ]);
-    const userIds = [...new Set(items.flatMap((i) => [i.assigneeId, i.requesterUserId]).filter(Boolean).map(String))];
-    const users = await User.find({ _id: { $in: userIds } }).select('displayNameAr').lean();
+    const userIds = [
+      ...new Set(
+        items
+          .flatMap((i) => [i.assigneeId, i.requesterUserId])
+          .filter(Boolean)
+          .map(String),
+      ),
+    ];
+    const users = await User.find({ _id: { $in: userIds } })
+      .select('displayNameAr')
+      .lean();
     const names = new Map(users.map((u) => [String(u._id), u.displayNameAr]));
     res.json({
       items: items.map((i) => ({
@@ -91,7 +132,9 @@ ticketsRouter.get(
     const [actions, hist, attachments, assignee, dept, config] = await Promise.all([
       svc.availableActions(req.auth.user, t),
       svc.history(String(t._id)),
-      Attachment.find({ _id: { $in: t.attachmentIds } }).select('originalName mimeType size').lean(),
+      Attachment.find({ _id: { $in: t.attachmentIds } })
+        .select('originalName mimeType size')
+        .lean(),
       t.assigneeId ? User.findById(t.assigneeId).select('displayNameAr').lean() : null,
       Department.findById(t.departmentId).select('nameAr code').lean(),
       svc.targetsFor(req.auth.user).then((ts) => ts.find((x) => x.code === t.departmentCode)?.config),

@@ -22,7 +22,7 @@ import { withTransaction } from '../../db';
 import { Department } from '../../core/org/model';
 import type { UserDoc } from '../../core/auth/model';
 import { departmentManagerUserIds } from '../../core/tasks/jobs';
-import { assertAssignable } from '../../core/tasks/service';
+import { assertAssignable, lookupAssignee } from '../../core/tasks/service';
 import { Employee } from '../hr/model';
 import { Ticket, TicketAction, type TicketDoc } from './model';
 
@@ -57,11 +57,19 @@ export async function targetsFor(user: UserDoc): Promise<TicketTarget[]> {
       managersOnly: managersOnly.includes(d.code),
       config: normalizeConfig(config[d.code]),
     }))
-    .sort((a, b) => TICKET_TARGET_CODES.indexOf(a.code as never) - TICKET_TARGET_CODES.indexOf(b.code as never));
+    .sort(
+      (a, b) => TICKET_TARGET_CODES.indexOf(a.code as never) - TICKET_TARGET_CODES.indexOf(b.code as never),
+    );
 }
 
-function normalizeConfig(c?: { fields?: unknown[]; priorityLabelsAr?: Record<string, string> }): TicketDepartmentConfig {
-  const fields = ((c?.fields ?? []) as TicketDepartmentConfig['fields']).map((f) => ({ ...f, required: !!f.required }));
+function normalizeConfig(c?: {
+  fields?: unknown[];
+  priorityLabelsAr?: Record<string, string>;
+}): TicketDepartmentConfig {
+  const fields = ((c?.fields ?? []) as TicketDepartmentConfig['fields']).map((f) => ({
+    ...f,
+    required: !!f.required,
+  }));
   return { fields, priorityLabelsAr: c?.priorityLabelsAr as TicketDepartmentConfig['priorityLabelsAr'] };
 }
 
@@ -141,11 +149,30 @@ export async function createTicket(req: AuthedRequest, input: CreateTicketInput)
     pendingWith: 'department',
     lastActivityAt: new Date(),
   });
-  if (input.attachmentIds.length) await claimAttachments(input.attachmentIds, 'ticket', String(ticket._id), user._id);
+  if (input.attachmentIds.length)
+    await claimAttachments(input.attachmentIds, 'ticket', String(ticket._id), user._id);
   const actor = actorFrom(req);
-  await TicketAction.create({ ticketId: ticket._id, action: 'created', toState: 'new', actorUserId: actor.userId, actorEmail: actor.email, actorRelation: 'requester' });
-  await recordAudit(actor, { action: 'create', resource: 'tickets', resourceId: String(ticket._id), after: { number: ticket.number, departmentCode: target.code, type: ticket.type } });
-  await publish({ type: 'ticket.created', aggregateType: 'ticket', aggregateId: String(ticket._id), payload: { number: ticket.number, departmentCode: target.code }, actorUserId: actor.userId });
+  await TicketAction.create({
+    ticketId: ticket._id,
+    action: 'created',
+    toState: 'new',
+    actorUserId: actor.userId,
+    actorEmail: actor.email,
+    actorRelation: 'requester',
+  });
+  await recordAudit(actor, {
+    action: 'create',
+    resource: 'tickets',
+    resourceId: String(ticket._id),
+    after: { number: ticket.number, departmentCode: target.code, type: ticket.type },
+  });
+  await publish({
+    type: 'ticket.created',
+    aggregateType: 'ticket',
+    aggregateId: String(ticket._id),
+    payload: { number: ticket.number, departmentCode: target.code },
+    actorUserId: actor.userId,
+  });
   // Stage 2 [EP §9.4]: the receiving department's managers are told.
   const managers = await departmentManagerUserIds(target.departmentId);
   await notify({
@@ -174,27 +201,56 @@ async function managesDepartment(user: UserDoc, departmentId: string): Promise<b
   return eff.scope === 'department' && eff.departmentIds.includes(departmentId);
 }
 
-/** The requester is only ever the requester (no self-handling); managers of the target department and the assignee act. */
+/** Per-department switch (slice 4 review change 1): staff of the target department see its queue and may claim. Missing = on. */
+export async function staffQueueEnabled(departmentCode: string): Promise<boolean> {
+  const cfg = await getSetting('tickets.staffQueueDepartments');
+  return cfg[departmentCode] ?? true;
+}
+
+/** The user's own department (code + id) from the account; HR keeps it in sync with the employee file. */
+export async function departmentOf(user: UserDoc): Promise<{ id: string; code: string } | null> {
+  if (!user.departmentId) return null;
+  const d = await Department.findById(user.departmentId).select('code').lean();
+  return d ? { id: String(d._id), code: d.code } : null;
+}
+
+export async function isDepartmentStaff(
+  user: UserDoc,
+  ticket: { departmentId: unknown; departmentCode: string },
+): Promise<boolean> {
+  return (
+    !!user.departmentId &&
+    String(user.departmentId) === String(ticket.departmentId) &&
+    (await staffQueueEnabled(ticket.departmentCode))
+  );
+}
+
+/** The requester is only ever the requester (no self-handling); managers of the target department, its staff (claim only) and the assignee act. */
 export async function relationsFor(user: UserDoc, ticket: TicketDoc): Promise<string[]> {
   const uid = String(user._id);
   if (String(ticket.requesterUserId) === uid) return ['requester'];
   const rel = new Set<string>();
   if (ticket.assigneeId && String(ticket.assigneeId) === uid) rel.add('assignee');
   if (await managesDepartment(user, String(ticket.departmentId))) rel.add('department_manager');
+  else if (await isDepartmentStaff(user, ticket)) rel.add('department_staff');
   return [...rel];
 }
 
 export async function visibilityFilter(user: UserDoc, authz: Authz): Promise<FilterQuery<unknown>> {
   if (authz.scope === 'all') return {};
-  const own = [{ requesterUserId: user._id }, { assigneeId: user._id }];
+  const own: Record<string, unknown>[] = [{ requesterUserId: user._id }, { assigneeId: user._id }];
   if (authz.scope === 'department') return { $or: [...own, { departmentId: { $in: authz.departmentIds } }] };
+  const dept = await departmentOf(user);
+  if (dept && (await staffQueueEnabled(dept.code))) own.push({ departmentId: dept.id }); // view-only department queue
   return { $or: own };
 }
 
 export async function availableActions(user: UserDoc, ticket: TicketDoc): Promise<string[]> {
   const def = await getWorkflow(ticket.workflowType);
   const rel = await relationsFor(user, ticket);
-  const codes = availableTransitions(def, ticket.state, rel).map((t) => t.code).filter((c) => c !== 'ask_confirmation');
+  const codes = availableTransitions(def, ticket.state, rel)
+    .map((t) => t.code)
+    .filter((c) => c !== 'ask_confirmation');
   if (codes.includes('reopen') && !(await mayReopen(ticket))) return codes.filter((c) => c !== 'reopen');
   return codes;
 }
@@ -222,28 +278,43 @@ export async function transition(ticket: TicketDoc, code: string, opts: Transiti
   const { input } = opts;
   // Authorization first (who may fire this transition from this state), then input checks.
   const t = def.transitions.find((x) => x.code === code);
-  if (!t || !t.from.includes(fromState)) throw badRequest('لا يمكن تنفيذ هذا الإجراء في حالة التذكرة الحالية');
+  if (!t || !t.from.includes(fromState))
+    throw badRequest('لا يمكن تنفيذ هذا الإجراء في حالة التذكرة الحالية');
   if (!(t.allow.includes('*') || t.allow.some((a) => opts.relations.includes(a))))
     throw forbidden(`ليست لديك صلاحية تنفيذ "${t.labelAr}"`);
   if (code === 'reopen' && !(await mayReopen(ticket))) throw badRequest('انتهت مهلة إعادة فتح التذكرة');
   if (code === 'assign') {
     if (!input.assigneeId) throw badRequest('حدّد الموظف المكلّف');
-    if (ticket.assigneeId && String(ticket.assigneeId) === input.assigneeId) throw badRequest('التذكرة مسندة لهذا الموظف أصلًا');
+    if (ticket.assigneeId && String(ticket.assigneeId) === input.assigneeId)
+      throw badRequest('التذكرة مسندة لهذا الموظف أصلًا');
   }
   if (code === 'resolve' && !input.resolution?.trim()) throw badRequest('اكتب ملخص الحل');
+  if (code === 'claim' && ticket.assigneeId) throw badRequest('التذكرة مسندة أصلًا');
   if (code === 'close' && !opts.actor.system && !input.rating) throw badRequest('قيّم الخدمة قبل الإغلاق');
   const set: Record<string, unknown> = { lastActivityAt: now };
   const unset: Record<string, unknown> = {};
   if (code === 'assign') set.assigneeId = input.assigneeId;
+  if (code === 'claim') set.assigneeId = opts.actor.userId;
   if (code === 'resolve') {
     set.resolution = input.resolution;
     set.resolvedAt = now;
+    set.resolvedByUserId = opts.actor.userId;
     unset.confirmReminderSentAt = 1;
+  }
+  if (code === 'reopen') {
+    // Back to whoever resolved it, while they are still on duty in the same department; otherwise the queue (review change 2).
+    const resolver = ticket.resolvedByUserId ? await lookupAssignee(String(ticket.resolvedByUserId)) : null;
+    const stillHere = !!resolver && resolver.active && resolver.departmentId === String(ticket.departmentId);
+    if (stillHere) set.assigneeId = String(ticket.resolvedByUserId);
+    else unset.assigneeId = 1;
   }
   if (code === 'close' && input.rating) set.rating = { ...input.rating, at: now };
   if (code === 'close' && opts.actor.system) set.autoClosed = true;
   if (code === 'reopen') set.$incReopen = true;
-  const payload = { assigneeId: set.assigneeId ?? ticket.assigneeId, resolution: set.resolution ?? ticket.resolution };
+  const payload = {
+    assigneeId: set.assigneeId ?? ticket.assigneeId,
+    resolution: set.resolution ?? ticket.resolution,
+  };
 
   const updated = await withTransaction(async (session) => {
     if (input.attachmentIds?.length && opts.user)
@@ -264,13 +335,19 @@ export async function transition(ticket: TicketDoc, code: string, opts: Transiti
       persist: async (fields) => {
         const $set: Record<string, unknown> = { ...fields, ...set };
         delete $set.$incReopen;
-        $set.pendingWith = pendingFor(fields.state, { assigneeId: $set.assigneeId ?? ticket.assigneeId });
+        $set.pendingWith = pendingFor(fields.state, {
+          assigneeId: unset.assigneeId ? undefined : ($set.assigneeId ?? ticket.assigneeId),
+        });
         if (fields.state === 'in_progress' && !ticket.processingStartedAt) $set.processingStartedAt = now; // IT §7.1
-        if (input.attachmentIds?.length) $set.attachmentIds = [...new Set([...ticket.attachmentIds.map(String), ...input.attachmentIds])];
+        if (input.attachmentIds?.length)
+          $set.attachmentIds = [...new Set([...ticket.attachmentIds.map(String), ...input.attachmentIds])];
         const update: Record<string, unknown> = { $set };
         if (Object.keys(unset).length) update.$unset = unset;
         if (set.$incReopen) update.$inc = { reopenCount: 1 };
-        doc = await Ticket.findOneAndUpdate({ _id: ticket._id, state: fromState, deletedAt: null }, update, { new: true, session });
+        doc = await Ticket.findOneAndUpdate({ _id: ticket._id, state: fromState, deletedAt: null }, update, {
+          new: true,
+          session,
+        });
         return !!doc;
       },
     });
@@ -297,11 +374,24 @@ export async function transition(ticket: TicketDoc, code: string, opts: Transiti
     );
     await recordAudit(
       opts.actor,
-      { action: 'transition', resource: 'tickets', resourceId: String(d._id), before: { state: fromState }, after: { state: result.to }, meta: { transition: code } },
+      {
+        action: 'transition',
+        resource: 'tickets',
+        resourceId: String(d._id),
+        before: { state: fromState },
+        after: { state: result.to },
+        meta: { transition: code },
+      },
       session,
     );
     await publish(
-      { type: `ticket.${result.to}`, aggregateType: 'ticket', aggregateId: String(d._id), payload: { number: d.number, from: fromState, transition: code }, actorUserId: opts.actor.userId },
+      {
+        type: `ticket.${result.to}`,
+        aggregateType: 'ticket',
+        aggregateId: String(d._id),
+        payload: { number: d.number, from: fromState, transition: code },
+        actorUserId: opts.actor.userId,
+      },
       session,
     );
     return d;
@@ -316,20 +406,52 @@ async function notifyAfter(t: TicketDoc, code: string, opts: TransitionOpts) {
   const requester = String(t.requesterUserId);
   const assignee = t.assigneeId ? String(t.assigneeId) : undefined;
   const actor = opts.actor.userId;
-  const others = (ids: (string | undefined)[]) => [...new Set(ids.filter((x): x is string => !!x && x !== actor))];
+  const others = (ids: (string | undefined)[]) => [
+    ...new Set(ids.filter((x): x is string => !!x && x !== actor)),
+  ];
   switch (code) {
     case 'assign':
       await notify({ userIds: others([assignee]), type: 'ticket.assigned', bodyAr: label, link });
-      await notify({ userIds: others([requester]), type: 'ticket.updated', bodyAr: `${label}: قيد المعالجة`, link });
+      await notify({
+        userIds: others([requester]),
+        type: 'ticket.updated',
+        bodyAr: `${label}: قيد المعالجة`,
+        link,
+      });
       break;
+    case 'claim': {
+      const managers = await departmentManagerUserIds(String(t.departmentId));
+      await notify({
+        userIds: others([requester, ...managers]),
+        type: 'ticket.updated',
+        bodyAr: `${label}: استلمها ${opts.actor.email ?? ''}`,
+        link,
+      });
+      break;
+    }
     case 'request_info':
-      await notify({ userIds: others([requester]), type: 'ticket.info_requested', bodyAr: `${label}: ${opts.input.reason ?? ''}`, link });
+      await notify({
+        userIds: others([requester]),
+        type: 'ticket.info_requested',
+        bodyAr: `${label}: ${opts.input.reason ?? ''}`,
+        link,
+      });
       break;
     case 'provide_info':
-      await notify({ userIds: others([assignee]), type: 'ticket.updated', bodyAr: `${label}: زوّد مقدم الطلب المعلومات`, link });
+      await notify({
+        userIds: others([assignee]),
+        type: 'ticket.updated',
+        bodyAr: `${label}: زوّد مقدم الطلب المعلومات`,
+        link,
+      });
       break;
     case 'resolve':
-      await notify({ userIds: others([requester]), type: 'ticket.resolved', bodyAr: `${label}: ${t.resolution ?? ''}`, link });
+      await notify({
+        userIds: others([requester]),
+        type: 'ticket.resolved',
+        bodyAr: `${label}: ${t.resolution ?? ''}`,
+        link,
+      });
       break;
     case 'close':
       await notify({
@@ -338,11 +460,17 @@ async function notifyAfter(t: TicketDoc, code: string, opts: TransitionOpts) {
         bodyAr: label,
         link,
       });
-      if (opts.actor.system && assignee) await notify({ userIds: [assignee], type: 'ticket.closed', bodyAr: label, link });
+      if (opts.actor.system && assignee)
+        await notify({ userIds: [assignee], type: 'ticket.closed', bodyAr: label, link });
       break;
     case 'reopen': {
       const managers = await departmentManagerUserIds(String(t.departmentId));
-      await notify({ userIds: others([assignee, ...managers]), type: 'ticket.reopened', bodyAr: `${label}: ${opts.input.reason ?? ''}`, link });
+      await notify({
+        userIds: others([assignee, ...managers]),
+        type: 'ticket.reopened',
+        bodyAr: `${label}: ${opts.input.reason ?? ''}`,
+        link,
+      });
       break;
     }
     case 'stall':
@@ -355,7 +483,12 @@ async function notifyAfter(t: TicketDoc, code: string, opts: TransitionOpts) {
 }
 
 /** The department manager assigns a member of their department / team (same rule as tasks, EP §16). */
-export async function assignByManager(req: AuthedRequest, ticket: TicketDoc, assigneeId: string, note?: string) {
+export async function assignByManager(
+  req: AuthedRequest,
+  ticket: TicketDoc,
+  assigneeId: string,
+  note?: string,
+) {
   await assertAssignable(req, assigneeId);
   return transition(ticket, 'assign', {
     user: req.auth.user,
@@ -378,11 +511,14 @@ export async function findVisible(req: AuthedRequest, id: string): Promise<Ticke
 
 /** Open tickets per assignee (team page). */
 export async function openTicketCounts(userIds: unknown[]): Promise<Map<string, number>> {
-  const docs = await Ticket.find({ assigneeId: { $in: userIds }, deletedAt: null, state: { $in: [...OPEN_TICKET_STATES] } })
+  const docs = await Ticket.find({
+    assigneeId: { $in: userIds },
+    deletedAt: null,
+    state: { $in: [...OPEN_TICKET_STATES] },
+  })
     .select('assigneeId')
     .lean();
   const m = new Map<string, number>();
   for (const d of docs) m.set(String(d.assigneeId), (m.get(String(d.assigneeId)) ?? 0) + 1);
   return m;
 }
-

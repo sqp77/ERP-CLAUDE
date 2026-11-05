@@ -174,7 +174,12 @@ Built per §8 and EP §9; the manager's side reuses the slice-5 team workspace.
 - **Integrity:** every transition is a conditional update on the current state inside one transaction with the stage log, the action log, the audit row and the outbox event (409 on a lost race, §15 follow-up 4).
 - **Tasks ↔ tickets:** a task can now link to a ticket by number; the department board shows the department's open tickets above the task queue; "فريقي" shows tickets assigned per employee.
 - **Seed:** seven IT/HR/Ops tickets covering new, قيد المعالجة, بانتظار معلومات, تم الحل, مغلقة مع تقييم, معاد فتحها, متعثر.
-- **Not built here:** Finance / Procurement targets (their modules), ticket KPIs dashboard for IT (IT §7.5, slice 6), department staff seeing the whole department queue without the manager role (today: manager assigns; staff see what is assigned to them).
+- **Not built here:** Finance / Procurement targets (their modules), ticket KPIs dashboard for IT (IT §7.5, slice 6).
+
+**Approved 2026-11-05 with two changes (built):**
+- **Department staff and the queue:** staff of the target department see their department's tickets (view only) and may take an unassigned one themselves ("استلام" → قيد المعالجة, assigned to them; requester and managers are told). The manager still assigns and reassigns. Per-department setting `tickets.staffQueueDepartments` (missing = on). Tickets to a department whose manager is away no longer wait.
+- **Reopening:** a reopened ticket goes back to the employee who resolved it (`resolvedByUserId`), who is notified together with the department manager; it returns to the department queue only when that employee is no longer on duty in that department.
+- All other §16 decisions stand (one priority field with IT wording, reopen window from closing, IT workflow copy, requester-only close with rating).
 
 ## Still open (ask before building)
 Everything in the "Open decisions" section of `CLAUDE.md` that is not settled above, notably: accounting depth / general ledger, ZATCA route and wave, financial authority matrix and monthly cut-off, customer app and company portal, offline support for field staff, discount limits, points and rewards policy, certificate weight criterion, impact factors, organization-type list (SAL §4.1 vs CS §6.8), Finance-stage state labels in other modules (FIN §5 vs PRC §4 and MKT §8).

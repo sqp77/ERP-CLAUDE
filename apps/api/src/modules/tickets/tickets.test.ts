@@ -36,13 +36,23 @@ async function setup() {
         directManagerId,
       });
     expect(r.status).toBe(201);
-    return { employeeId: r.body._id as string, userId: r.body.userId as string, token: await activateAccount(email, r.body.temporaryPassword) };
+    return {
+      employeeId: r.body._id as string,
+      userId: r.body.userId as string,
+      token: await activateAccount(email, r.body.temporaryPassword),
+    };
   };
   const itMgr = await mk('itmgr@eayni.local', it._id);
-  await User.updateOne({ _id: itMgr.userId }, { $push: { roles: { role: 'department_manager', departmentId: it._id } } });
+  await User.updateOne(
+    { _id: itMgr.userId },
+    { $push: { roles: { role: 'department_manager', departmentId: it._id } } },
+  );
   const tech = await mk('tech@eayni.local', it._id, itMgr.employeeId);
   const opsMgr = await mk('opsmgr@eayni.local', ops._id);
-  await User.updateOne({ _id: opsMgr.userId }, { $push: { roles: { role: 'department_manager', departmentId: ops._id } } });
+  await User.updateOne(
+    { _id: opsMgr.userId },
+    { $push: { roles: { role: 'department_manager', departmentId: ops._id } } },
+  );
   const emp = await mk('emp@eayni.local', ops._id, opsMgr.employeeId);
   const other = await mk('other@eayni.local', ops._id, opsMgr.employeeId);
   return {
@@ -60,9 +70,20 @@ const open = (token: string, body: Record<string, unknown>) =>
   request(app())
     .post('/api/v1/tickets')
     .set(auth(token))
-    .send({ departmentCode: 'it', type: 'issue', subject: 'الطابعة لا تعمل', body: 'خطأ ورق محشور', priority: 'high', fields: { itType: 'device' }, ...body });
+    .send({
+      departmentCode: 'it',
+      type: 'issue',
+      subject: 'الطابعة لا تعمل',
+      body: 'خطأ ورق محشور',
+      priority: 'high',
+      fields: { itType: 'device' },
+      ...body,
+    });
 const act = (token: string, id: string, transition: string, extra: Record<string, unknown> = {}) =>
-  request(app()).post(`/api/v1/tickets/${id}/transition`).set(auth(token)).send({ transition, ...extra });
+  request(app())
+    .post(`/api/v1/tickets/${id}/transition`)
+    .set(auth(token))
+    .send({ transition, ...extra });
 
 describe('internal tickets [EP §9, DECISIONS §8]', () => {
   it('targets hide Finance and Procurement until their modules exist; IT fields are required and validated', async () => {
@@ -74,7 +95,9 @@ describe('internal tickets [EP §9, DECISIONS §8]', () => {
     expect(codes).not.toContain('procurement');
     expect(codes).not.toContain('executive');
     // Hidden for managers too (DECISIONS §8), even though the managers-only rule would allow them.
-    const mgrCodes = (await request(app()).get('/api/v1/tickets/targets').set(auth(itMgr.token))).body.items.map((t: { code: string }) => t.code);
+    const mgrCodes = (
+      await request(app()).get('/api/v1/tickets/targets').set(auth(itMgr.token))
+    ).body.items.map((t: { code: string }) => t.code);
     expect(mgrCodes).not.toContain('finance');
     const itTarget = targets.body.items.find((t: { code: string }) => t.code === 'it');
     expect(itTarget.config.fields[0].key).toBe('itType');
@@ -98,11 +121,20 @@ describe('internal tickets [EP §9, DECISIONS §8]', () => {
     expect(await Notification.countDocuments({ userId: itMgr.userId, type: 'ticket.created' })).toBe(1);
     expect(await Notification.countDocuments({ userId: opsMgr.userId, type: 'ticket.created' })).toBe(0);
     expect((await request(app()).get(`/api/v1/tickets/${r.body._id}`).set(auth(emp.token))).status).toBe(200);
-    expect((await request(app()).get(`/api/v1/tickets/${r.body._id}`).set(auth(other.token))).status).toBe(404);
-    expect((await request(app()).get(`/api/v1/tickets/${r.body._id}`).set(auth(opsMgr.token))).status).toBe(404);
-    const queue = await request(app()).get('/api/v1/tickets?view=department&unassigned=true').set(auth(itMgr.token));
+    expect((await request(app()).get(`/api/v1/tickets/${r.body._id}`).set(auth(other.token))).status).toBe(
+      404,
+    );
+    expect((await request(app()).get(`/api/v1/tickets/${r.body._id}`).set(auth(opsMgr.token))).status).toBe(
+      404,
+    );
+    const queue = await request(app())
+      .get('/api/v1/tickets?view=department&unassigned=true')
+      .set(auth(itMgr.token));
     expect(queue.body.total).toBe(1);
-    expect((await request(app()).get('/api/v1/tickets?view=department').set(auth(emp.token))).status).toBe(403);
+    // Staff see their own department's queue (Operations here), not IT's.
+    const own = await request(app()).get('/api/v1/tickets?view=department').set(auth(emp.token));
+    expect(own.status).toBe(200);
+    expect(own.body.total).toBe(0);
     expect((await request(app()).get('/api/v1/tickets?view=mine').set(auth(emp.token))).body.total).toBe(1);
   });
 
@@ -125,7 +157,9 @@ describe('internal tickets [EP §9, DECISIONS §8]', () => {
     expect(waiting.body.state).toBe('waiting_requester');
     expect(await Notification.countDocuments({ userId: emp.userId, type: 'ticket.info_requested' })).toBe(1);
     expect((await act(tech.token, id, 'provide_info', { note: 'x' })).status).toBe(403);
-    expect((await act(emp.token, id, 'provide_info', { note: 'HP-204 في المستودع' })).body.state).toBe('in_progress');
+    expect((await act(emp.token, id, 'provide_info', { note: 'HP-204 في المستودع' })).body.state).toBe(
+      'in_progress',
+    );
     // Resolve needs a resolution; the requester cannot resolve; the department cannot close.
     expect((await act(tech.token, id, 'resolve')).status).toBe(400);
     expect((await act(emp.token, id, 'resolve', { resolution: 'x' })).status).toBe(403);
@@ -143,7 +177,14 @@ describe('internal tickets [EP §9, DECISIONS §8]', () => {
     expect(closed.body.rating.score).toBe(4);
     expect(await Notification.countDocuments({ userId: tech.userId, type: 'ticket.closed' })).toBe(1);
     const actions = await TicketAction.find({ ticketId: id }).sort({ at: 1 }).lean();
-    expect(actions.map((a) => a.action)).toEqual(['created', 'assign', 'request_info', 'provide_info', 'resolve', 'close']);
+    expect(actions.map((a) => a.action)).toEqual([
+      'created',
+      'assign',
+      'request_info',
+      'provide_info',
+      'resolve',
+      'close',
+    ]);
     expect(await StageLog.countDocuments({ recordType: 'ticket', recordId: id })).toBe(5);
   });
 
@@ -156,12 +197,26 @@ describe('internal tickets [EP §9, DECISIONS §8]', () => {
     // Resolved on a Sunday → reminder on Wednesday, auto-close the Sunday after (Fri/Sat skipped).
     const sunday = new Date('2026-11-01T08:00:00Z');
     await Ticket.updateOne({ _id: id }, { $set: { resolvedAt: sunday } });
-    expect(await runTicketFollowUps(new Date('2026-11-03T08:00:00Z'))).toEqual({ reminded: 0, autoClosed: 0 });
-    expect(await runTicketFollowUps(new Date('2026-11-04T09:00:00Z'))).toEqual({ reminded: 1, autoClosed: 0 });
+    expect(await runTicketFollowUps(new Date('2026-11-03T08:00:00Z'))).toEqual({
+      reminded: 0,
+      autoClosed: 0,
+    });
+    expect(await runTicketFollowUps(new Date('2026-11-04T09:00:00Z'))).toEqual({
+      reminded: 1,
+      autoClosed: 0,
+    });
     expect((await Ticket.findById(id))!.state).toBe('awaiting_confirmation');
-    expect(await Notification.countDocuments({ userId: emp.userId, type: 'ticket.confirm_reminder' })).toBe(1);
-    expect(await runTicketFollowUps(new Date('2026-11-05T09:00:00Z'))).toEqual({ reminded: 0, autoClosed: 0 });
-    expect(await runTicketFollowUps(new Date('2026-11-08T09:00:00Z'))).toEqual({ reminded: 0, autoClosed: 1 });
+    expect(await Notification.countDocuments({ userId: emp.userId, type: 'ticket.confirm_reminder' })).toBe(
+      1,
+    );
+    expect(await runTicketFollowUps(new Date('2026-11-05T09:00:00Z'))).toEqual({
+      reminded: 0,
+      autoClosed: 0,
+    });
+    expect(await runTicketFollowUps(new Date('2026-11-08T09:00:00Z'))).toEqual({
+      reminded: 0,
+      autoClosed: 1,
+    });
     const closed = await Ticket.findById(id);
     expect(closed!.state).toBe('closed');
     expect(closed!.autoClosed).toBe(true);
@@ -203,5 +258,98 @@ describe('internal tickets [EP §9, DECISIONS §8]', () => {
     const od = await request(app()).get(`/api/v1/tickets/${o.body._id}`).set(auth(opsMgr.token));
     expect(od.body.actions).not.toContain('stall');
     expect((await act(opsMgr.token, o.body._id, 'stall', { reason: 'x' })).status).toBe(400);
+  });
+});
+
+describe('slice 4 review changes', () => {
+  it('1: department staff see their department queue (view only) and may claim an unassigned ticket; per-department switch', async () => {
+    const { it, emp, itMgr, tech } = await setup();
+    // A second IT employee without any role.
+    const hr = await loginAs('hr@eayni.local');
+    const r = await request(app())
+      .post('/api/v1/hr/employees')
+      .set(auth(hr))
+      .send({
+        firstNameAr: 'نواف',
+        lastNameAr: 'الشهري',
+        gender: 'male',
+        nationality: 'سعودي',
+        workEmail: 'tech2@eayni.local',
+        identity: { type: 'national_id', number: '1088999001' },
+        hireDate: '2024-01-10',
+        departmentId: String(it._id),
+      });
+    const tech2 = {
+      userId: r.body.userId as string,
+      token: await activateAccount('tech2@eayni.local', r.body.temporaryPassword),
+    };
+    const t = await open(emp.token, {});
+    const id = t.body._id as string;
+    const caps = await request(app()).get('/api/v1/tickets/targets').set(auth(tech2.token));
+    expect(caps.body.queue).toMatchObject({ departmentCode: 'it', isManager: false, canView: true });
+    const queue = await request(app()).get('/api/v1/tickets?view=department').set(auth(tech2.token));
+    expect(queue.body.total).toBe(1);
+    const detail = await request(app()).get(`/api/v1/tickets/${id}`).set(auth(tech2.token));
+    expect(detail.status).toBe(200);
+    expect(detail.body.actions).toEqual(['claim']); // view only, except taking it
+    expect((await act(tech2.token, id, 'assign', { assigneeId: tech.userId })).status).toBe(403);
+    const claimed = await act(tech2.token, id, 'claim');
+    expect(claimed.status).toBe(200);
+    expect(claimed.body.assigneeId).toBe(tech2.userId);
+    expect(claimed.body.state).toBe('in_progress');
+    expect(await Notification.countDocuments({ userId: itMgr.userId, type: 'ticket.updated' })).toBe(1);
+    expect((await act(tech.token, id, 'claim')).status).toBe(400); // already taken
+    // The manager can still reassign it.
+    expect((await act(itMgr.token, id, 'assign', { assigneeId: tech.userId })).status).toBe(200);
+    // Switch off for IT: no queue, no claim.
+    await setSetting('tickets.staffQueueDepartments', { it: false }, SYSTEM_ACTOR);
+    const t2 = await open(emp.token, {});
+    expect((await request(app()).get('/api/v1/tickets?view=department').set(auth(tech2.token))).status).toBe(
+      403,
+    );
+    expect((await request(app()).get(`/api/v1/tickets/${t2.body._id}`).set(auth(tech2.token))).status).toBe(
+      404,
+    );
+    expect((await act(tech2.token, t2.body._id, 'claim')).status).toBe(404);
+  });
+
+  it('2: a reopened ticket goes back to whoever resolved it; to the queue only if they left the department', async () => {
+    const { it, ops, emp, itMgr, tech } = await setup();
+    const t = await open(emp.token, {});
+    const id = t.body._id as string;
+    await act(itMgr.token, id, 'assign', { assigneeId: tech.userId });
+    await act(tech.token, id, 'resolve', { resolution: 'تم' });
+    const back = await act(emp.token, id, 'reopen', { reason: 'لم يُحل' });
+    expect(back.body.state).toBe('reopened');
+    expect(back.body.assigneeId).toBe(tech.userId);
+    expect(back.body.pendingWith).toBe('assignee');
+    expect(await Notification.countDocuments({ userId: tech.userId, type: 'ticket.reopened' })).toBe(1);
+    expect(await Notification.countDocuments({ userId: itMgr.userId, type: 'ticket.reopened' })).toBe(1);
+    await act(tech.token, id, 'start');
+    await act(tech.token, id, 'resolve', { resolution: 'تم فعلًا' });
+    // The resolver moves to Operations → the reopened ticket lands in the IT queue instead.
+    const hr = await loginAs('hr@eayni.local');
+    const opsMgrEmp = await request(app()).get('/api/v1/hr/employees?limit=50').set(auth(hr));
+    const opsManager = opsMgrEmp.body.items.find(
+      (e: { workEmail: string }) => e.workEmail === 'opsmgr@eayni.local',
+    );
+    const techEmp = opsMgrEmp.body.items.find(
+      (e: { workEmail: string }) => e.workEmail === 'tech@eayni.local',
+    );
+    const moved = await request(app())
+      .post(`/api/v1/hr/employees/${techEmp._id}/transfer`)
+      .set(auth(hr))
+      .send({
+        departmentId: String(ops._id),
+        directManagerId: opsManager._id,
+        effectiveDate: '2026-11-01',
+        reason: 'نقل',
+      });
+    expect(moved.status).toBe(200);
+    const again = await act(emp.token, id, 'reopen', { reason: 'عادت المشكلة' });
+    expect(again.body.state).toBe('reopened');
+    expect(again.body.assigneeId ?? null).toBeNull();
+    expect(again.body.pendingWith).toBe('department');
+    expect(String(it._id)).toBeTruthy();
   });
 });

@@ -36,6 +36,8 @@ const ticketSchema = new Schema(
     /** First move into قيد المعالجة [IT §7.1 "تاريخ المعالجة"]. */
     processingStartedAt: { type: Date },
     resolvedAt: { type: Date },
+    /** Who resolved it last; a reopened ticket goes back to them while they are still in the department (slice 4 review change 2). */
+    resolvedByUserId: { type: Schema.Types.ObjectId, ref: 'User' },
     resolution: { type: String },
     rating: { score: Number, comment: String, at: Date },
     reopenCount: { type: Number, default: 0 },

@@ -4,9 +4,20 @@ import { useTranslation } from 'react-i18next';
 import { TICKET_STATES, TICKET_TYPES } from '@eayni/shared';
 import { usePrefs } from '@/lib/preferences';
 import { useAuth } from '@/lib/auth';
-import { Badge, Button, Card, EmptyState, PageHeader, QueryError, Select, Spinner, Table, Td } from '@/shared/ui';
+import {
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  PageHeader,
+  QueryError,
+  Select,
+  Spinner,
+  Table,
+  Td,
+} from '@/shared/ui';
 import { NewTicketDialog } from './NewTicketDialog';
-import { ticketTone, useTickets } from './_data';
+import { ticketTone, useTicketTargets, useTickets } from './_data';
 
 type View = 'mine' | 'assigned' | 'department';
 
@@ -20,8 +31,16 @@ export function TicketsListPage({ view: initial }: { view: View }) {
   const [type, setType] = useState('');
   const [unassigned, setUnassigned] = useState(false);
   const [open, setOpen] = useState(false);
+  const targets = useTicketTargets();
   const manager = (user?.permissions.find((p) => p.resource === 'tickets')?.scope ?? 'own') !== 'own';
-  const q = useTickets({ view, state: state || undefined, type: type || undefined, unassigned: view === 'department' && unassigned, limit: 200 });
+  const queueVisible = manager || !!targets.data?.queue.canView;
+  const q = useTickets({
+    view,
+    state: state || undefined,
+    type: type || undefined,
+    unassigned: view === 'department' && unassigned,
+    limit: 200,
+  });
   return (
     <>
       <PageHeader
@@ -29,7 +48,7 @@ export function TicketsListPage({ view: initial }: { view: View }) {
         actions={
           <>
             <div className="flex rounded-lg border border-slate-200 p-0.5 text-xs">
-              {(['mine', 'assigned', ...(manager ? ['department' as const] : [])] as View[]).map((v) => (
+              {(['mine', 'assigned', ...(queueVisible ? ['department' as const] : [])] as View[]).map((v) => (
                 <button
                   key={v}
                   onClick={() => setView(v)}
@@ -62,7 +81,8 @@ export function TicketsListPage({ view: initial }: { view: View }) {
         </Select>
         {view === 'department' && (
           <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={unassigned} onChange={(e) => setUnassigned(e.target.checked)} /> {t('tickets.unassignedOnly')}
+            <input type="checkbox" checked={unassigned} onChange={(e) => setUnassigned(e.target.checked)} />{' '}
+            {t('tickets.unassignedOnly')}
           </label>
         )}
       </div>
@@ -74,7 +94,17 @@ export function TicketsListPage({ view: initial }: { view: View }) {
         ) : !q.data?.items.length ? (
           <EmptyState title={t('tickets.empty')} />
         ) : (
-          <Table head={[t('common.number'), t('tickets.subject'), t('tickets.department'), t('tickets.type'), t('tickets.assignee'), t('common.status'), t('tickets.lastActivity')]}>
+          <Table
+            head={[
+              t('common.number'),
+              t('tickets.subject'),
+              t('tickets.department'),
+              t('tickets.type'),
+              t('tickets.assignee'),
+              t('common.status'),
+              t('tickets.lastActivity'),
+            ]}
+          >
             {q.data.items.map((r) => (
               <tr key={r._id}>
                 <Td className="tabular text-xs text-slate-500">
@@ -90,11 +120,17 @@ export function TicketsListPage({ view: initial }: { view: View }) {
                 </Td>
                 <Td>{t(`departments.${r.departmentCode}`, r.departmentCode)}</Td>
                 <Td>{t(`tickets.types.${r.type}`)}</Td>
-                <Td>{r.assigneeName ?? <span className="text-xs text-slate-400">{t('tickets.unassigned')}</span>}</Td>
+                <Td>
+                  {r.assigneeName ?? (
+                    <span className="text-xs text-slate-400">{t('tickets.unassigned')}</span>
+                  )}
+                </Td>
                 <Td>
                   <Badge tone={ticketTone[r.state]}>{t(`tickets.states.${r.state}`)}</Badge>
                 </Td>
-                <Td className="tabular text-xs text-slate-500">{formatDateTime(r.lastActivityAt ?? r.createdAt)}</Td>
+                <Td className="tabular text-xs text-slate-500">
+                  {formatDateTime(r.lastActivityAt ?? r.createdAt)}
+                </Td>
               </tr>
             ))}
           </Table>

@@ -143,6 +143,13 @@ export const SETTING_DEFINITIONS = {
     schema: ticketDepartmentFieldsSchema,
     default: DEFAULT_TICKET_DEPARTMENT_FIELDS, // IT §7.1
   }),
+  'tickets.staffQueueDepartments': def({
+    key: 'tickets.staffQueueDepartments',
+    labelAr: 'موظفو القسم يرون قائمة تذاكر قسمهم ويستلمون غير المسند منها (لكل قسم؛ الافتراضي مفعّل)',
+    group: 'tickets',
+    schema: z.record(z.string(), z.boolean()),
+    default: {}, // slice 4 review change 1: missing department = enabled
+  }),
   'tickets.remindAfterBusinessDays': def({
     key: 'tickets.remindAfterBusinessDays',
     labelAr: 'تذكير مقدّم الطلب بعد الحل (أيام عمل)',

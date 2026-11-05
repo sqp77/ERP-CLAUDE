@@ -7,7 +7,20 @@ import { get, post } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { usePrefs } from '@/lib/preferences';
 import { errorMessage } from '@/lib/errors';
-import { Alert, Badge, Button, Card, Dialog, Field, PageHeader, QueryError, Select, Spinner, Textarea, cx } from '@/shared/ui';
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  Dialog,
+  Field,
+  PageHeader,
+  QueryError,
+  Select,
+  Spinner,
+  Textarea,
+  cx,
+} from '@/shared/ui';
 import { useToast } from '@/shared/ui/Toast';
 import { FileUploader, downloadAttachment } from '@/shared/files/FileUploader';
 import { useTeam } from '../tasks/_data';
@@ -26,7 +39,10 @@ export function TicketDetailPage() {
   const q = useQuery({ queryKey: ['ticket', id], queryFn: () => get<TicketDetail>(`/tickets/${id}`) });
   const comments = useQuery({
     queryKey: ['comments', 'ticket', id],
-    queryFn: () => get<{ items: { _id: string; body: string; authorId: string; createdAt: string }[] }>(`/comments?recordType=ticket&recordId=${id}`),
+    queryFn: () =>
+      get<{ items: { _id: string; body: string; authorId: string; createdAt: string }[] }>(
+        `/comments?recordType=ticket&recordId=${id}`,
+      ),
   });
   const [mode, setMode] = useState<Mode>(null);
   const [text, setText] = useState('');
@@ -93,7 +109,10 @@ export function TicketDetailPage() {
         actions={
           <>
             <Badge tone={ticketTone[r.state]}>{t(`tickets.states.${r.state}`)}</Badge>
-            <Link to={r.requesterUserId === user?.id ? '/me/tickets' : '/tickets'} className="text-sm text-brand-700 hover:underline">
+            <Link
+              to={r.requesterUserId === user?.id ? '/me/tickets' : '/tickets'}
+              className="text-sm text-brand-700 hover:underline"
+            >
               {t('actions.back')}
             </Link>
           </>
@@ -110,7 +129,15 @@ export function TicketDetailPage() {
               <dt className="text-slate-500">{t('tasks.priority')}</dt>
               <dd>{priorityLabel(t, r.priority, r.departmentConfig)}</dd>
               {r.departmentConfig.fields.map((f) => (
-                <FieldRow key={f.key} label={f.labelAr} value={f.type === 'select' ? f.options?.find((o) => o.value === String(r.fields[f.key]))?.labelAr : r.fields[f.key]} />
+                <FieldRow
+                  key={f.key}
+                  label={f.labelAr}
+                  value={
+                    f.type === 'select'
+                      ? f.options?.find((o) => o.value === String(r.fields[f.key]))?.labelAr
+                      : r.fields[f.key]
+                  }
+                />
               ))}
               <dt className="text-slate-500">{t('tickets.assignee')}</dt>
               <dd>{r.assigneeName ?? t('tickets.unassigned')}</dd>
@@ -141,7 +168,14 @@ export function TicketDetailPage() {
               <div className="mt-2 flex items-center gap-1 text-sm text-slate-700">
                 <span>{t('tickets.rating')}:</span>
                 {[1, 2, 3, 4, 5].map((n) => (
-                  <Star key={n} className={cx('size-4', n <= r.rating!.score ? 'fill-amber-400 text-amber-400' : 'text-slate-300')} aria-hidden />
+                  <Star
+                    key={n}
+                    className={cx(
+                      'size-4',
+                      n <= r.rating!.score ? 'fill-amber-400 text-amber-400' : 'text-slate-300',
+                    )}
+                    aria-hidden
+                  />
                 ))}
                 {r.rating.comment && <span className="text-slate-500">— {r.rating.comment}</span>}
               </div>
@@ -151,8 +185,19 @@ export function TicketDetailPage() {
           {r.actions.length > 0 && (
             <Card title={t('requests.actions')}>
               <div className="flex flex-wrap gap-2">
-                {has('assign') && <Button onClick={() => setMode('assign')}>{r.assigneeId ? t('tasks.reassign') : t('tasks.assign')}</Button>}
-                {has('start') && <Button onClick={() => act.mutate({ transition: 'start' })}>{t('tasks.startWork')}</Button>}
+                {has('assign') && (
+                  <Button onClick={() => setMode('assign')}>
+                    {r.assigneeId ? t('tasks.reassign') : t('tasks.assign')}
+                  </Button>
+                )}
+                {has('claim') && (
+                  <Button onClick={() => act.mutate({ transition: 'claim' })}>
+                    {t('tickets.actions.claim')}
+                  </Button>
+                )}
+                {has('start') && (
+                  <Button onClick={() => act.mutate({ transition: 'start' })}>{t('tasks.startWork')}</Button>
+                )}
                 {has('review') && (
                   <Button variant="secondary" onClick={() => act.mutate({ transition: 'review' })}>
                     {t('tickets.actions.review')}
@@ -163,24 +208,37 @@ export function TicketDetailPage() {
                     {t('tickets.actions.request_info')}
                   </Button>
                 )}
-                {has('provide_info') && <Button onClick={() => setMode('provide_info')}>{t('tickets.actions.provide_info')}</Button>}
-                {has('resolve') && <Button onClick={() => setMode('resolve')}>{t('tickets.actions.resolve')}</Button>}
+                {has('provide_info') && (
+                  <Button onClick={() => setMode('provide_info')}>{t('tickets.actions.provide_info')}</Button>
+                )}
+                {has('resolve') && (
+                  <Button onClick={() => setMode('resolve')}>{t('tickets.actions.resolve')}</Button>
+                )}
                 {has('stall') && (
                   <Button variant="secondary" onClick={() => setMode('stall')}>
                     {t('tickets.actions.stall')}
                   </Button>
                 )}
-                {has('resume') && <Button onClick={() => act.mutate({ transition: 'resume' })}>{t('tickets.actions.resume')}</Button>}
-                {has('close') && <Button onClick={() => setMode('close')}>{t('tickets.actions.close')}</Button>}
+                {has('resume') && (
+                  <Button onClick={() => act.mutate({ transition: 'resume' })}>
+                    {t('tickets.actions.resume')}
+                  </Button>
+                )}
+                {has('close') && (
+                  <Button onClick={() => setMode('close')}>{t('tickets.actions.close')}</Button>
+                )}
                 {has('reopen') && (
                   <Button variant="danger" onClick={() => setMode('reopen')}>
                     {t('tickets.actions.reopen')}
                   </Button>
                 )}
               </div>
-              {(r.state === 'resolved' || r.state === 'awaiting_confirmation') && r.requesterUserId === user?.id && (
-                <p className="mt-2 text-xs text-slate-500">{t('tickets.confirmHint', { days: r.reopenWithinDays })}</p>
-              )}
+              {(r.state === 'resolved' || r.state === 'awaiting_confirmation') &&
+                r.requesterUserId === user?.id && (
+                  <p className="mt-2 text-xs text-slate-500">
+                    {t('tickets.confirmHint', { days: r.reopenWithinDays })}
+                  </p>
+                )}
             </Card>
           )}
 
@@ -192,12 +250,23 @@ export function TicketDetailPage() {
                   <div className="mt-1 text-xs tabular text-slate-400">{formatDateTime(c.createdAt)}</div>
                 </li>
               ))}
-              {!comments.data?.items.length && <li className="text-xs text-slate-500">{t('tickets.noComments')}</li>}
+              {!comments.data?.items.length && (
+                <li className="text-xs text-slate-500">{t('tickets.noComments')}</li>
+              )}
             </ul>
             {r.state !== 'closed' && (
               <div className="mt-3 flex gap-2">
-                <Textarea rows={2} value={comment} onChange={(e) => setComment(e.target.value)} placeholder={t('tickets.addComment')} />
-                <Button onClick={() => addComment.mutate()} disabled={comment.trim().length < 1} loading={addComment.isPending}>
+                <Textarea
+                  rows={2}
+                  value={comment}
+                  onChange={(e) => setComment(e.target.value)}
+                  placeholder={t('tickets.addComment')}
+                />
+                <Button
+                  onClick={() => addComment.mutate()}
+                  disabled={comment.trim().length < 1}
+                  loading={addComment.isPending}
+                >
                   {t('actions.send')}
                 </Button>
               </div>
@@ -209,10 +278,24 @@ export function TicketDetailPage() {
           <ol className="relative space-y-4 border-s border-slate-200 ps-4">
             {r.history.map((h) => (
               <li key={h._id} className="relative">
-                <span className={cx('absolute -start-[21px] top-1.5 size-2.5 rounded-full', h.toState === 'closed' ? 'bg-slate-400' : h.toState === 'resolved' ? 'bg-emerald-500' : 'bg-brand-600')} aria-hidden />
+                <span
+                  className={cx(
+                    'absolute -start-[21px] top-1.5 size-2.5 rounded-full',
+                    h.toState === 'closed'
+                      ? 'bg-slate-400'
+                      : h.toState === 'resolved'
+                        ? 'bg-emerald-500'
+                        : 'bg-brand-600',
+                  )}
+                  aria-hidden
+                />
                 <div className="text-sm font-medium">
                   {t(`tickets.actionsLog.${h.action}`, h.action)}
-                  {h.toState && h.toState !== h.fromState && <span className="ms-2 text-xs text-slate-500">← {t(`tickets.states.${h.toState}`, h.toState)}</span>}
+                  {h.toState && h.toState !== h.fromState && (
+                    <span className="ms-2 text-xs text-slate-500">
+                      ← {t(`tickets.states.${h.toState}`, h.toState)}
+                    </span>
+                  )}
                 </div>
                 {h.note && <div className="text-xs text-slate-600">{h.note}</div>}
                 <div className="text-xs tabular text-slate-400">
@@ -265,7 +348,12 @@ export function TicketDetailPage() {
               ))}
             </Field>
           </>,
-          () => act.mutate({ transition: 'provide_info', note: text, attachmentIds: atts.map((a) => a.attachmentId) }),
+          () =>
+            act.mutate({
+              transition: 'provide_info',
+              note: text,
+              attachmentIds: atts.map((a) => a.attachmentId),
+            }),
           text.trim().length < 1,
         )}
       {mode === 'resolve' &&
@@ -284,8 +372,19 @@ export function TicketDetailPage() {
             <Field label={t('tickets.rateService')} required>
               <div className="flex gap-1">
                 {[1, 2, 3, 4, 5].map((n) => (
-                  <button key={n} type="button" onClick={() => setScore(n)} aria-label={String(n)} className="p-1">
-                    <Star className={cx('size-7', n <= score ? 'fill-amber-400 text-amber-400' : 'text-slate-300')} />
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => setScore(n)}
+                    aria-label={String(n)}
+                    className="p-1"
+                  >
+                    <Star
+                      className={cx(
+                        'size-7',
+                        n <= score ? 'fill-amber-400 text-amber-400' : 'text-slate-300',
+                      )}
+                    />
                   </button>
                 ))}
               </div>

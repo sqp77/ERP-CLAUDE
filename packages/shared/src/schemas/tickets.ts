@@ -98,6 +98,7 @@ export type CreateTicketInput = z.infer<typeof createTicketSchema>;
 export const TICKET_ACTIONS = [
   'review',
   'assign',
+  'claim',
   'start',
   'request_info',
   'provide_info',

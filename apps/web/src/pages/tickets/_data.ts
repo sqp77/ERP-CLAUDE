@@ -67,18 +67,36 @@ export const ticketTone: Record<TicketState, 'slate' | 'blue' | 'amber' | 'green
   stalled: 'red',
 };
 
+export interface QueueAccess {
+  departmentCode: string | null;
+  isManager: boolean;
+  canView: boolean;
+}
 export const useTicketTargets = (enabled = true) =>
-  useQuery({ queryKey: ['tickets', 'targets'], queryFn: () => get<{ items: TicketTarget[] }>('/tickets/targets'), enabled, staleTime: 60_000 });
+  useQuery({
+    queryKey: ['tickets', 'targets'],
+    queryFn: () => get<{ items: TicketTarget[]; queue: QueueAccess }>('/tickets/targets'),
+    enabled,
+    staleTime: 60_000,
+  });
 
 export const useTickets = (params: Record<string, string | number | boolean | undefined>, enabled = true) => {
   const qs = Object.entries(params)
     .filter(([, v]) => v !== undefined && v !== '' && v !== false)
     .map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`)
     .join('&');
-  return useQuery({ queryKey: ['tickets', 'list', params], queryFn: () => get<Paged<TicketRow>>(`/tickets?${qs}`), enabled });
+  return useQuery({
+    queryKey: ['tickets', 'list', params],
+    queryFn: () => get<Paged<TicketRow>>(`/tickets?${qs}`),
+    enabled,
+  });
 };
 
 /** Priority label: the department's own wording when configured (IT §7.1), else the general one. */
-export function priorityLabel(t: (k: string) => string, priority: Priority, config?: TicketDepartmentConfig | null): string {
+export function priorityLabel(
+  t: (k: string) => string,
+  priority: Priority,
+  config?: TicketDepartmentConfig | null,
+): string {
   return config?.priorityLabelsAr?.[priority] ?? t(`tasks.priorities.${priority}`);
 }
