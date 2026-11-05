@@ -39,6 +39,9 @@ export async function employeeOfUser(userId: string): Promise<EmployeeDoc | null
   return Employee.findOne({ userId, deletedAt: null });
 }
 
+/** Employee statuses that may receive work (EP §16); on leave counts, suspended / left does not. */
+export const ON_DUTY_STATUSES = ['active', 'field_work', 'seconded', 'on_leave'] as const;
+
 /** Direct reports → user ids (team scope for RBAC). */
 export async function teamUserIdsOf(userId: string): Promise<string[]> {
   const me = await employeeOfUser(userId);

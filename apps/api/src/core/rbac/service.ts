@@ -1,5 +1,6 @@
 import {
   maxScope,
+  TEAM_LEAD_GRANTS,
   type Action,
   type FieldRule,
   type PermissionGrant,
@@ -8,6 +9,14 @@ import {
 } from '@eayni/shared';
 import { Role, type RoleDoc } from './model';
 import { CORE_ROLES } from './defaults';
+import { resolveTeamUserIds } from './scope';
+
+/** Direct managers (org chart) get TEAM_LEAD_GRANTS implicitly; no role is involved (DECISIONS §4). */
+async function teamLeadGrantsFor(userId?: string): Promise<PermissionGrant[]> {
+  if (!userId) return [];
+  const team = await resolveTeamUserIds(userId);
+  return team.length ? TEAM_LEAD_GRANTS : [];
+}
 
 const cache = { roles: new Map<string, RoleDoc>(), at: 0 };
 const TTL_MS = 10_000;
@@ -64,10 +73,13 @@ export async function effectivePermission(
   userDepartmentId: string | undefined,
   resource: string,
   action: Action,
+  userId?: string,
 ): Promise<Effective | null> {
   const roles = await loadRoles();
   let scope: Scope | undefined;
   const departmentIds = new Set<string>();
+  for (const g of await teamLeadGrantsFor(userId))
+    if (g.resource === resource && g.actions.includes(action)) scope = maxScope(scope, g.scope);
   for (const a of assignments) {
     const role = roles.get(a.role);
     if (!role) continue;
@@ -86,13 +98,19 @@ export async function effectivePermission(
 }
 
 /** All grants flattened for the UI (server still enforces). */
-export async function flattenPermissions(assignments: RoleAssignment[]): Promise<PermissionGrant[]> {
+export async function flattenPermissions(
+  assignments: RoleAssignment[],
+  userId?: string,
+): Promise<PermissionGrant[]> {
   const roles = await loadRoles();
   const merged = new Map<string, PermissionGrant>();
+  const sources: PermissionGrant[][] = [await teamLeadGrantsFor(userId)];
   for (const a of assignments) {
     const role = roles.get(a.role);
-    if (!role) continue;
-    for (const g of role.grants as PermissionGrant[]) {
+    if (role) sources.push(role.grants as PermissionGrant[]);
+  }
+  for (const grants of sources) {
+    for (const g of grants) {
       const key = g.resource;
       const prev = merged.get(key);
       if (!prev) merged.set(key, { resource: g.resource, actions: [...g.actions], scope: g.scope });

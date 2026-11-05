@@ -18,6 +18,7 @@ export function authorize(resource: string, action: Action): RequestHandler {
       user.departmentId ? String(user.departmentId) : undefined,
       resource,
       action,
+      String(user._id),
     )
       .then((eff) => {
         if (!eff) return next(forbidden());
@@ -39,6 +40,7 @@ export async function can(
     user.departmentId ? String(user.departmentId) : undefined,
     resource,
     action,
+    String(user._id),
   );
   return !!eff;
 }

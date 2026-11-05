@@ -20,6 +20,22 @@ describe('tasks [EP §10]', () => {
     );
     const emp = await makeUser('emp@eayni.local', [{ role: 'employee' }], { departmentId: d._id });
     await makeUser('other@eayni.local');
+    // The HR module decides who may receive work: give the assignee an employee file in the department.
+    const { Employee } = await import('../../modules/hr/model');
+    await Employee.create({
+      employeeNumber: 'EMP-T-1',
+      userId: emp._id,
+      firstNameAr: 'موظف',
+      lastNameAr: 'اختبار',
+      fullNameAr: 'موظف اختبار',
+      gender: 'male',
+      nationality: 'سعودي',
+      identity: { type: 'national_id', numberEnc: 'x', last4: '0001' },
+      workEmail: 'emp@eayni.local',
+      departmentId: d._id,
+      hireDate: new Date('2024-01-01'),
+      status: 'active',
+    });
     const mgr = await loginAs('mgr@eayni.local');
     const created = await request(app())
       .post('/api/v1/tasks')
@@ -41,7 +57,7 @@ describe('tasks [EP §10]', () => {
     expect(
       (
         await request(app())
-          .patch(`/api/v1/tasks/${created.body._id}`)
+          .post(`/api/v1/tasks/${created.body._id}/assign`)
           .set(auth(empT))
           .send({ assigneeId: String(emp._id) })
       ).status,

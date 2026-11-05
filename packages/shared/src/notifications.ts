@@ -24,6 +24,12 @@ export const NOTIFICATION_TYPES = [
   'auth.password_reset',
   'auth.new_login',
   'security.alert',
+  // tasks distribution [EP §10, EP §16]
+  'task.review_requested',
+  'task.approved',
+  'task.returned',
+  'task.reassigned',
+  'task.unassigned_reminder',
   'generic',
 ] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
@@ -52,5 +58,10 @@ export const NOTIFICATION_TITLES_AR: Record<NotificationType, string> = {
   'auth.password_reset': 'طلب إعادة تعيين كلمة المرور',
   'auth.new_login': 'تسجيل دخول جديد إلى حسابك',
   'security.alert': 'تنبيه أمني',
+  'task.review_requested': 'مهمة بانتظار مراجعتك',
+  'task.approved': 'تم اعتماد إنجاز مهمتك',
+  'task.returned': 'أُعيدت إليك مهمة للاستكمال',
+  'task.reassigned': 'أُعيد إسناد مهمة',
+  'task.unassigned_reminder': 'مهام في قائمة القسم بلا مكلّف',
   generic: 'إشعار',
 };

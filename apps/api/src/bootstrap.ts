@@ -2,7 +2,8 @@ import { ensureCoreRoles } from './core/rbac/service';
 import { ensureWorkflow } from './core/workflow/engine';
 import { DEFAULT_WORKFLOWS } from './core/workflow/defaults';
 import { registerJob } from './core/jobs/registry';
-import { runTaskReminders } from './core/tasks/jobs';
+import { runTaskReminders, runUnassignedTaskReminders } from './core/tasks/jobs';
+import { registerTaskAccess } from './core/tasks/service';
 import { runEventReminders } from './core/calendar/jobs';
 import { runDocumentExpiryAlerts } from './core/documents/service';
 import { registerExportResource } from './core/export/service';
@@ -21,6 +22,8 @@ export function registerModules(): void {
   jobsRegistered = true;
   registerSubscribers();
   registerJob('tasks.reminders', (now) => runTaskReminders(now));
+  registerJob('tasks.unassigned', (now) => runUnassignedTaskReminders(now));
+  registerTaskAccess();
   registerJob('calendar.reminders', (now) => runEventReminders(now));
   registerJob('documents.expiry', (now) => runDocumentExpiryAlerts(now));
   registerHrModule();

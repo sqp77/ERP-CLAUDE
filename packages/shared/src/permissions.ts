@@ -107,3 +107,15 @@ export function grantableRolesFor(actorRoles: readonly string[]): Set<string> | 
   }
   return out;
 }
+
+/**
+ * Grants every direct manager gets implicitly, scoped to their team (direct reports from the org
+ * chart), without holding any role (DECISIONS §4; EP §10, EP §16). Applied by the RBAC service when the
+ * user has at least one direct report.
+ */
+export const TEAM_LEAD_GRANTS: PermissionGrant[] = [
+  { resource: 'hr.employees', actions: ['view'], scope: 'team' },
+  { resource: 'tasks', actions: ['view', 'create', 'edit'], scope: 'team' },
+  { resource: 'hr.requests', actions: ['view'], scope: 'team' },
+  { resource: 'hr.reports', actions: ['view'], scope: 'team' },
+];

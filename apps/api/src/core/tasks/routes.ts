@@ -1,21 +1,27 @@
 import { Router } from 'express';
-import type { z } from 'zod';
-import { createTaskSchema, listTasksQuerySchema, updateTaskSchema } from '@eayni/shared';
+import { z } from 'zod';
+import {
+  assignTaskSchema,
+  createTaskSchema,
+  listTasksQuerySchema,
+  OPEN_TASK_STATUSES,
+  reviewTaskSchema,
+  updateTaskSchema,
+  type CreateTaskInput,
+} from '@eayni/shared';
 import { asyncHandler } from '../http/async';
 import { validate } from '../http/validate';
 import { actorFrom, type AuthedRequest } from '../http/context';
-import { forbidden, notFound } from '../http/errors';
+import { badRequest, forbidden } from '../http/errors';
 import { requireAuth } from '../auth/middleware';
 import { authorize } from '../rbac/authorize';
 import { scopeFilter } from '../rbac/scope';
 import { recordAudit } from '../audit/service';
-import { nextNumber } from '../numbering/service';
-import { notify } from '../notifications/service';
-import { publish } from '../outbox/service';
+import { claimAttachments } from '../files/service';
 import { Task } from './model';
+import * as svc from './service';
 
 export const tasksRouter = Router();
-const FIELDS = { ownerFields: ['assigneeId', 'assignerId'], departmentField: 'departmentId' };
 
 tasksRouter.get(
   '/',
@@ -25,11 +31,18 @@ tasksRouter.get(
   asyncHandler(async (req: AuthedRequest, res) => {
     const q = req.query as unknown as z.infer<typeof listTasksQuerySchema>;
     const userId = String(req.auth.user._id);
-    const scope = await scopeFilter(req.authz!, userId, FIELDS);
+    const scope = await scopeFilter(req.authz!, userId, svc.TASK_SCOPE_FIELDS);
     const filter: Record<string, unknown> = { deletedAt: null, ...scope };
     if (q.status) filter.status = q.status;
+    if (q.open) filter.status = { $in: [...OPEN_TASK_STATUSES] };
     if (q.assigneeId) filter.assigneeId = q.assigneeId;
+    if (q.assignerId) filter.assignerId = q.assignerId;
+    if (q.departmentId) filter.departmentId = q.departmentId;
+    if (q.priority) filter.priority = q.priority;
+    if (q.unassigned) filter.assigneeId = null;
     if (q.mine) filter.assigneeId = userId;
+    if (q.dueFrom || q.dueTo)
+      filter.dueAt = { ...(q.dueFrom ? { $gte: q.dueFrom } : {}), ...(q.dueTo ? { $lte: q.dueTo } : {}) };
     const [items, total] = await Promise.all([
       Task.find(filter)
         .sort({ dueAt: 1, createdAt: -1 })
@@ -42,41 +55,24 @@ tasksRouter.get(
   }),
 );
 
+/** Open / late tasks per employee (who is overloaded before assigning) [EP §16]. */
+tasksRouter.get(
+  '/workload',
+  requireAuth(),
+  authorize('tasks', 'view'),
+  validate(z.object({ departmentId: z.string().optional() }), 'query'),
+  asyncHandler(async (req: AuthedRequest, res) => {
+    res.json(await svc.workload(req, (req.query as { departmentId?: string }).departmentId));
+  }),
+);
+
 tasksRouter.post(
   '/',
   requireAuth(),
   authorize('tasks', 'create'),
   validate(createTaskSchema),
   asyncHandler(async (req: AuthedRequest, res) => {
-    const body = req.body as z.infer<typeof createTaskSchema>;
-    const number = await nextNumber('task');
-    const task = await Task.create({
-      ...body,
-      number,
-      assignerId: req.auth.user._id,
-      departmentId: body.departmentId ?? req.auth.user.departmentId,
-    });
-    await recordAudit(actorFrom(req), {
-      action: 'create',
-      resource: 'tasks',
-      resourceId: String(task._id),
-      after: task,
-    });
-    await publish({
-      type: 'core.task.assigned',
-      aggregateType: 'task',
-      aggregateId: String(task._id),
-      payload: { assigneeId: body.assigneeId },
-      actorUserId: String(req.auth.user._id),
-    });
-    await notify({
-      userIds: [body.assigneeId],
-      type: 'task.assigned',
-      bodyAr: `${task.number}: ${task.title}`,
-      link: `/tasks/${task._id}`,
-      data: { taskId: String(task._id) },
-    });
-    res.status(201).json(task);
+    res.status(201).json(await svc.createTask(req, req.body as CreateTaskInput));
   }),
 );
 
@@ -85,10 +81,8 @@ tasksRouter.get(
   requireAuth(),
   authorize('tasks', 'view'),
   asyncHandler(async (req: AuthedRequest, res) => {
-    const scope = await scopeFilter(req.authz!, String(req.auth.user._id), FIELDS);
-    const task = await Task.findOne({ _id: req.params.id, deletedAt: null, ...scope }).lean();
-    if (!task) throw notFound();
-    res.json(task);
+    const task = await svc.findVisibleTask(req, req.params.id);
+    res.json({ ...task.toObject(), history: await svc.taskHistory(String(task._id)) });
   }),
 );
 
@@ -99,35 +93,62 @@ tasksRouter.patch(
   validate(updateTaskSchema),
   asyncHandler(async (req: AuthedRequest, res) => {
     const body = req.body as z.infer<typeof updateTaskSchema>;
-    const scope = await scopeFilter(req.authz!, String(req.auth.user._id), FIELDS);
-    const task = await Task.findOne({ _id: req.params.id, deletedAt: null, ...scope });
-    if (!task) throw notFound();
-    const isAssignee = String(task.assigneeId) === String(req.auth.user._id);
-    // An assignee with 'own' scope may only move status/progress; reassigning needs wider scope.
-    if (req.authz!.scope === 'own' && isAssignee && (body.assigneeId || body.title || body.dueAt))
+    const task = await svc.findVisibleTask(req, req.params.id);
+    const me = String(req.auth.user._id);
+    const isAssignee = !!task.assigneeId && String(task.assigneeId) === me;
+    const isAssigner = String(task.assignerId) === me;
+    const { status, progressPercent, attachmentIds, ...content } = body;
+    const editsContent = Object.values(content).some((v) => v !== undefined);
+    // An assignee may move status / progress / attachments; content edits need the assigner or a wider scope.
+    if (editsContent && !isAssigner && req.authz!.scope === 'own')
       throw forbidden('يمكنك تحديث الحالة ونسبة الإنجاز فقط');
-    const before = task.toObject();
-    Object.assign(task, body);
-    if (body.status === 'done') {
-      task.completedAt = new Date();
-      task.progressPercent = 100;
-    }
-    await task.save();
-    await recordAudit(actorFrom(req), {
-      action: 'update',
-      resource: 'tasks',
-      resourceId: String(task._id),
-      before,
-      after: task,
-    });
-    if (body.assigneeId && String(before.assigneeId) !== body.assigneeId) {
-      await notify({
-        userIds: [body.assigneeId],
-        type: 'task.assigned',
-        bodyAr: `${task.number}: ${task.title}`,
-        link: `/tasks/${task._id}`,
+    if (!isAssignee && !isAssigner && req.authz!.scope === 'own') throw forbidden();
+    if (editsContent || attachmentIds) {
+      const before = task.toObject();
+      if (attachmentIds) {
+        await claimAttachments(attachmentIds, 'task', String(task._id), req.auth.user._id);
+        task.attachmentIds = attachmentIds as never;
+      }
+      Object.assign(task, Object.fromEntries(Object.entries(content).filter(([, v]) => v !== undefined)));
+      await task.save();
+      await recordAudit(actorFrom(req), {
+        action: 'update',
+        resource: 'tasks',
+        resourceId: String(task._id),
+        before,
+        after: task,
       });
     }
+    if (status || progressPercent !== undefined)
+      await svc.changeStatus(req, task, status ?? (task.status as never), progressPercent);
     res.json(task);
+  }),
+);
+
+/** Assign from the department queue or reassign with a reason [EP §16]. */
+tasksRouter.post(
+  '/:id/assign',
+  requireAuth(),
+  authorize('tasks', 'edit'),
+  validate(assignTaskSchema),
+  asyncHandler(async (req: AuthedRequest, res) => {
+    if (req.authz!.scope === 'own') throw forbidden('الإسناد من صلاحية المدير');
+    const task = await svc.findVisibleTask(req, req.params.id);
+    const { assigneeId, reason } = req.body as z.infer<typeof assignTaskSchema>;
+    res.json(await svc.assignTask(req, task, assigneeId, reason));
+  }),
+);
+
+/** The assigner approves a finished task or returns it with a note [EP §16]. */
+tasksRouter.post(
+  '/:id/review',
+  requireAuth(),
+  authorize('tasks', 'edit'),
+  validate(reviewTaskSchema),
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const task = await svc.findVisibleTask(req, req.params.id);
+    const { approve, note } = req.body as z.infer<typeof reviewTaskSchema>;
+    if (approve === undefined) throw badRequest('approve مطلوب');
+    res.json(await svc.reviewTask(req, task, approve, note));
   }),
 );

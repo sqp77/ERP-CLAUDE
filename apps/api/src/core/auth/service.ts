@@ -349,7 +349,7 @@ export async function toCurrentUser(user: UserDoc): Promise<CurrentUser> {
     status: user.status,
     mfaEnabled: user.totpEnabled,
     mfaRequired: await mfaRequiredFor(roles.map((r) => r.role)),
-    permissions: await flattenPermissions(roles),
+    permissions: await flattenPermissions(roles, String(user._id)),
   };
 }
 

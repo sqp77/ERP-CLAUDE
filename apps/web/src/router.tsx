@@ -29,6 +29,7 @@ import { SecondmentsPage } from './pages/hr/SecondmentsPage';
 import { RequestsListPage } from './pages/requests/RequestsListPage';
 import { RequestDetailPage } from './pages/requests/RequestDetailPage';
 import { TeamPage } from './pages/manager/TeamPage';
+import { BoardPage } from './pages/tasks/BoardPage';
 import { RouteError } from './shared/layout/RouteError';
 
 export const router = createBrowserRouter([
@@ -66,6 +67,7 @@ export const router = createBrowserRouter([
                 element: <RequirePermission resource="tasks" action="view" />,
                 children: [
                   { path: '/tasks', element: <TasksPage /> },
+                  { path: '/tasks/board', element: <BoardPage /> },
                   { path: '/tasks/:id', element: <TasksPage /> },
                 ],
               },

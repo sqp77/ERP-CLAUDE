@@ -304,11 +304,21 @@ const ROWS: Row[] = [
     salary: 1_300_000,
     contract: { type: 'fixed_term', endDays: 265, probationDays: -10 },
   },
+  {
+    first: 'فهد',
+    last: 'القحطاني',
+    gender: 'male',
+    dept: 'ops',
+    role: 'staff',
+    position: 'مشرف موقع',
+    hireDays: -1200,
+    salary: 800_000,
+  },
 ];
 
 const slug = (s: string) => s.replace(/[^a-z0-9]/gi, '').toLowerCase();
 const emailFor = (r: Row, i: number) =>
-  `${['abdullah', 'noura', 'sara', 'faisal', 'mohammed', 'khalid', 'rashed', 'omar', 'yousef', 'sultan', 'reem', 'majed', 'hind', 'lama', 'ahmed', 'dana', 'munira', 'arwa', 'bader', 'nasser', 'talal', 'abdulaziz', 'shahad', 'jawaher', 'turki'][i] ?? slug(r.first) + i}@eayni.local`;
+  `${['abdullah', 'noura', 'sara', 'faisal', 'mohammed', 'khalid', 'rashed', 'omar', 'yousef', 'sultan', 'reem', 'majed', 'hind', 'lama', 'ahmed', 'dana', 'munira', 'arwa', 'bader', 'nasser', 'talal', 'abdulaziz', 'shahad', 'jawaher', 'turki', 'fahad'][i] ?? slug(r.first) + i}@eayni.local`;
 
 export async function seedHr(
   password: string,

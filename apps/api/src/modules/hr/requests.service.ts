@@ -443,6 +443,10 @@ export async function visibilityFilter(user: UserDoc, authz: Authz): Promise<Fil
   if (authz.scope === 'all') return {};
   const own = [{ requesterUserId: user._id }, { directManagerUserId: user._id }];
   if (authz.scope === 'department') return { $or: [...own, { departmentId: { $in: authz.departmentIds } }] };
+  if (authz.scope === 'team') {
+    const { teamUserIdsOf } = await import('./service');
+    return { $or: [...own, { requesterUserId: { $in: await teamUserIdsOf(String(user._id)) } }] };
+  }
   return { $or: own };
 }
 

@@ -85,6 +85,13 @@ export const SETTING_DEFINITIONS = {
       .max(24 * 30),
     default: 72, // security review A8
   }),
+  'tasks.unassignedReminderBusinessDays': def({
+    key: 'tasks.unassignedReminderBusinessDays',
+    labelAr: 'تذكير مدير القسم بالمهام غير المسندة بعد (أيام عمل)',
+    group: 'notifications',
+    schema: z.number().int().min(1),
+    default: 1, // EP §16: the manager distributes department work
+  }),
   'tickets.remindAfterBusinessDays': def({
     key: 'tickets.remindAfterBusinessDays',
     labelAr: 'تذكير مقدّم الطلب بعد الحل (أيام عمل)',

@@ -19,6 +19,11 @@ import { nextNumber } from '../../core/numbering/service';
 import { notify } from '../../core/notifications/service';
 import { Attachment } from '../../core/files/model';
 import { claimAttachments } from '../../core/files/service';
+import { effectivePermission } from '../../core/rbac/service';
+import { Task } from '../../core/tasks/model';
+import { summarizeWorkload } from '../../core/tasks/service';
+import { HrRequest } from './requests.model';
+import { OPEN_TASK_STATUSES, type RoleAssignment } from '@eayni/shared';
 import { withTransaction } from '../../db';
 import { decrypt, encrypt } from '../../core/auth/crypto';
 import { Branch, Department, Position, Site, Unit } from '../../core/org/model';
@@ -266,27 +271,64 @@ portalRouter.post(
   }),
 );
 
-/** My direct reports [HR §6.2 "المدير المباشر"]: status and secondment report at a glance (review C18). */
+/**
+ * "فريقي" [HR §6.2, EP §16]: direct reports (org chart) plus, for a department manager, everyone in the
+ * departments they manage — with open / late tasks and pending requests per person.
+ */
 portalRouter.get(
   '/team',
   requireAuth(),
   asyncHandler(async (req: AuthedRequest, res) => {
-    const me = await Employee.findOne({ userId: req.auth.user._id, deletedAt: null }).select('_id').lean();
-    if (!me) return res.json({ items: [] });
-    const reports = await Employee.find({ directManagerId: me._id, deletedAt: null })
-      .select('fullNameAr employeeNumber positionId departmentId status secondment workEmail mobile')
+    const user = req.auth.user;
+    const me = await Employee.findOne({ userId: user._id, deletedAt: null }).select('_id').lean();
+    const eff = await effectivePermission(
+      user.roles as RoleAssignment[],
+      user.departmentId ? String(user.departmentId) : undefined,
+      'hr.employees',
+      'view',
+      String(user._id),
+    );
+    const or: Record<string, unknown>[] = [];
+    if (me) or.push({ directManagerId: me._id });
+    if (eff?.scope === 'department' && eff.departmentIds.length)
+      or.push({ departmentId: { $in: eff.departmentIds } });
+    if (!or.length) return res.json({ items: [], scope: eff?.scope ?? 'own' });
+    const reports = await Employee.find({ $or: or, deletedAt: null, _id: { $ne: me?._id } })
+      .select(
+        'fullNameAr employeeNumber positionId departmentId directManagerId status secondment workEmail mobile userId',
+      )
       .sort({ fullNameAr: 1 })
       .lean();
+    const userIds = reports.map((r) => r.userId).filter(Boolean);
+    const now = new Date();
+    const [taskDocs, requestDocs] = await Promise.all([
+      Task.find({ assigneeId: { $in: userIds }, deletedAt: null, status: { $in: [...OPEN_TASK_STATUSES] } })
+        .select('assigneeId status dueAt')
+        .lean(),
+      HrRequest.find({ requesterUserId: { $in: userIds }, deletedAt: null, closedAt: null })
+        .select('requesterUserId')
+        .lean(),
+    ]);
+    const tasksBy = new Map(summarizeWorkload(taskDocs, now).items.map((r) => [r.userId, r]));
+    const reqBy = new Map<string, number>();
+    for (const r of requestDocs)
+      reqBy.set(String(r.requesterUserId), (reqBy.get(String(r.requesterUserId)) ?? 0) + 1);
     res.json({
+      scope: eff?.scope ?? 'own',
       items: reports.map((r) => ({
         _id: r._id,
+        userId: r.userId,
         fullNameAr: r.fullNameAr,
         employeeNumber: r.employeeNumber,
         positionId: r.positionId,
         departmentId: r.departmentId,
+        directReport: !!me && String(r.directManagerId) === String(me._id),
         status: r.status,
         workEmail: r.workEmail,
         mobile: r.mobile,
+        openTasks: tasksBy.get(String(r.userId))?.open ?? 0,
+        lateTasks: tasksBy.get(String(r.userId))?.late ?? 0,
+        pendingRequests: reqBy.get(String(r.userId)) ?? 0,
         secondment: r.secondment?.destination
           ? {
               destination: r.secondment.destination,

@@ -11,6 +11,8 @@ import { registerExportResource } from '../../core/export/service';
 import { Employee } from './model';
 import { employeeScopeFilter, hrUserIds, teamUserIdsOf } from './service';
 import { registerRequestHandlers, runRequestOverdueReminders, visibilityFilter } from './requests.service';
+import { registerAssigneeDirectory, registerTaskSourceResolver } from '../../core/tasks/service';
+import { ON_DUTY_STATUSES } from './service';
 import {
   runAccountDeactivation,
   runBirthdayGreetings,
@@ -28,6 +30,38 @@ export function registerHrModule(): void {
 
   registerTeamResolver(teamUserIdsOf);
   registerRequestHandlers();
+  // Tasks: who may be assigned work comes from the employee file (EP §16); requests can be a task's source.
+  registerAssigneeDirectory({
+    async lookup(userId) {
+      const e = await Employee.findOne({ userId, deletedAt: null })
+        .select('fullNameAr departmentId directManagerId status')
+        .lean();
+      if (!e) return null;
+      const mgr = e.directManagerId
+        ? await Employee.findById(e.directManagerId).select('userId').lean()
+        : null;
+      return {
+        userId,
+        employeeId: String(e._id),
+        fullNameAr: e.fullNameAr,
+        departmentId: String(e.departmentId),
+        managerUserId: mgr?.userId ? String(mgr.userId) : undefined,
+        active: (ON_DUTY_STATUSES as readonly string[]).includes(e.status),
+      };
+    },
+  });
+  registerTaskSourceResolver('hr_request', async (idOrNumber) => {
+    const r = await HrRequest.findOne({
+      deletedAt: null,
+      $or: [
+        /^[0-9a-f]{24}$/i.test(idOrNumber) ? { _id: idOrNumber } : { number: idOrNumber },
+        { number: idOrNumber },
+      ],
+    })
+      .select('number type')
+      .lean();
+    return r ? { id: String(r._id), label: r.number } : null;
+  });
   registerJob('hr.requests.overdue', (now) => runRequestOverdueReminders(now));
 
   // Employee documents: expiry recipients and who may read them [HR §3.9, EP §5.2].

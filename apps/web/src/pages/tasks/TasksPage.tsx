@@ -1,112 +1,24 @@
 import { useState } from 'react';
-import { useNavigate, useParams } from 'react-router';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useForm } from 'react-hook-form';
+import { Link, useNavigate, useParams } from 'react-router';
 import { useTranslation } from 'react-i18next';
-import { PRIORITIES, type Priority, type TaskStatus } from '@eayni/shared';
 import { useAuth } from '@/lib/auth';
 import { usePrefs } from '@/lib/preferences';
-import { get, patch, post, type Paged } from '@/lib/api';
-import { errorMessage } from '@/lib/errors';
-import { localInputToIso } from '@/lib/dates';
-import {
-  Alert,
-  Badge,
-  Button,
-  Card,
-  Dialog,
-  EmptyState,
-  Field,
-  Input,
-  PageHeader,
-  QueryError,
-  Select,
-  Spinner,
-  Table,
-  Td,
-  Textarea,
-} from '@/shared/ui';
-import { useToast } from '@/shared/ui/Toast';
+import { Badge, Button, Card, EmptyState, PageHeader, QueryError, Spinner, Table, Td } from '@/shared/ui';
+import { AssignTaskDialog } from './AssignTaskDialog';
+import { TaskDialog } from './TaskDialog';
+import { TONE_BADGE, taskTone, useTasks } from './_data';
 
-interface Task {
-  _id: string;
-  number: string;
-  title: string;
-  assigneeId: string;
-  assignerId: string;
-  priority: Priority;
-  status: TaskStatus;
-  dueAt?: string;
-  progressPercent: number;
-}
-interface UserRow {
-  _id: string;
-  displayNameAr: string;
-  email: string;
-}
-
-const statusTone: Record<TaskStatus, 'slate' | 'blue' | 'amber' | 'green' | 'red'> = {
-  new: 'slate',
-  in_progress: 'blue',
-  waiting_review: 'amber',
-  done: 'green',
-  late: 'red',
-  cancelled: 'slate',
-};
-
-/** My tasks + assignment [EP §10]. Reminders are server jobs. */
+/** My tasks [EP §10]; managers also assign from here. /tasks/:id opens one task over the list (notification links). */
 export function TasksPage() {
   const { t } = useTranslation();
   const { user, can } = useAuth();
-  const { formatDate } = usePrefs();
-  const toast = useToast();
-  const qc = useQueryClient();
-  const [mine, setMine] = useState(true);
-  const [open, setOpen] = useState(false);
-  const [error, setError] = useState<string>();
-  const tasks = useQuery({
-    queryKey: ['tasks', mine],
-    queryFn: () => get<Paged<Task>>(`/tasks?limit=100${mine ? '&mine=true' : ''}`),
-  });
-  // /tasks/:id (notification links, review C18): show that task in a dialog on top of the list.
-  const { id: openId } = useParams();
+  const { formatDateTime } = usePrefs();
   const nav = useNavigate();
-  const one = useQuery({
-    queryKey: ['task', openId],
-    queryFn: () => get<Task & { description?: string; createdAt: string }>(`/tasks/${openId}`),
-    enabled: !!openId,
-  });
-  const users = useQuery({
-    queryKey: ['users', 'picker'],
-    queryFn: () => get<Paged<UserRow>>('/users?limit=200'),
-    enabled: can('users', 'view') && open,
-  });
-  const invalidate = () => qc.invalidateQueries({ queryKey: ['tasks'] });
-  const update = useMutation({
-    mutationFn: ({ id, body }: { id: string; body: Partial<Task> }) => patch(`/tasks/${id}`, body),
-    onSuccess: () => {
-      invalidate();
-      qc.invalidateQueries({ queryKey: ['task'] });
-    },
-  });
-  const form = useForm<{
-    title: string;
-    description?: string;
-    assigneeId: string;
-    priority: Priority;
-    dueAt?: string;
-  }>({ defaultValues: { priority: 'medium', assigneeId: user?.id } });
-  const create = form.handleSubmit(async (v) => {
-    try {
-      await post('/tasks', { ...v, dueAt: localInputToIso(v.dueAt) });
-      toast(t('actions.save'));
-      setOpen(false);
-      form.reset();
-      invalidate();
-    } catch (e) {
-      setError(errorMessage(e));
-    }
-  });
+  const { id: openId } = useParams();
+  const [mine, setMine] = useState(true);
+  const [assignOpen, setAssignOpen] = useState(false);
+  const tasks = useTasks({ limit: 200, mine });
+  const canAssign = can('tasks', 'create');
 
   return (
     <>
@@ -118,7 +30,12 @@ export function TasksPage() {
               <input type="checkbox" checked={mine} onChange={(e) => setMine(e.target.checked)} />{' '}
               {t('tasks.mine')}
             </label>
-            {can('tasks', 'create') && <Button onClick={() => setOpen(true)}>{t('tasks.new')}</Button>}
+            {canAssign && (
+              <Link to="/tasks/board" className="text-sm text-brand-700 hover:underline">
+                {t('tasks.board')}
+              </Link>
+            )}
+            {canAssign && <Button onClick={() => setAssignOpen(true)}>{t('tasks.assign')}</Button>}
           </>
         }
       />
@@ -137,136 +54,33 @@ export function TasksPage() {
               t('tasks.priority'),
               t('tasks.dueAt'),
               t('common.status'),
-              '',
             ]}
           >
             {tasks.data.items.map((task) => (
-              <tr key={task._id}>
+              <tr
+                key={task._id}
+                className="cursor-pointer hover:bg-slate-50"
+                onClick={() => nav(`/tasks/${task._id}`)}
+              >
                 <Td className="tabular text-xs text-slate-500">{task.number}</Td>
-                <Td className="font-medium">{task.title}</Td>
-                <Td>{t(`tasks.priorities.${task.priority}`)}</Td>
-                <Td className="tabular">{formatDate(task.dueAt)}</Td>
-                <Td>
-                  <Badge tone={statusTone[task.status]}>{t(`tasks.status.${task.status}`)}</Badge>
-                </Td>
-                <Td>
-                  {task.assigneeId === user?.id && task.status !== 'done' && task.status !== 'cancelled' && (
-                    <div className="flex gap-1">
-                      {task.status === 'new' && (
-                        <Button
-                          variant="ghost"
-                          onClick={() => update.mutate({ id: task._id, body: { status: 'in_progress' } })}
-                        >
-                          {t('tasks.startWork')}
-                        </Button>
-                      )}
-                      <Button
-                        variant="ghost"
-                        onClick={() => update.mutate({ id: task._id, body: { status: 'done' } })}
-                      >
-                        {t('tasks.markDone')}
-                      </Button>
-                    </div>
+                <Td className="font-medium">
+                  {task.title}
+                  {task.assigneeId && task.assigneeId !== user?.id && task.assignerId === user?.id && (
+                    <span className="ms-2 text-xs text-slate-500">{t('tasks.assignedByMe')}</span>
                   )}
+                </Td>
+                <Td>{t(`tasks.priorities.${task.priority}`)}</Td>
+                <Td className="tabular">{task.dueAt ? formatDateTime(task.dueAt) : '—'}</Td>
+                <Td>
+                  <Badge tone={TONE_BADGE[taskTone(task)]}>{t(`tasks.status.${task.status}`)}</Badge>
                 </Td>
               </tr>
             ))}
           </Table>
         )}
       </Card>
-      <Dialog
-        open={!!openId}
-        onClose={() => nav('/tasks')}
-        title={one.data ? `${one.data.number} · ${one.data.title}` : t('tasks.details')}
-      >
-        {one.isError ? (
-          <QueryError error={one.error} />
-        ) : !one.data ? (
-          <Spinner />
-        ) : (
-          <dl className="space-y-2 text-sm">
-            <div className="grid grid-cols-[120px_1fr] gap-2">
-              <dt className="text-slate-500">{t('common.status')}</dt>
-              <dd>
-                <Badge tone={statusTone[one.data.status]}>{t(`tasks.status.${one.data.status}`)}</Badge>
-              </dd>
-              <dt className="text-slate-500">{t('tasks.priority')}</dt>
-              <dd>{t(`tasks.priorities.${one.data.priority}`)}</dd>
-              <dt className="text-slate-500">{t('tasks.dueAt')}</dt>
-              <dd className="tabular">{formatDate(one.data.dueAt) || '—'}</dd>
-              <dt className="text-slate-500">{t('tasks.description')}</dt>
-              <dd className="whitespace-pre-wrap">{one.data.description || '—'}</dd>
-            </div>
-            {one.data.assigneeId === user?.id &&
-              one.data.status !== 'done' &&
-              one.data.status !== 'cancelled' && (
-                <div className="flex justify-end gap-2 pt-2">
-                  {one.data.status === 'new' && (
-                    <Button
-                      variant="secondary"
-                      onClick={() => update.mutate({ id: one.data!._id, body: { status: 'in_progress' } })}
-                    >
-                      {t('tasks.startWork')}
-                    </Button>
-                  )}
-                  <Button onClick={() => update.mutate({ id: one.data!._id, body: { status: 'done' } })}>
-                    {t('tasks.markDone')}
-                  </Button>
-                </div>
-              )}
-          </dl>
-        )}
-      </Dialog>
-      <Dialog open={open} onClose={() => setOpen(false)} title={t('tasks.new')}>
-        <form onSubmit={create} className="space-y-3" noValidate>
-          {error && <Alert kind="error">{error}</Alert>}
-          <Field label={t('tasks.taskTitle')} required>
-            <Input {...form.register('title', { required: true })} />
-          </Field>
-          <Field label={t('tasks.assignee')} required>
-            {users.data ? (
-              <Select {...form.register('assigneeId', { required: true })}>
-                {users.data.items.map((u) => (
-                  <option key={u._id} value={u._id}>
-                    {u.displayNameAr} — {u.email}
-                  </option>
-                ))}
-              </Select>
-            ) : (
-              <Input
-                dir="ltr"
-                {...form.register('assigneeId', { required: true })}
-                placeholder={t('tasks.assigneeId')}
-              />
-            )}
-          </Field>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label={t('tasks.priority')}>
-              <Select {...form.register('priority')}>
-                {PRIORITIES.map((p) => (
-                  <option key={p} value={p}>
-                    {t(`tasks.priorities.${p}`)}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-            <Field label={t('tasks.dueAt')}>
-              <Input type="datetime-local" dir="ltr" {...form.register('dueAt')} />
-            </Field>
-          </div>
-          <Field label={t('tasks.description')}>
-            <Textarea rows={3} {...form.register('description')} />
-          </Field>
-          <div className="flex justify-end gap-2">
-            <Button type="button" variant="secondary" onClick={() => setOpen(false)}>
-              {t('actions.cancel')}
-            </Button>
-            <Button type="submit" loading={form.formState.isSubmitting}>
-              {t('actions.save')}
-            </Button>
-          </div>
-        </form>
-      </Dialog>
+      <TaskDialog id={openId ?? null} onClose={() => nav('/tasks')} />
+      <AssignTaskDialog open={assignOpen} onClose={() => setAssignOpen(false)} />
     </>
   );
 }
