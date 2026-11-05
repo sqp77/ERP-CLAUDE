@@ -136,6 +136,7 @@ export async function seedTickets(): Promise<number> {
     attachmentIds: [],
     fields: {},
   });
+  await assign(khalid, t4, khalid); // the manager handles it himself
   await act(khalid, t4, 'resolve', { resolution: 'تم نقل الحاوية إلى الموقف الخلفي.' });
   n++;
   // 5. closed with a rating
