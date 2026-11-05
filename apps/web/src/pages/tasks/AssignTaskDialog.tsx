@@ -8,10 +8,11 @@ import { post } from '@/lib/api';
 import { errorMessage, fieldErrorsFrom } from '@/lib/errors';
 import { localInputToIso } from '@/lib/dates';
 import { usePositions, lookupName } from '@/lib/lookups';
+import { usePrefs } from '@/lib/preferences';
 import { Alert, Button, Dialog, Field, Input, Select, Textarea } from '@/shared/ui';
 import { useToast } from '@/shared/ui/Toast';
 import { FileUploader } from '@/shared/files/FileUploader';
-import { useTeam, type TeamMember } from './_data';
+import { awayNotice, useTeam, type TeamMember } from './_data';
 
 interface FormValues {
   title: string;
@@ -44,7 +45,9 @@ export function AssignTaskDialog({
   const qc = useQueryClient();
   const team = useTeam(open);
   const positions = usePositions();
+  const { formatDate } = usePrefs();
   const [q, setQ] = useState('');
+  const [awayConfirmed, setAwayConfirmed] = useState(false);
   const [assigneeId, setAssigneeId] = useState<string | ''>(initialAssigneeId ?? '');
   const [attachments, setAttachments] = useState<{ attachmentId: string; fileName: string }[]>([]);
   const [error, setError] = useState<string>();
@@ -55,10 +58,15 @@ export function AssignTaskDialog({
     return items.filter((m) => !needle || m.fullNameAr.includes(needle) || m.employeeNumber.includes(needle));
   }, [team.data, q]);
   const selected = team.data?.items.find((m) => m.userId === assigneeId);
+  const away = selected ? awayNotice(selected) : null;
   const required = t('common.requiredField');
 
   const submit = form.handleSubmit(async (v) => {
     setError(undefined);
+    if (away && !awayConfirmed) {
+      setError(t('tasks.awayConfirmRequired'));
+      return;
+    }
     try {
       await post('/tasks', {
         title: v.title,
@@ -90,7 +98,10 @@ export function AssignTaskDialog({
     <button
       key={m._id}
       type="button"
-      onClick={() => setAssigneeId(m.userId ?? '')}
+      onClick={() => {
+        setAssigneeId(m.userId ?? '');
+        setAwayConfirmed(false);
+      }}
       className={`flex w-full items-center justify-between rounded-lg border px-3 py-2 text-start text-sm ${
         assigneeId === m.userId ? 'border-brand-500 bg-brand-50' : 'border-slate-200 hover:bg-slate-50'
       }`}
@@ -129,6 +140,23 @@ export function AssignTaskDialog({
             </div>
             {selected && (
               <p className="text-xs text-slate-600">{t('tasks.selected', { name: selected.fullNameAr })}</p>
+            )}
+            {away && (
+              <Alert kind="warning">
+                <div>
+                  {t(`tasks.away.${away.kind}`, {
+                    date: away.until ? formatDate(away.until) : t('tasks.awayUnknownDate'),
+                  })}
+                </div>
+                <label className="mt-2 flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={awayConfirmed}
+                    onChange={(e) => setAwayConfirmed(e.target.checked)}
+                  />
+                  {t('tasks.awayConfirm')}
+                </label>
+              </Alert>
             )}
           </div>
         </Field>

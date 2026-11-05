@@ -110,6 +110,9 @@ export async function verifyMfa(
 ): Promise<void> {
   if (!user.totpEnabled || !user.totpSecret) throw badRequest('التحقق الثنائي غير مفعّل');
   if (session.mfaVerified) return;
+  const now = new Date();
+  if (user.mfaLockedUntil && user.mfaLockedUntil > now)
+    throw unauthorized('التحقق الثنائي مقفل مؤقتًا لهذا الحساب بسبب محاولات فاشلة متكررة', 'mfa_user_locked');
   const codeHash = sha256(`${user._id}:${code}`);
   // Replay guard: a code accepted within the last window (±1 step of 30 s) is never accepted again (security review A2).
   const replayed =
@@ -120,6 +123,32 @@ export async function verifyMfa(
     session.mfaFailedAttempts = (session.mfaFailedAttempts ?? 0) + 1;
     const base = { userId: user._id, email: user.email, sessionId: session._id, ...meta };
     await log(replayed ? 'mfa_replayed' : 'mfa_failed', base);
+    // Per-user counter across sessions (follow-up 1): a fresh login does not give fresh attempts.
+    const windowMs = (await getSetting('auth.mfaFailureWindowMinutes')) * 60_000;
+    if (!user.mfaFailedSince || now.getTime() - user.mfaFailedSince.getTime() > windowMs) {
+      user.mfaFailedSince = now;
+      user.mfaFailedCount = 0;
+    }
+    user.mfaFailedCount = (user.mfaFailedCount ?? 0) + 1;
+    if (user.mfaFailedCount >= (await getSetting('auth.mfaMaxFailuresPerUser'))) {
+      const lockMinutes = await getSetting('auth.mfaLockMinutes');
+      user.mfaLockedUntil = new Date(now.getTime() + lockMinutes * 60_000);
+      user.mfaFailedCount = 0;
+      user.mfaFailedSince = undefined;
+      await user.save();
+      await revokeSession(session, 'mfa_user_locked');
+      await log('mfa_user_locked', base);
+      await notifySystemAdmins({
+        bodyAr: `قُفل التحقق الثنائي للمستخدم ${user.email} لمدة ${lockMinutes} دقيقة بعد محاولات فاشلة متكررة`,
+        link: '/admin/users',
+        data: { kind: 'mfa_user_locked', userId: String(user._id) },
+      });
+      throw unauthorized(
+        'التحقق الثنائي مقفل مؤقتًا لهذا الحساب بسبب محاولات فاشلة متكررة',
+        'mfa_user_locked',
+      );
+    }
+    await user.save();
     if (session.mfaFailedAttempts >= MFA_MAX_ATTEMPTS) {
       await revokeSession(session, 'mfa_locked');
       await log('mfa_locked', base);
@@ -133,6 +162,8 @@ export async function verifyMfa(
   }
   user.totpLastCodeHash = codeHash;
   user.totpLastCodeAt = new Date();
+  user.mfaFailedCount = 0;
+  user.mfaFailedSince = undefined;
   await user.save();
   session.mfaVerified = true;
   session.mfaFailedAttempts = 0;

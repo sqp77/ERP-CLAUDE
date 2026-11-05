@@ -119,9 +119,11 @@ tasksRouter.patch(
         after: task,
       });
     }
-    if (status || progressPercent !== undefined)
-      await svc.changeStatus(req, task, status ?? (task.status as never), progressPercent);
-    res.json(task);
+    const result =
+      status || progressPercent !== undefined
+        ? await svc.changeStatus(req, task, status ?? (task.status as never), progressPercent)
+        : task;
+    res.json(result);
   }),
 );
 

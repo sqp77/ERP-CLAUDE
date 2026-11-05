@@ -34,6 +34,10 @@ const userSchema = new Schema(
     /** Replay guard: hash of the last accepted code and when (security review A2). */
     totpLastCodeHash: { type: String },
     totpLastCodeAt: { type: Date },
+    /** Per-user second-factor failures (follow-up 1): counted inside a window, then MFA is locked for a while. */
+    mfaFailedCount: { type: Number, default: 0 },
+    mfaFailedSince: { type: Date },
+    mfaLockedUntil: { type: Date },
     failedLogins: { type: Number, default: 0 },
     lockedUntil: { type: Date },
     lastLoginAt: { type: Date },
@@ -82,6 +86,7 @@ const loginLogSchema = new Schema(
         'mfa_failed',
         'mfa_verified',
         'mfa_locked',
+        'mfa_user_locked',
         'mfa_replayed',
         'mfa_reset',
         'login_temp_password_expired',

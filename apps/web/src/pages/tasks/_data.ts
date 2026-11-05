@@ -43,6 +43,8 @@ export interface TeamMember {
   openTasks: number;
   lateTasks: number;
   pendingRequests: number;
+  awayKind?: 'on_leave' | 'seconded' | null;
+  awayUntil?: string | null;
   secondment: null | {
     destination: string;
     startDate?: string;
@@ -98,3 +100,12 @@ export const useTasks = (params: Record<string, string | number | boolean | unde
     .join('&');
   return useQuery({ queryKey: ['tasks', params], queryFn: () => get<Paged<Task>>(`/tasks?${qs}`), enabled });
 };
+
+/** Away notice for the assign dialog (follow-up 3): on leave / seconded until a date — assigning stays allowed with confirmation. */
+export function awayNotice(
+  m: Pick<TeamMember, 'status' | 'awayKind' | 'awayUntil'>,
+): { kind: 'on_leave' | 'seconded'; until: string | null } | null {
+  const kind = m.awayKind ?? (m.status === 'on_leave' || m.status === 'seconded' ? m.status : null);
+  if (!kind) return null;
+  return { kind, until: m.awayUntil ?? null };
+}

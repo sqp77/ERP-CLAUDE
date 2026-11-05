@@ -158,5 +158,11 @@ Built from the brief "Department managers distribute work to their staff" [EP §
 - **Seed:** the Operations manager (khalid) now has four employees (rashed, omar, yousef, fahad) and seven tasks covering every state, including a queue task and a returned one.
 - **Not built here:** tickets as a task source (slice 4), employee reports (EP §14), per-employee calendar of tasks, push/WhatsApp channels.
 
+**Approved 2026-11-05 with four follow-ups (built):**
+- **MFA lockout per user:** wrong codes are counted on the user across sessions inside `auth.mfaFailureWindowMinutes` (30); at `auth.mfaMaxFailuresPerUser` (10) the second factor is locked for `auth.mfaLockMinutes` (30), logged (`mfa_user_locked`), the session revoked and system admins alerted. The per-session lock after 5 stays.
+- **Own roles:** nobody changes their own roles, system admins included (`own_roles`). Granting `finance_manager` or `executive` is audited and executive management (users with the `executive` role) is notified [FIN §12].
+- **Assigning to someone away** (إجازة / انتداب) stays allowed; the team list carries `awayKind` / `awayUntil` (secondment end date, or the end of the latest approved leave) and the assign dialog shows "في إجازة حتى …" and asks for an explicit confirmation.
+- **Task status changes, reviews and (re)assignments** use the conditional-update + transaction pattern of §14.B (409 on a lost race); tickets use it from the start.
+
 ## Still open (ask before building)
 Everything in the "Open decisions" section of `CLAUDE.md` that is not settled above, notably: accounting depth / general ledger, ZATCA route and wave, financial authority matrix and monthly cut-off, customer app and company portal, offline support for field staff, discount limits, points and rewards policy, certificate weight criterion, impact factors, organization-type list (SAL §4.1 vs CS §6.8), Finance-stage state labels in other modules (FIN §5 vs PRC §4 and MKT §8).

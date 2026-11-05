@@ -211,3 +211,41 @@ describe('work distribution [EP §16, EP §10]', () => {
     expect(await Task.countDocuments({ assigneeId: a.userId })).toBe(0);
   });
 });
+
+describe('slice 5 review follow-ups — tasks', () => {
+  it('F3: the team list says until when an employee is on leave or seconded', async () => {
+    const { hr, mgr, a } = await setup();
+    await request(app())
+      .post(`/api/v1/hr/employees/${a.employeeId}/status`)
+      .set(auth(hr))
+      .send({
+        status: 'seconded',
+        effectiveDate: '2026-11-01',
+        reason: 'انتداب',
+        secondment: { destination: 'فرع جدة', startDate: '2026-11-01', endDate: '2026-12-15' },
+      });
+    const team = await request(app()).get('/api/v1/hr/team').set(auth(mgr.token));
+    const row = team.body.items.find((i: { userId: string }) => i.userId === a.userId);
+    expect(row.awayKind).toBe('seconded');
+    expect(String(row.awayUntil)).toContain('2026-12-15');
+    // Assigning stays allowed.
+    expect((await create(mgr.token, { assigneeId: a.userId })).status).toBe(201);
+  });
+
+  it('F4: concurrent status changes and reviews are serialized — one wins, the other gets 409', async () => {
+    const { mgr, a } = await setup();
+    const t = await create(mgr.token, { assigneeId: a.userId });
+    const id = t.body._id as string;
+    const patch = (body: Record<string, unknown>) =>
+      request(app()).patch(`/api/v1/tasks/${id}`).set(auth(a.token)).send(body);
+    const [x, y] = await Promise.all([patch({ status: 'in_progress' }), patch({ status: 'in_progress' })]);
+    expect([x.status, y.status].sort()).toEqual([200, 409]);
+    expect(await TaskEvent.countDocuments({ taskId: id, type: 'status_changed' })).toBe(1);
+    await patch({ status: 'done' });
+    const review = (body: Record<string, unknown>) =>
+      request(app()).post(`/api/v1/tasks/${id}/review`).set(auth(mgr.token)).send(body);
+    const [p, q] = await Promise.all([review({ approve: true }), review({ approve: false, note: 'لا' })]);
+    expect([p.status, q.status].sort()).toEqual([200, 409]);
+    expect(await TaskEvent.countDocuments({ taskId: id, type: { $in: ['approved', 'returned'] } })).toBe(1);
+  });
+});

@@ -73,6 +73,35 @@ export const SETTING_DEFINITIONS = {
     schema: z.number().int().min(8).max(64),
     default: 10,
   }),
+  'auth.mfaMaxFailuresPerUser': def({
+    key: 'auth.mfaMaxFailuresPerUser',
+    labelAr: 'عدد رموز التحقق الخاطئة قبل قفل المصادقة للمستخدم',
+    group: 'auth',
+    schema: z.number().int().min(3).max(50),
+    default: 10, // slice 5 review follow-up 1
+  }),
+  'auth.mfaFailureWindowMinutes': def({
+    key: 'auth.mfaFailureWindowMinutes',
+    labelAr: 'نافذة احتساب رموز التحقق الخاطئة (دقائق)',
+    group: 'auth',
+    schema: z
+      .number()
+      .int()
+      .min(1)
+      .max(24 * 60),
+    default: 30,
+  }),
+  'auth.mfaLockMinutes': def({
+    key: 'auth.mfaLockMinutes',
+    labelAr: 'مدة قفل المصادقة الثنائية للمستخدم (دقائق)',
+    group: 'auth',
+    schema: z
+      .number()
+      .int()
+      .min(1)
+      .max(24 * 60),
+    default: 30,
+  }),
   'auth.temporaryPasswordHours': def({
     key: 'auth.temporaryPasswordHours',
     labelAr: 'صلاحية كلمة المرور المؤقتة (ساعات)',

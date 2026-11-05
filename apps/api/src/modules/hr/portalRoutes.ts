@@ -21,6 +21,7 @@ import { Attachment } from '../../core/files/model';
 import { claimAttachments } from '../../core/files/service';
 import { effectivePermission } from '../../core/rbac/service';
 import { Task } from '../../core/tasks/model';
+import { riyadhDate } from '../../core/dates/businessDays';
 import { summarizeWorkload } from '../../core/tasks/service';
 import { HrRequest } from './requests.model';
 import { OPEN_TASK_STATUSES, type RoleAssignment } from '@eayni/shared';
@@ -309,6 +310,22 @@ portalRouter.get(
         .select('requesterUserId')
         .lean(),
     ]);
+    // Away until (follow-up 3): secondment end, or the end of the latest approved leave that is still running.
+    const leaves = await HrRequest.find({
+      requesterUserId: { $in: userIds },
+      type: 'leave',
+      state: { $in: ['approved', 'closed'] },
+      deletedAt: null,
+      'details.endDate': { $gte: riyadhDate(now) },
+    })
+      .select('requesterUserId details')
+      .lean();
+    const leaveUntil = new Map<string, string>();
+    for (const l of leaves) {
+      const end = String((l.details as { endDate?: string }).endDate ?? '');
+      const k = String(l.requesterUserId);
+      if (!leaveUntil.get(k) || leaveUntil.get(k)! < end) leaveUntil.set(k, end);
+    }
     const tasksBy = new Map(summarizeWorkload(taskDocs, now).items.map((r) => [r.userId, r]));
     const reqBy = new Map<string, number>();
     for (const r of requestDocs)
@@ -326,6 +343,13 @@ portalRouter.get(
         status: r.status,
         workEmail: r.workEmail,
         mobile: r.mobile,
+        awayKind: r.status === 'seconded' ? 'seconded' : r.status === 'on_leave' ? 'on_leave' : null,
+        awayUntil:
+          r.status === 'seconded'
+            ? (r.secondment?.endDate ?? null)
+            : r.status === 'on_leave'
+              ? (leaveUntil.get(String(r.userId)) ?? null)
+              : null,
         openTasks: tasksBy.get(String(r.userId))?.open ?? 0,
         lateTasks: tasksBy.get(String(r.userId))?.late ?? 0,
         pendingRequests: reqBy.get(String(r.userId)) ?? 0,

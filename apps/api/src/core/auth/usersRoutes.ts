@@ -12,7 +12,7 @@ import { asyncHandler } from '../http/async';
 import { validate } from '../http/validate';
 import { actorFrom, type AuthedRequest } from '../http/context';
 import { badRequest, forbidden, notFound } from '../http/errors';
-import { notifySystemAdmins } from '../notifications/alerts';
+import { notifyExecutives, notifySystemAdmins } from '../notifications/alerts';
 import { recordAudit } from '../audit/service';
 import { authorize } from '../rbac/authorize';
 import { loadRoles } from '../rbac/service';
@@ -71,7 +71,17 @@ async function announceRoleChange(
     data: { userId: String(target._id), ...diff },
     excludeUserId: String(req.auth.user._id),
   });
+  // Financial and executive authority is a management matter [FIN §12]: executives hear about every grant.
+  const sensitive = diff.added.filter((r) => SENSITIVE_ROLES.has(r));
+  if (sensitive.length)
+    await notifyExecutives({
+      bodyAr: `تم منح ${target.email} الدور: ${sensitive.join(', ')} بواسطة ${req.auth.user.email}`,
+      link: '/admin/users',
+      data: { userId: String(target._id), roles: sensitive },
+      excludeUserId: String(req.auth.user._id),
+    });
 }
+const SENSITIVE_ROLES = new Set(['finance_manager', 'executive']);
 
 usersRouter.get(
   '/',
@@ -154,6 +164,13 @@ usersRouter.patch(
     if (!before) throw notFound();
     if (body.roles) await assertRolesExist(body.roles);
     const diff = body.roles ? assertMayChangeRoles(req, before.roles, body.roles) : undefined;
+    // Nobody changes their own roles, system admins included (follow-up 2, FIN §12).
+    if (
+      diff &&
+      (diff.added.length || diff.removed.length) &&
+      String(before._id) === String(req.auth.user._id)
+    )
+      throw forbidden('لا يمكنك تغيير أدوارك بنفسك', 'own_roles');
     if (body.status === 'disabled' && String(before._id) === String(req.auth.user._id))
       throw badRequest('لا يمكنك تعطيل حسابك');
     const snapshot = before.toObject();

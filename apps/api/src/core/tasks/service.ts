@@ -1,6 +1,6 @@
-import type { FilterQuery } from 'mongoose';
+import type { ClientSession, FilterQuery } from 'mongoose';
 import { OPEN_TASK_STATUSES, type CreateTaskInput, type TaskStatus } from '@eayni/shared';
-import { badRequest, forbidden, notFound } from '../http/errors';
+import { badRequest, conflict, forbidden, notFound } from '../http/errors';
 import { actorFrom, type Actor, type AuthedRequest } from '../http/context';
 import { recordAudit } from '../audit/service';
 import { nextNumber } from '../numbering/service';
@@ -10,6 +10,7 @@ import { scopeFilter } from '../rbac/scope';
 import { effectivePermission } from '../rbac/service';
 import { registerRecordAccess } from '../access/registry';
 import { claimAttachments } from '../files/service';
+import { withTransaction } from '../../db';
 import type { RoleAssignment } from '@eayni/shared';
 import { Task, TaskEvent, type TaskDoc } from './model';
 
@@ -169,7 +170,32 @@ export async function createTask(req: AuthedRequest, body: CreateTaskInput) {
   return task;
 }
 
-/** Assign a queued task, or move it to another employee with a reason; both sides are told [EP §16]. */
+/** Append an event inside the same transaction as the record change. */
+async function logEventIn(
+  session: ClientSession | undefined,
+  taskId: unknown,
+  type: string,
+  actor: Actor,
+  data: Partial<{
+    fromStatus: string;
+    toStatus: string;
+    fromAssigneeId: unknown;
+    toAssigneeId: unknown;
+    note: string;
+  }> = {},
+) {
+  await TaskEvent.create([{ taskId, type, actorUserId: actor.userId, actorEmail: actor.email, ...data }], {
+    session,
+  });
+}
+
+const CONFLICT_MSG = 'تغيّرت المهمة من مستخدم آخر أثناء العمل عليها، حدّث الصفحة وأعد المحاولة';
+
+/**
+ * Assign a queued task, or move it to another employee with a reason; both sides are told [EP §16].
+ * Conditional update on the previous assignee + open status, in one transaction with the event and
+ * audit rows (follow-up 4): a lost race gets 409 and writes nothing.
+ */
 export async function assignTask(
   req: AuthedRequest,
   task: InstanceType<typeof Task>,
@@ -184,37 +210,60 @@ export async function assignTask(
   if (previous && !reason?.trim()) throw badRequest('سبب إعادة الإسناد مطلوب');
   await assertAssignable(req, assigneeId);
   const before = task.toObject();
-  task.assigneeId = assigneeId as never;
-  if (task.status === 'waiting_review') task.status = 'in_progress';
-  await task.save();
-  await logEvent(task, previous ? 'reassigned' : 'assigned', actor, {
-    fromAssigneeId: previous,
-    toAssigneeId: assigneeId,
-    note: reason,
-  });
-  await recordAudit(actor, {
-    action: 'update',
-    resource: 'tasks',
-    resourceId: String(task._id),
-    before,
-    after: task,
-    meta: { reassign: !!previous, reason },
+  const updated = await withTransaction(async (session) => {
+    const set: Record<string, unknown> = { assigneeId };
+    if (task.status === 'waiting_review') set.status = 'in_progress';
+    const doc = await Task.findOneAndUpdate(
+      {
+        _id: task._id,
+        deletedAt: null,
+        assigneeId: previous ?? null,
+        status: { $in: [...OPEN_TASK_STATUSES] },
+      },
+      { $set: set },
+      { new: true, session },
+    );
+    if (!doc) throw conflict(CONFLICT_MSG);
+    await logEventIn(session, doc._id, previous ? 'reassigned' : 'assigned', actor, {
+      fromAssigneeId: previous,
+      toAssigneeId: assigneeId,
+      note: reason,
+    });
+    await recordAudit(
+      actor,
+      {
+        action: 'update',
+        resource: 'tasks',
+        resourceId: String(doc._id),
+        before,
+        after: doc,
+        meta: { reassign: !!previous, reason },
+      },
+      session,
+    );
+    return doc;
   });
   if (assigneeId !== actor.userId)
-    await notify({ userIds: [assigneeId], type: 'task.assigned', bodyAr: label(task), link: link(task) });
+    await notify({
+      userIds: [assigneeId],
+      type: 'task.assigned',
+      bodyAr: label(updated),
+      link: link(updated),
+    });
   if (previous && previous !== actor.userId)
     await notify({
       userIds: [previous],
       type: 'task.reassigned',
-      bodyAr: `${label(task)} — ${reason ?? ''}`,
-      link: link(task),
+      bodyAr: `${label(updated)} — ${reason ?? ''}`,
+      link: link(updated),
     });
-  return task;
+  return updated;
 }
 
 /**
  * Status moves. The assignee's "done" becomes waiting_review when someone else assigned the task;
  * the assigner approves (done) or returns it (in_progress) through reviewTask [EP §16].
+ * Conditional update on the current status inside one transaction (follow-up 4).
  */
 export async function changeStatus(
   req: AuthedRequest,
@@ -240,37 +289,47 @@ export async function changeStatus(
     event = 'review_requested';
   }
   const before = task.toObject();
-  task.status = to;
-  if (progress !== undefined) task.progressPercent = progress;
-  if (to === 'done') {
-    task.completedAt = new Date();
-    task.progressPercent = 100;
-  }
-  if (to === 'in_progress' && !task.startAt) task.startAt = new Date();
-  await task.save();
-  await logEvent(task, next === 'cancelled' ? 'cancelled' : event, actor, { fromStatus: from, toStatus: to });
-  await recordAudit(actor, {
-    action: 'update',
-    resource: 'tasks',
-    resourceId: String(task._id),
-    before,
-    after: task,
+  const now = new Date();
+  const updated = await withTransaction(async (session) => {
+    const set: Record<string, unknown> = { status: to };
+    if (progress !== undefined) set.progressPercent = progress;
+    if (to === 'done') {
+      set.completedAt = now;
+      set.progressPercent = 100;
+    }
+    if (to === 'in_progress' && !task.startAt) set.startAt = now;
+    const doc = await Task.findOneAndUpdate(
+      { _id: task._id, deletedAt: null, status: from },
+      { $set: set },
+      { new: true, session },
+    );
+    if (!doc) throw conflict(CONFLICT_MSG);
+    await logEventIn(session, doc._id, next === 'cancelled' ? 'cancelled' : event, actor, {
+      fromStatus: from,
+      toStatus: to,
+    });
+    await recordAudit(
+      actor,
+      { action: 'update', resource: 'tasks', resourceId: String(doc._id), before, after: doc },
+      session,
+    );
+    return doc;
   });
   if (to === 'waiting_review')
     await notify({
-      userIds: [String(task.assignerId)],
+      userIds: [String(updated.assignerId)],
       type: 'task.review_requested',
-      bodyAr: label(task),
-      link: link(task),
+      bodyAr: label(updated),
+      link: link(updated),
     });
-  else if (task.assigneeId && String(task.assigneeId) !== me && (to === 'done' || to === 'cancelled'))
+  else if (updated.assigneeId && String(updated.assigneeId) !== me && (to === 'done' || to === 'cancelled'))
     await notify({
-      userIds: [String(task.assigneeId)],
+      userIds: [String(updated.assigneeId)],
       type: 'task.approved',
-      bodyAr: label(task),
-      link: link(task),
+      bodyAr: label(updated),
+      link: link(updated),
     });
-  return task;
+  return updated;
 }
 
 export async function reviewTask(
@@ -287,33 +346,43 @@ export async function reviewTask(
   if (task.status !== 'waiting_review') throw badRequest('المهمة ليست بانتظار المراجعة');
   if (!approve && !note?.trim()) throw badRequest('ملاحظة الإعادة مطلوبة');
   const before = task.toObject();
-  task.status = approve ? 'done' : 'in_progress';
-  if (approve) {
-    task.completedAt = new Date();
-    task.progressPercent = 100;
-  } else task.reviewNote = note;
-  await task.save();
-  await logEvent(task, approve ? 'approved' : 'returned', actor, {
-    fromStatus: 'waiting_review',
-    toStatus: task.status,
-    note,
-  });
-  await recordAudit(actor, {
-    action: approve ? 'approve' : 'update',
-    resource: 'tasks',
-    resourceId: String(task._id),
-    before,
-    after: task,
-    meta: { note },
-  });
-  if (task.assigneeId)
-    await notify({
-      userIds: [String(task.assigneeId)],
-      type: approve ? 'task.approved' : 'task.returned',
-      bodyAr: approve ? label(task) : `${label(task)} — ${note ?? ''}`,
-      link: link(task),
+  const updated = await withTransaction(async (session) => {
+    const set: Record<string, unknown> = approve
+      ? { status: 'done', completedAt: new Date(), progressPercent: 100 }
+      : { status: 'in_progress', reviewNote: note };
+    const doc = await Task.findOneAndUpdate(
+      { _id: task._id, deletedAt: null, status: 'waiting_review' },
+      { $set: set },
+      { new: true, session },
+    );
+    if (!doc) throw conflict(CONFLICT_MSG);
+    await logEventIn(session, doc._id, approve ? 'approved' : 'returned', actor, {
+      fromStatus: 'waiting_review',
+      toStatus: doc.status,
+      note,
     });
-  return task;
+    await recordAudit(
+      actor,
+      {
+        action: approve ? 'approve' : 'update',
+        resource: 'tasks',
+        resourceId: String(doc._id),
+        before,
+        after: doc,
+        meta: { note },
+      },
+      session,
+    );
+    return doc;
+  });
+  if (updated.assigneeId)
+    await notify({
+      userIds: [String(updated.assigneeId)],
+      type: approve ? 'task.approved' : 'task.returned',
+      bodyAr: approve ? label(updated) : `${label(updated)} — ${note ?? ''}`,
+      link: link(updated),
+    });
+  return updated;
 }
 
 /** Open / late counts per assignee inside the caller's scope (workload view, EP §16). */
