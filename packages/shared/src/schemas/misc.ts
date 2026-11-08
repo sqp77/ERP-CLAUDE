@@ -47,7 +47,8 @@ export const createDocumentSchema = z.object({
   issueDate: z.coerce.date().optional(),
   expiryDate: z.coerce.date().nullable().optional(),
   alertOffsetsDays: z.array(z.number().int().min(0)).optional(),
-  sensitive: z.boolean().default(false),
+  /** Omitted → decided by type on the server: identity / contract / bank_proof always, 'other' by default (HR may untick). */
+  sensitive: z.boolean().optional(),
 });
 
 export const exportRequestSchema = z.object({

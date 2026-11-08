@@ -20,7 +20,6 @@ import { effectivePermission } from '../../core/rbac/service';
 import type { RoleAssignment } from '@eayni/shared';
 import { Ticket } from './model';
 import * as svc from './service';
-import { teamUserIdsOf } from '../hr/service';
 
 export const ticketsRouter = Router();
 
@@ -69,13 +68,13 @@ ticketsRouter.get(
   asyncHandler(async (req: AuthedRequest, res) => {
     const q = req.query as unknown as z.infer<typeof listTicketsQuerySchema>;
     const user = req.auth.user;
-    const filter: Record<string, unknown> = {
-      deletedAt: null,
-      ...(await svc.visibilityFilter(user, req.authz!)),
-    };
+    // 'team' uses exactly the dashboard's filter (follow-up 5); the other views intersect with the caller's visibility.
+    const filter: Record<string, unknown> =
+      q.view === 'team'
+        ? await svc.teamTicketsFilter(String(user._id))
+        : { deletedAt: null, ...(await svc.visibilityFilter(user, req.authz!)) };
     if (q.view === 'mine') filter.requesterUserId = user._id;
     if (q.view === 'assigned') filter.assigneeId = user._id;
-    if (q.view === 'team') filter.assigneeId = { $in: await teamUserIdsOf(String(user._id)) };
     if (q.view === 'department') {
       if (req.authz!.scope === 'department') filter.departmentId = { $in: req.authz!.departmentIds };
       else if (req.authz!.scope !== 'all') {

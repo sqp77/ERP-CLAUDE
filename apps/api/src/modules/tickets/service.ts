@@ -20,6 +20,7 @@ import { effectivePermission } from '../../core/rbac/service';
 import { claimAttachments } from '../../core/files/service';
 import { withTransaction } from '../../db';
 import { Department } from '../../core/org/model';
+import { teamUserIdsOf } from '../hr/service';
 import type { UserDoc } from '../../core/auth/model';
 import { departmentManagerUserIds } from '../../core/tasks/jobs';
 import { assertAssignable, lookupAssignee } from '../../core/tasks/service';
@@ -249,10 +250,24 @@ export async function relationsFor(user: UserDoc, ticket: TicketDoc): Promise<st
 export async function visibilityFilter(user: UserDoc, authz: Authz): Promise<FilterQuery<unknown>> {
   if (authz.scope === 'all') return {};
   const own: Record<string, unknown>[] = [{ requesterUserId: user._id }, { assigneeId: user._id }];
+  // A direct manager sees the tickets assigned to their reports (EP §16, go-live follow-up 5): the same clause the
+  // manager dashboard counts and the team list shows.
+  const team = await teamUserIdsOf(String(user._id));
+  if (team.length) own.push({ assigneeId: { $in: team } });
   if (authz.scope === 'department') return { $or: [...own, { departmentId: { $in: authz.departmentIds } }] };
   const dept = await departmentOf(user);
   if (dept && (await staffQueueEnabled(dept.code))) own.push({ departmentId: dept.id }); // view-only department queue
   return { $or: own };
+}
+
+/** Tickets assigned to the caller's direct reports — ONE filter for the dashboard card and `tickets?view=team` (follow-up 5). */
+export async function teamTicketsFilter(userId: string, open = false): Promise<FilterQuery<unknown>> {
+  const team = await teamUserIdsOf(userId);
+  return {
+    deletedAt: null,
+    assigneeId: { $in: team },
+    ...(open ? { state: { $in: [...OPEN_TICKET_STATES] } } : {}),
+  };
 }
 
 export async function availableActions(user: UserDoc, ticket: TicketDoc): Promise<string[]> {

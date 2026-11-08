@@ -12,6 +12,7 @@ import { DocumentRecord } from './model';
 import { canAccessDocuments } from './access';
 import { canViewSensitive } from '../access/registry';
 import { Attachment } from '../files/model';
+import { claimAttachments } from '../files/service';
 import { forbidden } from '../http/errors';
 
 export const documentsRouter = Router();
@@ -61,8 +62,17 @@ documentsRouter.post(
   asyncHandler(async (req: AuthedRequest, res) => {
     const body = req.body as z.infer<typeof createDocumentSchema>;
     if (!(await canAccessDocuments(req, body.ownerType, body.ownerId))) throw forbidden();
-    if (body.ownerType === 'employee' && ['identity', 'contract', 'bank_proof'].includes(body.type))
-      body.sensitive = true;
+    // Sensitivity by type (review E2, follow-up 3): identity, contract and bank proof are always sensitive; 'other' is
+    // sensitive unless HR explicitly unticks it; everything else is what the caller said (default not sensitive).
+    const sensitive =
+      body.ownerType === 'employee' && ['identity', 'contract', 'bank_proof'].includes(body.type)
+        ? true
+        : body.type === 'other'
+          ? body.sensitive !== false
+          : body.sensitive === true;
+    body.sensitive = sensitive;
+    // The file must be the caller's own upload and unowned or already owned by this record (follow-up 4).
+    await claimAttachments([body.attachmentId], body.ownerType, body.ownerId, req.auth.user._id);
     const prev = await DocumentRecord.findOne({
       ownerType: body.ownerType,
       ownerId: body.ownerId,
@@ -76,16 +86,7 @@ documentsRouter.post(
       previousId: prev?._id,
     });
     // The file inherits the document's sensitivity (review E2).
-    await Attachment.updateOne(
-      { _id: body.attachmentId },
-      {
-        $set: {
-          ownerType: body.ownerType,
-          ownerId: body.ownerId,
-          ...(body.sensitive ? { sensitive: true } : {}),
-        },
-      },
-    );
+    if (sensitive) await Attachment.updateOne({ _id: body.attachmentId }, { $set: { sensitive: true } });
     await recordAudit(actorFrom(req), {
       action: 'create',
       resource: 'documents',

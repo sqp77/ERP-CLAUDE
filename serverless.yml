@@ -22,7 +22,10 @@ provider:
     # so the SameSite=Lax session cookie and relative /api/v1 calls work (review F2).
     APP_URL: ${ssm:/eayni/${self:provider.stage}/app-url}
     COOKIE_SECURE: 'true'
-    TRUST_PROXY_HOPS: '2' # CloudFront → API Gateway (review E11)
+    # Requests must come through CloudFront (follow-up 2): the distribution adds this secret origin header and the
+    # API rejects anything without it; the client IP is read from CloudFront-Viewer-Address, not from X-Forwarded-For.
+    ORIGIN_SECRET: ${ssm:/eayni/${self:provider.stage}/origin-secret}
+    TRUST_PROXY_HOPS: '0'
   iam:
     role:
       statements:
@@ -131,29 +134,57 @@ resources:
               CustomOriginConfig:
                 OriginProtocolPolicy: https-only
                 OriginSSLProtocols: [TLSv1.2]
+              # Proof the request came through CloudFront (go-live follow-up 2); the API rejects requests without it.
+              OriginCustomHeaders:
+                - HeaderName: x-origin-secret
+                  HeaderValue: ${ssm:/eayni/${self:provider.stage}/origin-secret}
           DefaultCacheBehavior:
             TargetOriginId: web
             ViewerProtocolPolicy: redirect-to-https
             AllowedMethods: [GET, HEAD, OPTIONS]
             Compress: true
             CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6 # Managed-CachingOptimized
+            # SPA fallback (follow-up 1): paths without a file extension are rewritten to /index.html on the web
+            # behaviour only, so /api/* keeps its real 403/404 status codes and bodies.
+            FunctionAssociations:
+              - EventType: viewer-request
+                FunctionARN: !GetAtt WebSpaRewriteFunction.FunctionARN
           CacheBehaviors:
             - PathPattern: /api/*
               TargetOriginId: api
               ViewerProtocolPolicy: https-only
               AllowedMethods: [GET, HEAD, OPTIONS, PUT, POST, PATCH, DELETE]
               CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad # Managed-CachingDisabled
-              OriginRequestPolicyId: b689b0a8-53d0-40ab-baf2-68738e2966ac # Managed-AllViewerExceptHostHeader: cookies, query strings, headers
-          # SPA fallback: unknown paths serve index.html with 200 (S3 answers 403/404 for missing keys).
-          CustomErrorResponses:
-            - ErrorCode: 403
-              ResponseCode: 200
-              ResponsePagePath: /index.html
-              ErrorCachingMinTTL: 0
-            - ErrorCode: 404
-              ResponseCode: 200
-              ResponsePagePath: /index.html
-              ErrorCachingMinTTL: 0
+              OriginRequestPolicyId: !Ref ApiOriginRequestPolicy
+    # Forwards everything the viewer sent plus CloudFront-Viewer-Address, the API's source of the client IP (follow-up 2).
+    ApiOriginRequestPolicy:
+      Type: AWS::CloudFront::OriginRequestPolicy
+      Properties:
+        OriginRequestPolicyConfig:
+          Name: ${self:service}-${self:provider.stage}-api-origin
+          Comment: all viewer headers except Host, plus CloudFront-Viewer-Address
+          CookiesConfig: { CookieBehavior: all }
+          QueryStringsConfig: { QueryStringBehavior: all }
+          HeadersConfig:
+            HeaderBehavior: allViewerAndWhitelistCloudFront
+            Headers: [CloudFront-Viewer-Address]
+    WebSpaRewriteFunction:
+      Type: AWS::CloudFront::Function
+      Properties:
+        Name: ${self:service}-${self:provider.stage}-spa-rewrite
+        AutoPublish: true
+        FunctionConfig:
+          Comment: SPA routes (no file extension) → /index.html; attached to the web behaviour only
+          Runtime: cloudfront-js-2.0
+        FunctionCode: |
+          function handler(event) {
+            var request = event.request;
+            var uri = request.uri;
+            if (uri.startsWith('/api/')) return request;
+            var last = uri.substring(uri.lastIndexOf('/') + 1);
+            if (last.indexOf('.') === -1) request.uri = '/index.html';
+            return request;
+          }
   Outputs:
     WebBucketName:
       Value: !Ref WebBucket

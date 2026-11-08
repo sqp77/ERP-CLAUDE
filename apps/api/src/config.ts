@@ -20,6 +20,11 @@ const envSchema = z.object({
    * CloudFront → API Gateway → Lambda = 2 (the client address is the entry before the two proxies).
    */
   TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(5).default(1),
+  /**
+   * Shared secret CloudFront adds as `x-origin-secret` (go-live follow-up 2). When set, every request except the health
+   * check must carry it, and the client IP is read from `CloudFront-Viewer-Address`. Required in production.
+   */
+  ORIGIN_SECRET: z.string().min(16).optional(),
   API_URL: z.string().default('http://localhost:4000'),
   COOKIE_SECURE: z
     .string()
@@ -52,6 +57,9 @@ export function env(): Env {
       );
     }
     cached = parsed.data;
+    if (cached.NODE_ENV === 'production' && !cached.ORIGIN_SECRET) {
+      throw new Error('ORIGIN_SECRET must be set in production (CloudFront origin header)');
+    }
     if (cached.NODE_ENV === 'production' && cached.APP_SECRET.startsWith('dev-only')) {
       throw new Error('APP_SECRET must be set in production');
     }

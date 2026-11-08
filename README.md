@@ -82,8 +82,9 @@ aws s3 sync apps/web/dist s3://eayni-erp-staging-web --delete
 aws cloudfront create-invalidation --distribution-id <id from the stack> --paths '/*'
 ```
 
-Set the SSM parameter `/eayni/staging/app-url` to the distribution URL (or the custom domain pointed at it) before the
-first API deploy; it drives CORS on the files bucket and the cookie origin. The API sits behind two proxies
-(`TRUST_PROXY_HOPS=2`). Scheduled jobs run every 5 minutes (`cadence: frequent`) and daily at 06:00 Riyadh
-(`cadence: daily`); locally `npm run dev` runs the same schedule in-process.
+Set the SSM parameters `/eayni/staging/app-url` (distribution URL or custom domain; drives CORS and the cookie origin)
+and `/eayni/staging/origin-secret` (CloudFront → API origin header; the API refuses direct calls to the gateway) before the
+first API deploy. SPA routing is a CloudFront Function on the web behaviour only, so `/api/*` keeps its real status codes.
+Details, topology and the client-IP rule: `docs/DEPLOY.md`. Scheduled jobs run every 5 minutes (`cadence: frequent`) and
+daily at 06:00 Riyadh (`cadence: daily`); locally `npm run dev` runs the same schedule in-process.
 

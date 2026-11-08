@@ -4,6 +4,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import { pinoHttp } from 'pino-http';
 import { env } from './config';
+import { requireCloudFrontOrigin } from './core/http/origin';
 import { logger } from './logger';
 import { errorHandler, notFoundHandler } from './core/http/errors';
 import { authRouter } from './core/auth/routes';
@@ -40,6 +41,7 @@ export function createApp(): Express {
   const app = express();
   app.set('trust proxy', env().TRUST_PROXY_HOPS);
   app.disable('x-powered-by');
+  app.use(requireCloudFrontOrigin); // go-live follow-up 2: CloudFront-only in deployed stages
   app.use(helmet({ contentSecurityPolicy: false }));
   app.use(cors({ origin: env().APP_URL, credentials: true }));
   app.use(cookieParser());

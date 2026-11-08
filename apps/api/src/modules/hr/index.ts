@@ -93,12 +93,14 @@ export function registerHrModule(): void {
     const eff = await permissionOn(req, 'hr.employees');
     if (!eff) return false;
     if (eff.scope === 'all') return true;
-    const filter = await employeeScopeFilter(
-      { resource: 'hr.employees', action: 'view', ...eff },
-      req.auth.user,
-    );
+    // Team scope comes from the org chart alone (DECISIONS §4, §19): it never widens file access, so only a real
+    // grant (department) or the own record passes here; the direct-manager branch below handles the team.
+    const filter =
+      eff.scope === 'team'
+        ? { userId: req.auth.user._id }
+        : await employeeScopeFilter({ resource: 'hr.employees', action: 'view', ...eff }, req.auth.user);
     if (await Employee.exists({ _id: ownerId, deletedAt: null, ...filter })) return true;
-    // A direct manager (org chart, not a role) sees the record; of its files only the photo and secondment reports (review E2).
+    // A direct manager (org chart, not a role) sees the record; of its files only the photo and secondment reports (review E2, §19).
     const me = await Employee.findOne({ userId: req.auth.user._id, deletedAt: null }).select('_id').lean();
     if (!me) return false;
     const report = await Employee.findOne({ _id: ownerId, deletedAt: null, directManagerId: me._id })

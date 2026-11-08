@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import type { RoleAssignment } from '@eayni/shared';
-import { OPEN_TASK_STATUSES, OPEN_TICKET_STATES } from '@eayni/shared';
+import { OPEN_TASK_STATUSES } from '@eayni/shared';
 import { asyncHandler } from '../../core/http/async';
 import { startOfRiyadhWeek } from '../../core/dates/businessDays';
 import type { AuthedRequest } from '../../core/http/context';
@@ -13,6 +13,7 @@ import { CalendarEvent } from '../../core/calendar/model';
 import { DocumentRecord } from '../../core/documents/model';
 import { Department, Branch } from '../../core/org/model';
 import { Ticket } from '../tickets/model';
+import { teamTicketsFilter } from '../tickets/service';
 import { Contract, Employee, EmployeeEvent } from './model';
 import { HrRequest } from './requests.model';
 import { EmployeeReport } from './reports.model';
@@ -63,11 +64,7 @@ dashboardRouter.get(
         startAt: { $gte: weekStart, $lt: weekEnd },
         $or: [{ ownerId: user._id }, { participantIds: { $in: [user._id, ...userIds] } }],
       }),
-      Ticket.countDocuments({
-        assigneeId: { $in: userIds },
-        state: { $in: [...OPEN_TICKET_STATES] },
-        deletedAt: null,
-      }),
+      Ticket.countDocuments(await teamTicketsFilter(String(user._id), true)), // same filter as tickets?view=team (follow-up 5)
     ]);
     const byStatus: Record<string, number> = {};
     let overdue = 0;
