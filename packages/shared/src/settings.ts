@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { DEFAULT_HR_REQUEST_ROUTES, hrRequestRoutesSchema } from './schemas/hrRequests';
 import { DEFAULT_TICKET_DEPARTMENT_FIELDS, ticketDepartmentFieldsSchema } from './schemas/tickets';
+import { DEFAULT_REPORT_TYPES, reportTypesSchema } from './schemas/hrReports';
 
 /**
  * Settings registry: everything the specs want configurable lives here with a default and a schema
@@ -205,6 +206,13 @@ export const SETTING_DEFINITIONS = {
     group: 'hr',
     schema: z.number().int().min(1),
     default: 3, // slice 2 review
+  }),
+  'hr.reportTypes': def({
+    key: 'hr.reportTypes',
+    labelAr: 'أنواع تقارير الموظفين إلى المدير المباشر',
+    group: 'hr',
+    schema: reportTypesSchema,
+    default: [...DEFAULT_REPORT_TYPES] as { code: string; labelAr: string }[], // EP §14.1
   }),
   'hr.requestRoutes': def({
     key: 'hr.requestRoutes',

@@ -6,6 +6,7 @@ import { usePositions, lookupName } from '@/lib/lookups';
 import { Badge, Button, Card, EmptyState, PageHeader, QueryError, Spinner, Table, Td } from '@/shared/ui';
 import { downloadAttachment } from '@/shared/files/FileUploader';
 import { AssignTaskDialog } from '../tasks/AssignTaskDialog';
+import { RequestReportDialog } from '../reports/RequestReportDialog';
 import { useTeam } from '../tasks/_data';
 
 /**
@@ -19,6 +20,7 @@ export function TeamPage() {
   const positions = usePositions();
   const q = useTeam();
   const [assignTo, setAssignTo] = useState<string | null>(null);
+  const [reportFrom, setReportFrom] = useState<{ userId: string; name: string } | null>(null);
   return (
     <>
       <PageHeader
@@ -97,9 +99,17 @@ export function TeamPage() {
                 </Td>
                 <Td>
                   {r.userId && (
-                    <Button variant="ghost" onClick={() => setAssignTo(r.userId!)}>
-                      {t('tasks.assign')}
-                    </Button>
+                    <div className="flex gap-1">
+                      <Button variant="ghost" onClick={() => setAssignTo(r.userId!)}>
+                        {t('tasks.assign')}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        onClick={() => setReportFrom({ userId: r.userId!, name: r.fullNameAr })}
+                      >
+                        {t('reports.request')}
+                      </Button>
+                    </div>
                   )}
                 </Td>
               </tr>
@@ -112,6 +122,7 @@ export function TeamPage() {
         onClose={() => setAssignTo(null)}
         initialAssigneeId={assignTo ?? undefined}
       />
+      <RequestReportDialog target={reportFrom} onClose={() => setReportFrom(null)} />
     </>
   );
 }

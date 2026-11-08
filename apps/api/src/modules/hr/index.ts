@@ -7,6 +7,8 @@ import type { RoleAssignment } from '@eayni/shared';
 import type { AuthedRequest } from '../../core/http/context';
 import { ProfileChangeRequest } from './profileChanges.model';
 import { HrRequest } from './requests.model';
+import { EmployeeReport } from './reports.model';
+import { visibilityFilter as reportsVisibility } from './reports.service';
 import { registerExportResource } from '../../core/export/service';
 import { Employee } from './model';
 import { employeeScopeFilter, hrUserIds, teamUserIdsOf } from './service';
@@ -109,6 +111,47 @@ export function registerHrModule(): void {
     return !!(await ProfileChangeRequest.exists({ _id: id, ...filter }));
   });
   for (const t of ['employee', 'hr_request', 'profile_change']) registerSensitiveOwnerType(t);
+  registerRecordAccess('employee_report', async (req, id) => {
+    const eff = await permissionOn(req, 'hr.reports');
+    if (!eff) return false;
+    const filter = await reportsVisibility(req.auth.user, { resource: 'hr.reports', action: 'view', ...eff });
+    return !!(await EmployeeReport.exists({ _id: id, deletedAt: null, ...filter }));
+  });
+  // Field-picker export of employee reports [EP §14.3, HR §4].
+  registerExportResource({
+    resource: 'employee_reports',
+    labelAr: 'تقارير الموظفين',
+    permissionResource: 'hr.reports',
+    fields: [
+      { key: 'number', labelAr: 'رقم التقرير' },
+      { key: 'employeeName', labelAr: 'الموظف' },
+      { key: 'type', labelAr: 'النوع' },
+      { key: 'title', labelAr: 'العنوان' },
+      { key: 'submittedAt', labelAr: 'التاريخ' },
+      { key: 'periodFrom', labelAr: 'من' },
+      { key: 'periodTo', labelAr: 'إلى' },
+      { key: 'state', labelAr: 'الحالة' },
+      { key: 'notesCount', labelAr: 'عدد الملاحظات' },
+    ],
+    query: async ({ filters, authz, userId, limit }) => {
+      const { User } = await import('../../core/auth/model');
+      const user = await User.findById(userId);
+      if (!user) return [];
+      const f: Record<string, unknown> = { deletedAt: null, ...(await reportsVisibility(user, authz)) };
+      if (typeof filters.type === 'string') f.type = filters.type;
+      if (typeof filters.employeeId === 'string') f.employeeId = filters.employeeId;
+      const rows = await EmployeeReport.find(f).sort({ submittedAt: -1 }).limit(limit).lean();
+      const emps = await Employee.find({ _id: { $in: rows.map((r) => r.employeeId) } })
+        .select('fullNameAr')
+        .lean();
+      const names = new Map(emps.map((e) => [String(e._id), e.fullNameAr]));
+      return rows.map((r) => ({
+        ...r,
+        employeeName: names.get(String(r.employeeId)) ?? '',
+        notesCount: r.notes.length,
+      })) as unknown as Record<string, unknown>[];
+    },
+  });
 
   // People picker (participants, assignees) over the employee file; secondments on the calendar [EP §13.7].
   registerPeopleSearch(async (q, limit) => {

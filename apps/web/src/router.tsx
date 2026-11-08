@@ -34,6 +34,8 @@ import { TicketsListPage } from './pages/tickets/TicketsListPage';
 import { TicketDetailPage } from './pages/tickets/TicketDetailPage';
 import { NewsPage } from './pages/news/NewsPage';
 import { NewsDetailPage } from './pages/news/NewsDetailPage';
+import { ReportsListPage } from './pages/reports/ReportsListPage';
+import { ReportDetailPage } from './pages/reports/ReportDetailPage';
 import { RouteError } from './shared/layout/RouteError';
 
 export const router = createBrowserRouter([
@@ -71,6 +73,9 @@ export const router = createBrowserRouter([
               { path: '/tickets/:id', element: <TicketDetailPage /> },
               { path: '/news', element: <NewsPage /> },
               { path: '/news/:id', element: <NewsDetailPage /> },
+              { path: '/me/reports', element: <ReportsListPage view="mine" /> },
+              { path: '/reports', element: <ReportsListPage view="team" /> },
+              { path: '/reports/:id', element: <ReportDetailPage /> },
               { path: '/hr/requests', element: <RequestsListPage view="queue" /> },
               {
                 element: <RequirePermission resource="tasks" action="view" />,

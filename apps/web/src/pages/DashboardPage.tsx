@@ -50,6 +50,11 @@ export function DashboardPage() {
     queryFn: () => get<Paged<unknown>>('/tickets?view=mine&open=true&limit=1'),
     enabled: can('tickets', 'view'),
   });
+  const myReports = useQuery({
+    queryKey: ['reports', { view: 'mine', limit: 1 }],
+    queryFn: () => get<Paged<unknown>>('/hr/employee-reports?view=mine&limit=1'),
+    enabled: can('hr.reports', 'view'),
+  });
   const latestNews = useQuery({
     queryKey: ['news', { view: 'feed', limit: 1 }],
     queryFn: () => get<Paged<{ title: string }>>('/news?view=feed&limit=1'),
@@ -158,7 +163,12 @@ export function DashboardPage() {
           t('dashboard.sections.calendar'),
           `${events.data?.items.length ?? 0} ${t('dashboard.upcoming')}`,
         )}
-        {tile('/', Briefcase, t('dashboard.sections.reports'), t('dashboard.phaseNote'), true)}
+        {tile(
+          '/me/reports',
+          Briefcase,
+          t('dashboard.sections.reports'),
+          `${myReports.data?.total ?? 0} ${t('dashboard.reportsSent')}`,
+        )}
         {tile(
           '/news',
           Newspaper,

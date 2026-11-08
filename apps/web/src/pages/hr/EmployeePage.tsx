@@ -30,11 +30,12 @@ import { useToast } from '@/shared/ui/Toast';
 import { FileUploader, downloadAttachment } from '@/shared/files/FileUploader';
 import { sar, useHrLookups, type EmployeeFull } from './_data';
 import { riyadhToday } from '@/lib/dates';
+import { typeLabel, useReportTypes, useReports } from '../reports/_data';
 
 const CUSTODY_CONDITIONS = ['good', 'damaged', 'lost'] as const;
 import { statusTone } from './EmployeesPage';
 
-type Tab = 'data' | 'job' | 'contracts' | 'documents' | 'custody';
+type Tab = 'data' | 'job' | 'contracts' | 'documents' | 'custody' | 'reports';
 
 /** Employee file [HR §3.3]: data, job + history [HR §3.1], contracts [HR §3.9], documents, custody. */
 export function EmployeePage() {
@@ -58,6 +59,7 @@ export function EmployeePage() {
     { key: 'contracts', label: t('hr.tabs.contracts') },
     { key: 'documents', label: t('hr.tabs.documents') },
     { key: 'custody', label: t('hr.tabs.custody') },
+    { key: 'reports', label: t('hr.tabs.reports') },
   ];
   return (
     <>
@@ -96,6 +98,7 @@ export function EmployeePage() {
       {tab === 'contracts' && <ContractsTab e={e} />}
       {tab === 'documents' && <DocumentsTab e={e} />}
       {tab === 'custody' && <CustodyTab e={e} />}
+      {tab === 'reports' && <ReportsTab e={e} />}
     </>
   );
 }
@@ -1127,6 +1130,53 @@ function CustodyTab({ e }: { e: EmployeeFull }) {
           </div>
         </div>
       </Dialog>
+    </Card>
+  );
+}
+
+/* ---------------- reports tab [EP §14.2.9: reports stay in the employee's record] ---------------- */
+function ReportsTab({ e }: { e: EmployeeFull }) {
+  const { t } = useTranslation();
+  const { formatDate } = usePrefs();
+  const types = useReportTypes();
+  const q = useReports({ view: 'all', employeeId: e._id, limit: 100 });
+  return (
+    <Card title={t('hr.tabs.reports')}>
+      {q.isError ? (
+        <QueryError error={q.error} onRetry={() => q.refetch()} />
+      ) : q.isLoading ? (
+        <Spinner />
+      ) : !q.data?.items.length ? (
+        <EmptyState title={t('reports.empty')} />
+      ) : (
+        <Table
+          head={[
+            t('common.number'),
+            t('reports.reportTitle'),
+            t('reports.type'),
+            t('common.date'),
+            t('common.status'),
+          ]}
+        >
+          {q.data.items.map((r) => (
+            <tr key={r._id}>
+              <Td className="tabular text-xs text-slate-500">
+                <Link to={`/reports/${r._id}`} className="text-brand-800 hover:underline">
+                  {r.number}
+                </Link>
+              </Td>
+              <Td className="font-medium">{r.title}</Td>
+              <Td>{typeLabel(types.data?.items, r.type)}</Td>
+              <Td className="tabular text-xs">{formatDate(r.submittedAt)}</Td>
+              <Td>
+                <Badge tone={r.state === 'reviewed' ? 'green' : 'blue'}>
+                  {t(`reports.states.${r.state}`)}
+                </Badge>
+              </Td>
+            </tr>
+          ))}
+        </Table>
+      )}
     </Card>
   );
 }
