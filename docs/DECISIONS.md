@@ -240,6 +240,13 @@ Review of commit 82b0f54 before any deploy; fixed in four commits, one per group
 3. **Web upload cache headers** (`scripts/deploy-web.sh`): hashed assets `public,max-age=31536000,immutable`, then `index.html` `no-cache` + invalidation, so no browser loads a chunk that `s3 sync --delete` removed.
 4. **Origin secret rotation:** `ORIGIN_SECRET_PREVIOUS` (SSM `origin-secret-previous`, empty when idle) is accepted alongside the current one; steps rotate → deploy → wait for `Deployed` → clear previous → deploy are in `docs/DEPLOY.md`.
 
+### Staging readiness on 8b9c357 (2026-11-08) — one commit
+1. **`bootstrap` Lambda** (`serverless invoke -f bootstrap --data '{"adminEmail":…}'`): the ten DECISIONS §3 departments (idempotent) and the first system admin with a random temporary password returned once, `mustChangePassword`, TOTP enrolment forced by `auth.mfaRequiredRoles`; refused when an active system admin exists; audited. No sample branches, sites, positions or people — those stay in the local seed.
+2. **First deploy order** `scripts/first-deploy.sh`: placeholder `app-url` → deploy → read `WebDistributionDomain` / `HttpApiUrl` → write the real URL → redeploy → `deploy-web.sh` → `smoke-staging.sh`. SSM parameter list and **Atlas network access** (staging `0.0.0.0/0` + strong user + TLS; PrivateLink/peering is a production decision) in `docs/DEPLOY.md`.
+3. **Staging demo data** `seedStagingDemo` / `purgeDemo` invokes: allowed only when `STAGE=staging`; same sample people as the local seed with a random password per account returned once; every created document tagged in `demo_records` and removed by `purgeDemo` (baseline config, real users, audit and login logs kept). Fixing this surfaced a stale-document bug in `seedRequests` (chained transitions reused the pre-transition object since review B9) — fixed, so the local seed works again.
+4. **Web assets:** `deploy-web.sh` no longer `--delete`s; `scripts/prune-web-assets.sh <stage> <days>` removes assets unreferenced by the live `index.html` and older than N days; the web app reloads once on `vite:preloadError` (sessionStorage guard).
+5. **Smoke (d)** prints the session IP; IPv6 session vs IPv4 `checkip` is "PASS (IPv6)".
+
 ### Disagreements and things not done
 - **G8 "TTL on delivered events":** implemented as a daily purge job driven by the `outbox.retentionDays` setting rather than a MongoDB TTL index, because a TTL index has a fixed expiry that an admin setting cannot change and would also delete failed events once `deliveredAt` is set on a retry. Same outcome, configurable.
 - **G1 reverting a late task when its due date moves:** the status goes back to what it was before the job marked it late (from the task event), not blindly to "new".

@@ -6,6 +6,8 @@ import { z } from 'zod';
  */
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
+  /** Deployment stage from serverless.yml (`staging`, `prod`); unset locally. Gates the staging-only demo seed. */
+  STAGE: z.string().optional(),
   PORT: z.coerce.number().int().default(4000),
   MONGODB_URI: z.string().optional(),
   /** Root secret: per-purpose keys are derived from it (HKDF). Must be set in production. */

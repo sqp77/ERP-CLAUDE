@@ -321,8 +321,9 @@ const emailFor = (r: Row, i: number) =>
   `${['abdullah', 'noura', 'sara', 'faisal', 'mohammed', 'khalid', 'rashed', 'omar', 'yousef', 'sultan', 'reem', 'majed', 'hind', 'lama', 'ahmed', 'dana', 'munira', 'arwa', 'bader', 'nasser', 'talal', 'abdulaziz', 'shahad', 'jawaher', 'turki', 'fahad'][i] ?? slug(r.first) + i}@eayni.local`;
 
 export async function seedHr(
-  password: string,
+  passwordFor: string | ((email: string) => string),
 ): Promise<{ created: number; logins: { email: string; role: string }[] }> {
+  const password = (email: string) => (typeof passwordFor === 'string' ? passwordFor : passwordFor(email));
   if (await Employee.countDocuments()) return { created: 0, logins: [] };
   const depts = new Map<string, string>();
   for (const code of DEPARTMENT_CODES) {
@@ -421,7 +422,13 @@ export async function seedHr(
       if (r.extraRole) roles.push({ role: r.extraRole });
       await User.updateOne(
         { _id: employee.userId },
-        { $set: { passwordHash: await hashPassword(password), mustChangePassword: false, roles } },
+        {
+          $set: {
+            passwordHash: await hashPassword(password(employee.workEmail)),
+            mustChangePassword: false,
+            roles,
+          },
+        },
       );
       if (r.role !== 'staff' || r.extraRole)
         logins.push({

@@ -81,6 +81,8 @@ therefore always fetch a fresh `index.html` and never ask for a chunk that the s
 scripts/smoke-staging.sh https://<distribution>.cloudfront.net https://<id>.execute-api.<region>.amazonaws.com you@eayni.local
 ```
 
+Check (d) prints the session IP next to your public IP; an IPv6 session address with an IPv4 `checkip` answer is reported as **PASS (IPv6)**.
+
 | Check | Expect | Proves |
 |---|---|---|
 | (a) `GET /api/health` via CloudFront | 200 | distribution → API Gateway → Lambda path works |
@@ -89,6 +91,69 @@ scripts/smoke-staging.sh https://<distribution>.cloudfront.net https://<id>.exec
 | (d) login, then `GET /api/v1/auth/sessions` | the current session's `ip` equals your public IP | `CloudFront-Viewer-Address` is forwarded; otherwise the API is in the "ip unknown" fallback |
 
 Use an account without an authenticator for (d) (the script logs out at the end).
+
+## SSM parameters to create before the first deploy
+
+All under `/eayni/<stage>/`. `first-deploy.sh` checks the first three and creates the last two when missing.
+
+| Parameter | Type | Value |
+|---|---|---|
+| `mongodb-uri` | SecureString | Atlas connection string (`mongodb+srv://…`), database user with readWrite on the app database only |
+| `app-secret` | SecureString | ≥ 32 random chars: `openssl rand -base64 48`; rotation uses `APP_SECRET_PREVIOUS` |
+| `origin-secret` | SecureString | ≥ 32 random chars; CloudFront → API header |
+| `origin-secret-previous` | SecureString | `""` unless rotating |
+| `app-url` | String | `https://<distribution domain>`; placeholder on the very first deploy (see below) |
+
+## First deploy order (staging readiness item 2)
+
+`APP_URL` is read from SSM **at deploy time**, but the CloudFront domain exists only after the first deploy.
+`scripts/first-deploy.sh <stage> [email]` resolves that:
+
+1. verifies the SSM parameters above, writes `https://placeholder.invalid` to `app-url` when it is missing;
+2. `npx serverless deploy --stage <stage>`;
+3. reads `WebDistributionDomain` and `HttpApiUrl` from the stack outputs;
+4. writes `https://<domain>` to `app-url` and **redeploys** (CORS, cookie origin, files-bucket CORS now point at it);
+5. `scripts/deploy-web.sh <stage>` then `scripts/smoke-staging.sh …`.
+
+Then create the first admin (item 1):
+
+```bash
+npx serverless invoke -f bootstrap --stage staging --data '{"adminEmail":"you@eayni.local"}'
+```
+
+It creates the ten official departments (DECISIONS §3; idempotent, no sample branches, sites, positions or
+people), and one `system_admin` with a random temporary password **printed once in the invoke output**:
+first login forces a password change and the authenticator enrolment (DECISIONS §2). It refuses when an active
+system admin already exists, and writes an audit row.
+
+### MongoDB Atlas network access
+
+The Lambdas run outside a VPC, so their source addresses are not fixed. **Staging** uses an Atlas IP access list
+of `0.0.0.0/0` with a dedicated database user (long random password, `readWrite` on the application database
+only, no admin roles) and TLS, which Atlas enforces. **Production** decides between AWS PrivateLink and VPC
+peering (Lambdas inside a VPC with NAT) before go-live — DECISIONS §1.
+
+## Staging demo data (item 3, staging only)
+
+```bash
+npx serverless invoke -f seedStagingDemo --stage staging   # sample people, tasks, tickets, news, reports
+npx serverless invoke -f purgeDemo --stage staging         # remove exactly what the demo seed created
+```
+
+`seedStagingDemo` is **refused unless `STAGE=staging`** (so never prod/production, never an unnamed production
+process). Every demo account gets its own random password; the `accounts: [{ email, password }]` list is in the
+invoke output only — not stored, not logged. Every created document is tagged in `demo_records`, so `purgeDemo`
+deletes exactly that set and keeps departments, roles, settings, real users and the audit/login logs.
+
+## Web assets after a deploy (item 4)
+
+`deploy-web.sh` never deletes: a tab still running the previous build can lazy-load its old chunks. The web app
+also listens for Vite's `vite:preloadError` and reloads once (guarded per path in `sessionStorage`) so a stale tab
+recovers after a deploy. Old assets are removed later:
+
+```bash
+scripts/prune-web-assets.sh staging 14   # assets not referenced by the live index.html and older than 14 days
+```
 
 ## Other SSM parameters
 

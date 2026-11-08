@@ -36,7 +36,7 @@ export async function seedRequests(): Promise<number> {
     actorOf(omar),
   );
   // 2. Permission approved end to end (rashed → khalid → sara)
-  const perm = await createRequest(
+  let perm = await createRequest(
     rashed,
     {
       type: 'permission',
@@ -45,7 +45,8 @@ export async function seedRequests(): Promise<number> {
     },
     actorOf(rashed),
   );
-  await transition(perm, 'approve', {
+  // Transitions return the updated document (conditional update, review B9): chain on the result, not the stale object.
+  perm = await transition(perm, 'approve', {
     user: khalid,
     actor: actorOf(khalid),
     relations: await relationsFor(khalid, perm),
@@ -76,7 +77,7 @@ export async function seedRequests(): Promise<number> {
     relations: await relationsFor(sara, cert),
   });
   // 4. Advance handed off to Finance (omar → khalid → sara → waiting for Finance)
-  const adv = await createRequest(
+  let adv = await createRequest(
     omar,
     {
       type: 'advance',
@@ -85,7 +86,7 @@ export async function seedRequests(): Promise<number> {
     },
     actorOf(omar),
   );
-  await transition(adv, 'approve', {
+  adv = await transition(adv, 'approve', {
     user: khalid,
     actor: actorOf(khalid),
     relations: await relationsFor(khalid, adv),

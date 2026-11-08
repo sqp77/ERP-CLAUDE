@@ -81,6 +81,8 @@ scripts/deploy-web.sh staging      # build, upload (assets immutable, index.html
 scripts/smoke-staging.sh https://<distribution> https://<id>.execute-api.<region>.amazonaws.com you@eayni.local
 ```
 
+First deploy of a stage: `scripts/first-deploy.sh staging`, then `npx serverless invoke -f bootstrap --stage staging --data '{"adminEmail":"you@eayni.local"}'` for the first admin (`docs/DEPLOY.md`).
+
 Set the SSM parameters `/eayni/staging/app-url` (distribution URL or custom domain; drives CORS and the cookie origin)
 and `/eayni/staging/origin-secret` (CloudFront → API origin header; the API refuses direct calls to the gateway) before the
 first API deploy. SPA routing is a CloudFront Function on the web behaviour only, so `/api/*` keeps its real status codes.

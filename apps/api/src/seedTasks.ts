@@ -14,7 +14,7 @@ const day = (n: number) => new Date(Date.now() + n * 86_400_000);
  * Sample work distribution for the Operations manager [EP §16]: a queue task, and assigned tasks in
  * every state across the four Operations employees.
  */
-export async function seedTasks(samplePassword: string): Promise<number> {
+export async function seedTasks(samplePassword: string | ((email: string) => string)): Promise<number> {
   if (await Task.countDocuments()) return 0;
   const ops = await Department.findOne({ code: 'ops' });
   if (!ops) return 0;
@@ -55,7 +55,14 @@ export async function seedTasks(samplePassword: string): Promise<number> {
     );
     await User.updateOne(
       { _id: employee.userId },
-      { $set: { passwordHash: await hashPassword(samplePassword), mustChangePassword: false } },
+      {
+        $set: {
+          passwordHash: await hashPassword(
+            typeof samplePassword === 'string' ? samplePassword : samplePassword(employee.workEmail),
+          ),
+          mustChangePassword: false,
+        },
+      },
     );
   }
   const staff = await Employee.find({

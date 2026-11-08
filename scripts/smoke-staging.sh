@@ -31,8 +31,22 @@ if [ -n "$EMAIL" ]; then
   check "$code" 200 "(d) login (use an account without an authenticator)"
   mine=$(curl -s https://checkip.amazonaws.com | tr -d '[:space:]')
   sess=$(curl -s -b "$jar" "${CDN}/api/v1/auth/sessions")
-  echo "$sess" | grep -q "\"ip\":\"${mine}\"" && echo "PASS (d) session ip = ${mine} (CloudFront-Viewer-Address arrives)" \
-    || { echo "FAIL (d) your ip ${mine} not in sessions: $sess"; echo "      → check the origin request policy; the API falls back to 'ip unknown' and skips per-IP limits"; fail=1; }
+  # the current session's ip, as the API recorded it
+  sip=$(echo "$sess" | python3 -c 'import sys,json
+try:
+  d=json.load(sys.stdin); cur=[s for s in d.get("items",[]) if s.get("current")] or d.get("items",[])
+  print(cur[0].get("ip","") if cur else "")
+except Exception: print("")')
+  echo "     session ip = '${sip}'  checkip = '${mine}'"
+  if [ "$sip" = "$mine" ]; then
+    echo "PASS (d) session ip matches your public IP (CloudFront-Viewer-Address arrives)"
+  elif [[ "$sip" == *:* && "$mine" != *:* ]]; then
+    echo "PASS (IPv6) (d) the session carries an IPv6 address while checkip answered IPv4 — the viewer header arrives"
+  elif [ -z "$sip" ]; then
+    echo "FAIL (d) the session has no ip: the API is in the 'ip unknown' fallback → check the origin request policy"; fail=1
+  else
+    echo "FAIL (d) session ip ${sip} ≠ your ip ${mine}: X-Forwarded-For or a proxy is being used instead of the viewer header"; fail=1
+  fi
   curl -s -o /dev/null -b "$jar" -X POST "${CDN}/api/v1/auth/logout"; rm -f "$jar"
 else
   echo "SKIP (d) pass an email as the third argument to verify the viewer IP"

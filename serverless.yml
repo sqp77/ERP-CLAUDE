@@ -51,6 +51,19 @@ functions:
     timeout: 120
     events:
       - schedule: rate(1 minute)
+  # One-off operations (staging readiness 1 and 3). Invoke by hand, never scheduled:
+  #   npx serverless invoke -f bootstrap --stage staging --data '{"adminEmail":"you@eayni.local"}'
+  #   npx serverless invoke -f seedStagingDemo --stage staging      (refused unless STAGE=staging)
+  #   npx serverless invoke -f purgeDemo --stage staging
+  bootstrap:
+    handler: apps/api/src/handlers/bootstrap.handler
+    timeout: 120
+  seedStagingDemo:
+    handler: apps/api/src/handlers/bootstrap.seedDemoHandler
+    timeout: 300
+  purgeDemo:
+    handler: apps/api/src/handlers/bootstrap.purgeDemoHandler
+    timeout: 300
   jobs:
     handler: apps/api/src/handlers/jobs.handler
     timeout: 300
@@ -184,6 +197,8 @@ resources:
       Value: !Ref WebDistribution
     WebDistributionDomain:
       Value: !GetAtt WebDistribution.DomainName
+    HttpApiUrl:
+      Value: !GetAtt HttpApi.ApiEndpoint
       Description: Set /eayni/<stage>/app-url to https://<this value> (or the custom domain) before the first deploy of the API
 
 build:
