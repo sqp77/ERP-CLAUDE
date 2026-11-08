@@ -29,6 +29,8 @@ const employeeSchema = new Schema(
       numberEnc: { type: String, required: true },
       /** HMAC blind index of the number (review D22): equality search and a unique constraint without clear text. */
       hash: { type: String },
+      /** Key id of the secret the blind index was made with (review G12). */
+      hashKid: { type: String },
       last4: { type: String },
       expiryDate: { type: Date },
       alertsSent: { type: [Number], default: [] },

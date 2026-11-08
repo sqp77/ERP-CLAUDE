@@ -3,7 +3,9 @@ import { getSetting } from '../settings/service';
 import { notify } from '../notifications/service';
 import { addBusinessDays, isBusinessDay, loadHolidaySet, riyadhDate } from '../dates/businessDays';
 import { User } from '../auth/model';
-import { Task } from './model';
+import { Task, TaskEvent } from './model';
+import { recordAudit } from '../audit/service';
+import { SYSTEM_ACTOR } from '../http/context';
 
 const taskLabel = (t: { number: string; title: string }) => `${t.number}: ${t.title}`;
 
@@ -21,16 +23,41 @@ export async function runTaskReminders(now = new Date()): Promise<{ dueSoon: num
     await t.save();
   }
   const overdue = await Task.find({ ...open, remindedOverdue: false, dueAt: { $lt: now } });
+  let flipped = 0;
   for (const t of overdue) {
+    // Conditional on the status read (review G1): a task finished between load and write stays finished.
+    const from = t.status;
+    const toLate = from !== 'waiting_review';
+    const r = await Task.updateOne(
+      { _id: t._id, status: from, dueAt: { $lt: now } },
+      { $set: toLate ? { remindedOverdue: true, status: 'late' } : { remindedOverdue: true } },
+    );
+    if (!r.modifiedCount) continue;
+    flipped++;
     const ids = [
       ...new Set([t.assigneeId ? String(t.assigneeId) : '', String(t.assignerId)].filter(Boolean)),
     ];
     await notify({ userIds: ids, type: 'task.overdue', bodyAr: taskLabel(t), link: `/tasks/${t._id}` });
-    t.remindedOverdue = true;
-    if (t.status !== 'waiting_review') t.status = 'late';
-    await t.save();
+    if (toLate) {
+      await TaskEvent.create({
+        taskId: t._id,
+        type: 'status_changed',
+        fromStatus: from,
+        toStatus: 'late',
+        note: 'overdue',
+        actorEmail: SYSTEM_ACTOR.email,
+      });
+      await recordAudit(SYSTEM_ACTOR, {
+        action: 'update',
+        resource: 'tasks',
+        resourceId: String(t._id),
+        before: { status: from },
+        after: { status: 'late' },
+        meta: { job: 'tasks.reminders' },
+      });
+    }
   }
-  return { dueSoon: dueSoon.length, overdue: overdue.length };
+  return { dueSoon: dueSoon.length, overdue: flipped };
 }
 
 /** Department managers of a department: role scoped to it, or the role without a department on a user of that department. */

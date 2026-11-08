@@ -1,6 +1,7 @@
 import { ensureCoreRoles } from './core/rbac/service';
 import { ensureWorkflow } from './core/workflow/engine';
 import { DEFAULT_WORKFLOWS } from './core/workflow/defaults';
+import { purgeDeliveredEvents } from './core/outbox/service';
 import { registerJob } from './core/jobs/registry';
 import { runTaskReminders, runUnassignedTaskReminders } from './core/tasks/jobs';
 import { registerTaskAccess } from './core/tasks/service';
@@ -28,6 +29,7 @@ export function registerModules(): void {
   registerTaskAccess();
   registerJob('calendar.reminders', (now) => runEventReminders(now), 'frequent');
   registerJob('documents.expiry', (now) => runDocumentExpiryAlerts(now), 'daily');
+  registerJob('outbox.retention', (now) => purgeDeliveredEvents(now), 'daily'); // review G8
   registerHrModule();
   registerTicketsModule();
   registerNewsModule();

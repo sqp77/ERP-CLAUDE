@@ -16,6 +16,7 @@ export const CORE_RESOURCES = [
   'roles',
   'settings',
   'audit',
+  'outbox',
   'org.departments',
   'org.units',
   'org.branches',

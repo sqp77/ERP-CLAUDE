@@ -38,6 +38,7 @@ export const CORE_ROLES: RoleDefinition[] = [
       { resource: 'roles', actions: ALL_ACTIONS, scope: 'all' },
       { resource: 'settings', actions: ALL_ACTIONS, scope: 'all' },
       { resource: 'audit', actions: ['view', 'export'], scope: 'all' },
+      { resource: 'outbox', actions: ['view', 'edit'], scope: 'all' }, // go-live review G8: requeue failed events
       { resource: 'org.departments', actions: ALL_ACTIONS, scope: 'all' },
       { resource: 'org.units', actions: ALL_ACTIONS, scope: 'all' },
       { resource: 'org.branches', actions: ALL_ACTIONS, scope: 'all' },

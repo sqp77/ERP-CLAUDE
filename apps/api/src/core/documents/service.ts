@@ -18,10 +18,30 @@ export async function runDocumentExpiryAlerts(now = new Date()): Promise<number>
     expiryDate: { $ne: null, $lte: new Date(now.getTime() + (maxOffset + 1) * 86_400_000) },
   });
   let sent = 0;
+  // Only the latest version per owner + type is alerted (review G5); a superseded version is ignored even
+  // when the newer one is outside the alert window.
+  const current: typeof docs = [];
   for (const d of docs) {
+    const newer = await DocumentRecord.exists({
+      ownerType: d.ownerType,
+      ownerId: d.ownerId,
+      type: d.type,
+      version: { $gt: d.version ?? 1 },
+      deletedAt: null,
+    });
+    if (!newer) current.push(d);
+  }
+  for (const d of current) {
     const offsets = d.alertOffsetsDays?.length ? d.alertOffsetsDays : defaults;
     const daysLeft = Math.ceil((d.expiryDate!.getTime() - now.getTime()) / 86_400_000);
+    // A document added inside the window gets only the nearest alert (review G5); farther offsets are marked passed.
+    const due = offsets.filter((o) => daysLeft <= o && !d.alertsSent.includes(o));
+    const nearest = due.length ? Math.min(...due) : undefined;
     for (const o of offsets) {
+      if (due.includes(o) && o !== nearest) {
+        d.alertsSent.push(o);
+        continue;
+      }
       if (daysLeft <= o && !d.alertsSent.includes(o)) {
         const resolve = resolvers.get(d.ownerType);
         const userIds = resolve ? await resolve(d.ownerId) : [];

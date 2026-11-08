@@ -141,6 +141,7 @@ export function AppShell() {
     { to: '/admin/workflows', label: t('nav.workflows'), icon: Workflow, show: can('workflows', 'view') },
     { to: '/admin/settings', label: t('nav.settings'), icon: Settings, show: can('settings', 'view') },
     { to: '/admin/audit', label: t('nav.audit'), icon: FileClock, show: can('audit', 'view') },
+    { to: '/admin/outbox', label: t('nav.outbox'), icon: Send, show: can('outbox', 'view') },
   ];
 
   const link = (to: string, label: string, Icon: typeof Home) => (

@@ -258,34 +258,67 @@ async function publish(news: NewsDoc, actor: Actor, how: string): Promise<NewsDo
   return updated;
 }
 
-export async function announce(news: NewsDoc): Promise<void> {
-  const ids = await audienceUserIds(news);
+/**
+ * Announce a published item once (review G7): the announcement is claimed with a conditional update
+ * (notifiedAt null → now) before anyone is notified, so two workers never notify twice; an item whose
+ * window already ended is never announced.
+ */
+export async function announce(news: NewsDoc, now = new Date()): Promise<boolean> {
+  if (news.publishTo && news.publishTo < now) return false;
+  const claimed = await News.findOneAndUpdate(
+    { _id: news._id, state: 'published', notifiedAt: null, deletedAt: null },
+    { $set: { notifiedAt: now } },
+    { new: true },
+  );
+  if (!claimed) return false;
+  const ids = await audienceUserIds(claimed);
   await notify({
     userIds: ids,
     type: 'news.published',
-    bodyAr: news.title,
-    link: `/news/${news._id}`,
-    data: { newsId: String(news._id), departmentCode: news.departmentCode },
+    bodyAr: claimed.title,
+    link: `/news/${claimed._id}`,
+    data: { newsId: String(claimed._id), departmentCode: claimed.departmentCode },
   });
-  await News.updateOne({ _id: news._id }, { $set: { notifiedAt: new Date() } });
+  return true;
 }
 
 export async function archiveNews(req: AuthedRequest, news: NewsDoc): Promise<NewsDoc> {
   if (!(await canEdit(req.auth.user, news))) throw forbidden();
-  news.state = 'archived';
-  news.archivedAt = new Date();
-  news.pinned = false;
-  await news.save();
-  await log(news, 'archived', actorFrom(req));
-  return news;
+  // Conditional on the current state and audited (review G7).
+  const updated = await News.findOneAndUpdate(
+    { _id: news._id, state: news.state, deletedAt: null },
+    { $set: { state: 'archived', archivedAt: new Date(), pinned: false } },
+    { new: true },
+  );
+  if (!updated) throw conflict('تغيّرت حالة الخبر، أعد التحميل');
+  await log(updated, 'archived', actorFrom(req));
+  await recordAudit(actorFrom(req), {
+    action: 'update',
+    resource: 'news',
+    resourceId: String(updated._id),
+    before: { state: news.state, pinned: news.pinned },
+    after: { state: 'archived', pinned: false },
+  });
+  return updated;
 }
 
 export async function setPinned(req: AuthedRequest, news: NewsDoc, pinned: boolean): Promise<NewsDoc> {
   if (!(await canApprove(req.auth.user, news))) throw forbidden('تثبيت الأخبار من صلاحية مدير القسم');
-  news.pinned = pinned;
-  await news.save();
-  await log(news, pinned ? 'pinned' : 'unpinned', actorFrom(req));
-  return news;
+  const updated = await News.findOneAndUpdate(
+    { _id: news._id, state: news.state, pinned: !pinned, deletedAt: null },
+    { $set: { pinned } },
+    { new: true },
+  );
+  if (!updated) throw conflict('تغيّرت حالة الخبر، أعد التحميل');
+  await log(updated, pinned ? 'pinned' : 'unpinned', actorFrom(req));
+  await recordAudit(actorFrom(req), {
+    action: 'update',
+    resource: 'news',
+    resourceId: String(updated._id),
+    before: { pinned: !pinned },
+    after: { pinned },
+  });
+  return updated;
 }
 
 /** What the viewer may read: published items in their audience and window; plus their department's items when they manage / publish. */

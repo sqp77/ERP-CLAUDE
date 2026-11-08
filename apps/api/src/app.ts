@@ -11,6 +11,7 @@ import { usersRouter } from './core/auth/usersRoutes';
 import { rolesRouter } from './core/rbac/routes';
 import { settingsRouter } from './core/settings/routes';
 import { auditRouter } from './core/audit/routes';
+import { outboxRouter } from './core/outbox/routes';
 import { orgRouter } from './core/org/routes';
 import { holidaysRouter } from './core/dates/routes';
 import { workflowsRouter } from './core/workflow/routes';
@@ -59,6 +60,7 @@ export function createApp(): Express {
   v1.use('/roles', rolesRouter);
   v1.use('/settings', settingsRouter);
   v1.use('/audit', auditRouter);
+  v1.use('/outbox', outboxRouter);
   v1.use('/org', orgRouter);
   v1.use('/holidays', holidaysRouter);
   v1.use('/workflows', workflowsRouter);

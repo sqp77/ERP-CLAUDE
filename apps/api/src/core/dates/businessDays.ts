@@ -70,3 +70,15 @@ export function formatHijri(d: Date): string {
     day: 'numeric',
   }).format(d);
 }
+
+/** Instant at 00:00 Riyadh of the calendar day containing `d`. */
+export function startOfRiyadhDay(d: Date): Date {
+  const [y, m, day] = riyadhDate(d).split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, day, -3)); // Riyadh is UTC+3 with no DST
+}
+
+/** Instant at 00:00 Riyadh of the Sunday starting the week containing `d` (review G11). */
+export function startOfRiyadhWeek(d: Date): Date {
+  const dayStart = startOfRiyadhDay(d);
+  return new Date(dayStart.getTime() - riyadhWeekday(d) * 86_400_000);
+}

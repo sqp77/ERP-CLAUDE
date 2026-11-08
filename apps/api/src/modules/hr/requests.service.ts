@@ -170,28 +170,41 @@ export async function createRequest(
       flags.push('advance_limit_unset'); // DECISIONS §5: flag for HR until the limit is decided
     else if ((details.amountHalalas as number) > limit) flags.push('over_limit');
   }
-  const request = await HrRequest.create({
-    number: await nextNumber('hrRequest'),
-    type: input.type,
-    employeeId: employee._id,
-    requesterUserId: user._id,
-    departmentId: employee.departmentId,
-    directManagerUserId: managerUserId,
-    details,
-    attachmentIds: input.attachmentIds,
-    notes: input.notes,
-    route,
-    ...wf,
-    pendingWith: 'requester',
-    flags,
-  });
-  await claimAttachments(input.attachmentIds, 'hr_request', String(request._id), user._id);
-  await logAction(request, 'created', actor, { toState: 'new' });
-  await recordAudit(actor, {
-    action: 'create',
-    resource: 'hr.requests',
-    resourceId: String(request._id),
-    after: { number: request.number, type: request.type },
+  // Record, attachment claims, action log and audit commit together (review G9).
+  const request = await withTransaction(async (session) => {
+    const [doc] = await HrRequest.create(
+      [
+        {
+          number: await nextNumber('hrRequest', session),
+          type: input.type,
+          employeeId: employee._id,
+          requesterUserId: user._id,
+          departmentId: employee.departmentId,
+          directManagerUserId: managerUserId,
+          details,
+          attachmentIds: input.attachmentIds,
+          notes: input.notes,
+          route,
+          ...wf,
+          pendingWith: 'requester',
+          flags,
+        },
+      ],
+      { session },
+    );
+    await claimAttachments(input.attachmentIds, 'hr_request', String(doc._id), user._id, session);
+    await logAction(doc, 'created', actor, { toState: 'new' }, session);
+    await recordAudit(
+      actor,
+      {
+        action: 'create',
+        resource: 'hr.requests',
+        resourceId: String(doc._id),
+        after: { number: doc.number, type: doc.type },
+      },
+      session,
+    );
+    return doc;
   });
   // Submit immediately along the configured route (HR §3.5 stage 1; DECISIONS §5).
   const viaManager = route.viaManager && !!managerUserId;
@@ -470,30 +483,43 @@ async function reassignPending(args: {
   let moved = 0;
   for (const r of open) {
     const wasPending = r.state === 'awaiting_manager';
-    r.directManagerUserId = (args.toManagerUserId ?? undefined) as never;
-    await r.save();
-    if (wasPending) {
-      moved++;
-      await StageLog.create({
-        recordType: 'hr_request',
-        recordId: String(r._id),
-        recordNumber: r.number,
-        fromState: r.state,
-        toState: r.state,
-        transition: 'reassigned_manager',
-        actorUserId: args.actor.userId,
-        actorEmail: args.actor.email,
-        reason: args.reason,
-        departmentId: r.departmentId ? String(r.departmentId) : undefined,
-        meta: { fromManagerUserId: args.fromManagerUserId, toManagerUserId: args.toManagerUserId },
-      });
-      await logAction(r, 'reassigned_manager', args.actor, {
-        fromState: r.state,
-        toState: r.state,
-        note: args.reason,
-        changes: { fromManagerUserId: args.fromManagerUserId, toManagerUserId: args.toManagerUserId },
-      });
-    }
+    // Request, stage log and action log move together (review G9).
+    await withTransaction(async (session) => {
+      r.directManagerUserId = (args.toManagerUserId ?? undefined) as never;
+      await r.save({ session });
+      if (!wasPending) return;
+      await StageLog.create(
+        [
+          {
+            recordType: 'hr_request',
+            recordId: String(r._id),
+            recordNumber: r.number,
+            fromState: r.state,
+            toState: r.state,
+            transition: 'reassigned_manager',
+            actorUserId: args.actor.userId,
+            actorEmail: args.actor.email,
+            reason: args.reason,
+            departmentId: r.departmentId ? String(r.departmentId) : undefined,
+            meta: { fromManagerUserId: args.fromManagerUserId, toManagerUserId: args.toManagerUserId },
+          },
+        ],
+        { session },
+      );
+      await logAction(
+        r,
+        'reassigned_manager',
+        args.actor,
+        {
+          fromState: r.state,
+          toState: r.state,
+          note: args.reason,
+          changes: { fromManagerUserId: args.fromManagerUserId, toManagerUserId: args.toManagerUserId },
+        },
+        session,
+      );
+    });
+    if (wasPending) moved++;
   }
   return moved;
 }

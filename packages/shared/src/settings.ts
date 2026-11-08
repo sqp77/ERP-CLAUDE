@@ -11,7 +11,7 @@ export interface SettingDefinition<T = unknown> {
   key: string;
   labelAr: string;
   descriptionAr?: string;
-  group: 'auth' | 'tickets' | 'hr' | 'notifications' | 'general';
+  group: 'auth' | 'tickets' | 'hr' | 'notifications' | 'general' | 'system';
   schema: z.ZodType<T>;
   default: T;
 }
@@ -192,6 +192,24 @@ export const SETTING_DEFINITIONS = {
     group: 'tickets',
     schema: z.number().int().min(1),
     default: 10, // DECISIONS §8
+  }),
+  'outbox.retentionDays': def({
+    key: 'outbox.retentionDays',
+    labelAr: 'الاحتفاظ بالأحداث المُسلَّمة في صندوق الأحداث (أيام)',
+    descriptionAr:
+      'تُحذف الأحداث المُسلَّمة الأقدم من هذه المدة يوميًا. الأحداث الفاشلة أو غير المعالَجة لا تُحذف.',
+    group: 'system',
+    schema: z.number().int().min(7).max(3650),
+    default: 90, // go-live review G8
+  }),
+  'outbox.replayWindowDays': def({
+    key: 'outbox.replayWindowDays',
+    labelAr: 'إعادة تشغيل الأحداث غير المعالَجة لمشترك جديد خلال (أيام)',
+    descriptionAr:
+      'حدث لم يكن له مشترك ويزيد عمره عن هذه المدة يُعلَّم "منتهيًا" بدل إعادة تشغيله، ويمكن للمسؤول إعادته يدويًا.',
+    group: 'system',
+    schema: z.number().int().min(1).max(3650),
+    default: 30, // go-live review G8
   }),
   'hr.advanceLimitHalalas': def({
     key: 'hr.advanceLimitHalalas',

@@ -11,7 +11,8 @@ const outboxSchema = new Schema(
     status: {
       type: String,
       // 'unhandled' = no subscriber yet; replayed automatically once one registers (review B11b).
-      enum: ['pending', 'processing', 'delivered', 'failed', 'unhandled'],
+      // 'expired' = unhandled for longer than outbox.replayWindowDays when a subscriber appeared (review G8); requeue by hand.
+      enum: ['pending', 'processing', 'delivered', 'failed', 'unhandled', 'expired'],
       default: 'pending',
       index: true,
     },
@@ -28,5 +29,10 @@ const outboxSchema = new Schema(
   },
   { versionKey: false },
 );
+// Indexes matching the worker's queries (review G8): claim, lease reclaim, replay by type, retention purge.
+outboxSchema.index({ status: 1, availableAt: 1, createdAt: 1 });
+outboxSchema.index({ status: 1, leaseExpiresAt: 1 });
+outboxSchema.index({ status: 1, type: 1, createdAt: 1 });
+outboxSchema.index({ status: 1, deliveredAt: 1 });
 export type OutboxDoc = InferSchemaType<typeof outboxSchema>;
 export const Outbox = model('Outbox', outboxSchema);

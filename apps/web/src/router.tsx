@@ -18,6 +18,7 @@ import { BranchesPage } from './pages/admin/BranchesPage';
 import { HolidaysPage } from './pages/admin/HolidaysPage';
 import { SettingsPage } from './pages/admin/SettingsPage';
 import { AuditPage } from './pages/admin/AuditPage';
+import { OutboxPage } from './pages/admin/OutboxPage';
 import { WorkflowsPage } from './pages/admin/WorkflowsPage';
 import { UnitsPage } from './pages/admin/UnitsPage';
 import { PositionsPage } from './pages/admin/PositionsPage';
@@ -146,6 +147,10 @@ export const router = createBrowserRouter([
               {
                 element: <RequirePermission resource="audit" action="view" />,
                 children: [{ path: '/admin/audit', element: <AuditPage /> }],
+              },
+              {
+                element: <RequirePermission resource="outbox" action="view" />,
+                children: [{ path: '/admin/outbox', element: <OutboxPage /> }],
               },
             ],
           },

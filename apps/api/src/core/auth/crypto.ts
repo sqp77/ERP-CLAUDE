@@ -114,8 +114,13 @@ export function hmac(value: string, purpose: KeyPurpose = 'sign'): string {
  * Blind index for equality search on an encrypted field (review D22): HMAC of the normalized value
  * under the 'index' key, so duplicates are detected without storing the value in clear.
  */
-export function blindIndex(value: string): string {
-  return hmac(value.normalize('NFKC').replace(/\s+/g, '').toUpperCase(), 'index');
+export function blindIndex(value: string, secret = env().APP_SECRET): string {
+  const norm = value.normalize('NFKC').replace(/\s+/g, '').toUpperCase();
+  return createHmac('sha256', deriveKey('index', secret)).update(norm).digest('base64url');
+}
+/** Blind indexes under the current and the previous secret: duplicate checks keep working across a rotation (review G12). */
+export function blindIndexCandidates(value: string): string[] {
+  return [...new Set(secrets().map((s) => blindIndex(value, s)))];
 }
 
 /** AES-256-GCM for secrets at rest (TOTP seeds, field-level encryption of sensitive values). */

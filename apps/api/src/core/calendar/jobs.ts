@@ -6,7 +6,7 @@ export async function runEventReminders(now = new Date()): Promise<number> {
   const windowEnd = new Date(now.getTime() + 24 * 3_600_000);
   const events = await CalendarEvent.find({
     deletedAt: null,
-    status: 'scheduled',
+    status: { $in: ['scheduled', 'rescheduled'] }, // review G2: rescheduled meetings are reminded too
     startAt: { $gt: now, $lte: windowEnd },
   });
   let sent = 0;

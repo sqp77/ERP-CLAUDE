@@ -2,6 +2,8 @@ import { getSetting } from '../../core/settings/service';
 import { notify } from '../../core/notifications/service';
 import { User } from '../../core/auth/model';
 import { revokeAllSessions } from '../../core/auth/session';
+import { recordAudit } from '../../core/audit/service';
+import { SYSTEM_ACTOR } from '../../core/http/context';
 import { addBusinessDays, loadHolidaySet, riyadhDate } from '../../core/dates/businessDays';
 import { Contract, Employee } from './model';
 import { hrUserIds } from './service';
@@ -36,11 +38,33 @@ export async function runContractAlerts(now = new Date()): Promise<{ alerts: num
     }
     if (c.isModified()) await c.save();
   }
-  const expired = await Contract.updateMany(
-    { status: 'active', endDate: { $lt: now } },
-    { $set: { status: 'expired', statusReason: 'end_date_passed' } },
-  );
-  return { alerts, expired: expired.modifiedCount };
+  // A contract expires the day AFTER its end date by the Riyadh calendar (review G3): conditional and audited.
+  const today = riyadhDate(now);
+  const ending = await Contract.find({
+    status: { $in: ['active', 'renewing'] },
+    endDate: { $ne: null, $lt: now },
+  })
+    .select('endDate status')
+    .lean();
+  let expired = 0;
+  for (const c of ending) {
+    if (riyadhDate(c.endDate!) >= today) continue;
+    const r = await Contract.updateOne(
+      { _id: c._id, status: c.status },
+      { $set: { status: 'expired', statusReason: 'end_date_passed' } },
+    );
+    if (!r.modifiedCount) continue;
+    expired++;
+    await recordAudit(SYSTEM_ACTOR, {
+      action: 'update',
+      resource: 'hr.contracts',
+      resourceId: String(c._id),
+      before: { status: c.status },
+      after: { status: 'expired', statusReason: 'end_date_passed' },
+      meta: { job: 'hr.contracts' },
+    });
+  }
+  return { alerts, expired };
 }
 
 /** Probation end alerts at each configured offset (default 30 and 7 days) [EP §6.5–6.6, EP §15.11]. */
@@ -94,13 +118,24 @@ export async function runAccountDeactivation(now = new Date()): Promise<number> 
   let disabled = 0;
   for (const e of leavers) {
     if (riyadhDate(e.endDate!) >= today) continue; // last working day not over yet
+    // Re-check at write time that the employee is still leaving (review G4): a reinstated employee keeps the account.
+    const still = await Employee.updateOne(
+      { _id: e._id, status: { $in: ['terminated', 'resigned'] }, accountDisabledAt: null },
+      { $set: { accountDisabledAt: now } },
+    );
+    if (!still.modifiedCount) continue;
     await User.updateOne(
       { _id: e.userId, status: 'active' },
       { $set: { status: 'disabled', disabledAt: now, disabledReason: 'end_of_service' } },
     );
     await revokeAllSessions(String(e.userId), 'end_of_service');
-    e.accountDisabledAt = now;
-    await e.save();
+    await recordAudit(SYSTEM_ACTOR, {
+      action: 'update',
+      resource: 'users',
+      resourceId: String(e.userId),
+      after: { status: 'disabled', disabledReason: 'end_of_service' },
+      meta: { employeeId: String(e._id), job: 'hr.accounts.deactivate' },
+    });
     disabled++;
   }
   return disabled;

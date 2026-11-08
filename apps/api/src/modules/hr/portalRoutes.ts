@@ -148,8 +148,6 @@ portalRouter.post(
   asyncHandler(async (req: AuthedRequest, res) => {
     const e = await myEmployee(req);
     const body = req.body as z.infer<typeof bankChangeRequestSchema>;
-    if (await ProfileChangeRequest.exists({ employeeId: e._id, type: 'bank', state: 'pending' }))
-      throw conflict('يوجد طلب تغيير حساب بنكي بانتظار الاعتماد');
     const proof = await Attachment.findOne({
       _id: body.proofAttachmentId,
       uploadedBy: req.auth.user._id,
@@ -157,6 +155,7 @@ portalRouter.post(
       deletedAt: null,
     });
     if (!proof) throw badRequest('مستند إثبات الحساب مطلوب');
+    // One pending request per employee and type is enforced by a unique partial index (review G6).
     const pcr = await ProfileChangeRequest.create({
       number: await nextNumber('profileChange'),
       employeeId: e._id,
@@ -223,14 +222,20 @@ portalRouter.post(
   requireAuth(),
   asyncHandler(async (req: AuthedRequest, res) => {
     const e = await myEmployee(req);
-    const pcr = await ProfileChangeRequest.findOne({
-      _id: req.params.id,
-      employeeId: e._id,
-      state: 'pending',
+    // Conditional from pending (review G6): a request Finance already decided cannot be cancelled.
+    const pcr = await ProfileChangeRequest.findOneAndUpdate(
+      { _id: req.params.id, employeeId: e._id, state: 'pending' },
+      { $set: { state: 'cancelled', decidedAt: new Date() } },
+      { new: true },
+    );
+    if (!pcr) throw conflict('الطلب غير موجود أو تم البت فيه');
+    await recordAudit(actorFrom(req), {
+      action: 'update',
+      resource: 'hr.profile_changes',
+      resourceId: String(pcr._id),
+      before: { state: 'pending' },
+      after: { state: 'cancelled' },
     });
-    if (!pcr) throw notFound();
-    pcr.state = 'cancelled';
-    await pcr.save();
     res.json({ ok: true });
   }),
 );
@@ -317,13 +322,18 @@ portalRouter.get(
       type: 'leave',
       state: { $in: ['approved', 'closed'] },
       deletedAt: null,
-      'details.endDate': { $gte: riyadhDate(now) },
+      'details.endDate': { $gte: new Date(now.getTime() - 2 * 86_400_000) },
     })
       .select('requesterUserId details')
       .lean();
+    // details.endDate is stored as a Date; compare Riyadh calendar dates (review G10).
+    const todayStr = riyadhDate(now);
     const leaveUntil = new Map<string, string>();
     for (const l of leaves) {
-      const end = String((l.details as { endDate?: string }).endDate ?? '');
+      const raw = (l.details as { endDate?: Date | string }).endDate;
+      if (!raw) continue;
+      const end = raw instanceof Date ? riyadhDate(raw) : String(raw).slice(0, 10);
+      if (end < todayStr) continue;
       const k = String(l.requesterUserId);
       if (!leaveUntil.get(k) || leaveUntil.get(k)! < end) leaveUntil.set(k, end);
     }

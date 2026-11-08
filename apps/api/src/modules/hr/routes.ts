@@ -325,10 +325,8 @@ hrRouter.post(
     const body = req.body as z.infer<typeof contractSchema>;
     if (body.endDate && body.endDate < body.startDate)
       throw forbidden('تاريخ النهاية قبل البداية', 'bad_request');
-    const previous = await Contract.findOne({
-      employeeId: req.params.id,
-      status: { $in: ['active', 'renewing'] },
-    }).sort({ version: -1 });
+    // Latest contract, active or already expired, so the version chain never restarts (review G3).
+    const previous = await Contract.findOne({ employeeId: req.params.id }).sort({ version: -1 });
     const c = await Contract.create({
       ...body,
       employeeId: req.params.id,
@@ -338,7 +336,7 @@ hrRouter.post(
       createdBy: req.auth.user._id,
     });
     if (body.attachmentId) await markSensitiveFile(body.attachmentId, req.params.id);
-    if (previous) {
+    if (previous && ['active', 'renewing'].includes(previous.status)) {
       previous.status = 'expired';
       previous.statusReason = 'renewed';
       await previous.save();

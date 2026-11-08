@@ -78,13 +78,17 @@ export async function submitReport(
       );
       if (!linked) throw badRequest('طلب التقرير غير موجود أو تم الرد عليه');
     }
+    await recordAudit(
+      actorFrom(req),
+      {
+        action: 'create',
+        resource: 'hr.reports',
+        resourceId: String(doc._id),
+        after: { number: doc.number, type: doc.type },
+      },
+      session,
+    );
     return doc;
-  });
-  await recordAudit(actorFrom(req), {
-    action: 'create',
-    resource: 'hr.reports',
-    resourceId: String(report._id),
-    after: { number: report.number, type: report.type },
   });
   if (manager?.userId)
     await notify({

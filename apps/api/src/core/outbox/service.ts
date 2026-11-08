@@ -1,6 +1,11 @@
 import type { ClientSession } from 'mongoose';
 import { logger } from '../../logger';
 import { Outbox, type OutboxDoc } from './model';
+import { getSetting } from '../settings/service';
+import { notifySystemAdmins } from '../notifications/alerts';
+import { recordAudit } from '../audit/service';
+import type { Actor } from '../http/context';
+import { conflict } from '../http/errors';
 
 export interface DomainEvent<T = Record<string, unknown>> {
   type: string;
@@ -77,8 +82,18 @@ export async function processOutbox(
   let unhandled = 0;
   const types = subscribedTypes();
   if (types.length) {
+    // Replay for a new subscriber (review G8): only events inside the replay window; older ones are marked
+    // 'expired' for a manual requeue. Replayed events keep their createdAt, and the claim below sorts by
+    // createdAt, so they are delivered before any live event.
+    const windowDays = await getSetting('outbox.replayWindowDays');
+    const since = new Date(now.getTime() - windowDays * 86_400_000);
+    const typeFilter = types.includes('*') ? {} : { type: { $in: types } };
     await Outbox.updateMany(
-      { status: 'unhandled', ...(types.includes('*') ? {} : { type: { $in: types } }) },
+      { status: 'unhandled', ...typeFilter, createdAt: { $lt: since } },
+      { $set: { status: 'expired' } },
+    );
+    await Outbox.updateMany(
+      { status: 'unhandled', ...typeFilter },
       { $set: { status: 'pending', availableAt: now } },
     );
   }
@@ -130,8 +145,15 @@ export async function processOutbox(
       if (!fresh) continue;
       fresh.lastError = message;
       fresh.leaseExpiresAt = undefined;
-      if (fresh.attempts >= MAX_ATTEMPTS) fresh.status = 'failed';
-      else {
+      if (fresh.attempts >= MAX_ATTEMPTS) {
+        fresh.status = 'failed';
+        // A hand-off that gave up is a security/integrity alert for the admins (review G8).
+        await notifySystemAdmins({
+          bodyAr: `فشل تسليم حدث ${fresh.type} بعد ${fresh.attempts} محاولات: ${message}`,
+          link: '/admin/outbox',
+          data: { kind: 'outbox.failed', eventId: String(fresh._id), type: fresh.type },
+        }).catch((e) => logger.error({ err: e }, 'outbox failure alert failed'));
+      } else {
         fresh.status = 'pending';
         fresh.availableAt = new Date(now.getTime() + backoffMs(fresh.attempts));
       }
@@ -140,4 +162,37 @@ export async function processOutbox(
     }
   }
   return { delivered, failed, unhandled };
+}
+
+/** Daily purge of delivered events older than `outbox.retentionDays` (review G8). Failed, expired and unhandled events are kept. */
+export async function purgeDeliveredEvents(now = new Date()): Promise<number> {
+  const days = await getSetting('outbox.retentionDays');
+  const before = new Date(now.getTime() - days * 86_400_000);
+  const r = await Outbox.deleteMany({ status: 'delivered', deliveredAt: { $lt: before } });
+  return r.deletedCount ?? 0;
+}
+
+/** Admin requeue of a failed or expired event (review G8): conditional on its status, attempts reset, audited. */
+export async function requeueEvent(id: string, actor: Actor): Promise<OutboxDoc & { _id: unknown }> {
+  const ev = await Outbox.findOneAndUpdate(
+    { _id: id, status: { $in: ['failed', 'expired'] } },
+    {
+      $set: {
+        status: 'pending',
+        availableAt: new Date(),
+        attempts: 0,
+        lastError: undefined,
+        leaseExpiresAt: undefined,
+      },
+    },
+    { new: true },
+  );
+  if (!ev) throw conflict('الحدث غير موجود أو ليس فاشلًا');
+  await recordAudit(actor, {
+    action: 'update',
+    resource: 'outbox',
+    resourceId: String(ev._id),
+    after: { status: 'pending', requeued: true, type: ev.type },
+  });
+  return ev as OutboxDoc & { _id: unknown };
 }

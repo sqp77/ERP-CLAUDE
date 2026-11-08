@@ -19,4 +19,9 @@ const profileChangeSchema = new Schema(
   },
   { timestamps: true },
 );
+// One pending change per employee and type (review G6): a unique partial index, not check-then-create.
+profileChangeSchema.index(
+  { employeeId: 1, type: 1 },
+  { unique: true, partialFilterExpression: { state: 'pending' } },
+);
 export const ProfileChangeRequest = model('ProfileChangeRequest', profileChangeSchema);

@@ -2,6 +2,7 @@ import { Router } from 'express';
 import type { RoleAssignment } from '@eayni/shared';
 import { OPEN_TASK_STATUSES, OPEN_TICKET_STATES } from '@eayni/shared';
 import { asyncHandler } from '../../core/http/async';
+import { startOfRiyadhWeek } from '../../core/dates/businessDays';
 import type { AuthedRequest } from '../../core/http/context';
 import { forbidden } from '../../core/http/errors';
 import { requireAuth } from '../../core/auth/middleware';
@@ -48,9 +49,7 @@ dashboardRouter.get(
       throw forbidden('هذه اللوحة للمديرين المباشرين ومديري الأقسام');
     const userIds = team.map((t) => t.userId).filter(Boolean);
     const now = new Date();
-    const weekStart = new Date(now.getTime() - ((now.getUTCDay() + 7) % 7) * DAY);
-    weekStart.setUTCHours(21, 0, 0, 0);
-    weekStart.setTime(weekStart.getTime() - DAY); // Sunday 00:00 Riyadh = Saturday 21:00 UTC
+    const weekStart = startOfRiyadhWeek(now); // review G11: shared Riyadh helper
     const weekEnd = new Date(weekStart.getTime() + 7 * DAY);
     const [tasks, requestsPending, reportsPending, meetings, tickets] = await Promise.all([
       Task.find({ assigneeId: { $in: userIds }, deletedAt: null })
@@ -121,8 +120,15 @@ dashboardRouter.get(
         .select('employeeId type endDate probationEndDate')
         .lean(),
       DocumentRecord.find({ deletedAt: null, ownerType: 'employee', expiryDate: { $ne: null, $lte: d(90) } })
-        .select('expiryDate titleAr')
-        .lean(),
+        .select('expiryDate ownerId type version')
+        .sort({ version: -1 })
+        .lean()
+        // Latest version per owner + type only (review G5).
+        .then((rows) =>
+          rows.filter(
+            (r, i, arr) => arr.findIndex((x) => x.ownerId === r.ownerId && x.type === r.type) === i,
+          ),
+        ),
       HrRequest.find({ deletedAt: null, closedAt: null })
         .select('type state pendingWith createdAt stateEnteredAt')
         .lean(),

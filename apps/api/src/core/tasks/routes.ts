@@ -18,7 +18,7 @@ import { authorize } from '../rbac/authorize';
 import { scopeFilter } from '../rbac/scope';
 import { recordAudit } from '../audit/service';
 import { claimAttachments } from '../files/service';
-import { Task } from './model';
+import { Task, TaskEvent } from './model';
 import * as svc from './service';
 
 export const tasksRouter = Router();
@@ -110,6 +110,23 @@ tasksRouter.patch(
         task.attachmentIds = attachmentIds as never;
       }
       Object.assign(task, Object.fromEntries(Object.entries(content).filter(([, v]) => v !== undefined)));
+      if (content.dueAt !== undefined) {
+        // A new due date resets the reminders and recomputes "late" (review G1).
+        task.remindedDueSoon = false;
+        task.remindedOverdue = false;
+        const isOpen = (OPEN_TASK_STATUSES as readonly string[]).includes(task.status);
+        if (isOpen && task.status !== 'waiting_review' && task.dueAt && task.dueAt < new Date())
+          task.status = 'late';
+        else if (task.status === 'late') {
+          // Back to the status it had before the job marked it late.
+          const flip = await TaskEvent.findOne({ taskId: task._id, type: 'status_changed', toStatus: 'late' })
+            .sort({ at: -1 })
+            .lean();
+          task.status =
+            (flip?.fromStatus as typeof task.status | undefined) ??
+            (task.progressPercent > 0 ? 'in_progress' : 'new');
+        }
+      }
       await task.save();
       await recordAudit(actorFrom(req), {
         action: 'update',

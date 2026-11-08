@@ -20,7 +20,17 @@ import { nextNumber } from '../../core/numbering/service';
 import { notify } from '../../core/notifications/service';
 import { publish } from '../../core/outbox/service';
 import { User, type UserDoc } from '../../core/auth/model';
-import { blindIndex, decrypt, encrypt, hashPassword, randomToken } from '../../core/auth/crypto';
+import type { ClientSession } from 'mongoose';
+import { withTransaction } from '../../db';
+import {
+  blindIndex,
+  blindIndexCandidates,
+  decrypt,
+  encrypt,
+  hashPassword,
+  keyId,
+  randomToken,
+} from '../../core/auth/crypto';
 import { fieldRestrictions, redact } from '../../core/rbac/service';
 import { Department, Position } from '../../core/org/model';
 import { Employee, EmployeeEvent, type EmployeeDoc } from './model';
@@ -62,7 +72,7 @@ export async function backfillIdentityHashes(): Promise<number> {
     if (!e.identity?.numberEnc) continue;
     await Employee.updateOne(
       { _id: e._id },
-      { $set: { 'identity.hash': blindIndex(decrypt(e.identity.numberEnc)) } },
+      { $set: { 'identity.hash': blindIndex(decrypt(e.identity.numberEnc)), 'identity.hashKid': keyId() } },
     );
     n++;
   }
@@ -144,14 +154,20 @@ async function logEvent(
   type: string,
   actor: Actor,
   data: { from?: unknown; to?: unknown; changedFields?: string[]; effectiveDate?: Date; reason?: string },
+  session?: ClientSession,
 ) {
-  await EmployeeEvent.create({
-    employeeId,
-    type,
-    actorUserId: actor.userId,
-    actorEmail: actor.email,
-    ...data,
-  });
+  await EmployeeEvent.create(
+    [
+      {
+        employeeId,
+        type,
+        actorUserId: actor.userId,
+        actorEmail: actor.email,
+        ...data,
+      },
+    ],
+    { session },
+  );
 }
 
 export async function createEmployee(
@@ -172,7 +188,12 @@ export async function createEmployee(
 
   const { identity, bank, createAccount, basicSalaryHalalas, ...rest } = input;
   const identityHash = blindIndex(identity.number);
-  if (await Employee.exists({ 'identity.hash': identityHash, deletedAt: null }))
+  if (
+    await Employee.exists({
+      'identity.hash': { $in: blindIndexCandidates(identity.number) },
+      deletedAt: null,
+    })
+  )
     throw conflict('رقم الهوية مسجّل لموظف آخر');
   const employee = await Employee.create({
     ...rest,
@@ -182,6 +203,7 @@ export async function createEmployee(
       type: identity.type,
       numberEnc: encrypt(identity.number),
       hash: identityHash,
+      hashKid: keyId(),
       last4: identity.number.slice(-4),
       expiryDate: identity.expiryDate,
     },
@@ -247,13 +269,20 @@ export async function updateEmployee(
     employee.fullNameAr = input.fullNameAr ?? `${employee.firstNameAr} ${employee.lastNameAr}`;
   if (identity) {
     const hash = blindIndex(identity.number);
-    if (await Employee.exists({ 'identity.hash': hash, deletedAt: null, _id: { $ne: employee._id } }))
+    if (
+      await Employee.exists({
+        'identity.hash': { $in: blindIndexCandidates(identity.number) },
+        deletedAt: null,
+        _id: { $ne: employee._id },
+      })
+    )
       throw conflict('رقم الهوية مسجّل لموظف آخر');
     employee.identity = {
       ...employee.identity,
       type: identity.type,
       numberEnc: encrypt(identity.number),
       hash,
+      hashKid: keyId(),
       last4: identity.number.slice(-4),
       expiryDate: identity.expiryDate,
       alertsSent: [],
@@ -531,32 +560,54 @@ export async function changeStatus(
   } else if (from.status === 'terminated' || from.status === 'resigned') {
     employee.endDate = undefined;
     employee.accountDisabledAt = undefined;
-    if (employee.userId)
+  }
+  const reinstate =
+    employee.userId &&
+    (from.status === 'terminated' || from.status === 'resigned') &&
+    input.status !== 'terminated' &&
+    input.status !== 'resigned';
+  // Record, history event, audit and domain event commit together (review G9).
+  await withTransaction(async (session) => {
+    await employee.save({ session });
+    if (reinstate)
       await User.updateOne(
         { _id: employee.userId, disabledReason: 'end_of_service' },
         { $set: { status: 'active' }, $unset: { disabledAt: 1, disabledReason: 1 } },
+        { session },
       );
-  }
-  await employee.save();
-  await logEvent(employee._id, 'status_change', actor, {
-    from,
-    to: { status: input.status, secondment: input.secondment },
-    effectiveDate: input.effectiveDate,
-    reason: input.reason,
-  });
-  await recordAudit(actor, {
-    action: 'update',
-    resource: 'hr.employees',
-    resourceId: String(employee._id),
-    before: from,
-    after: { status: input.status },
-  });
-  await publish({
-    type: 'hr.employee.status_changed',
-    aggregateType: 'employee',
-    aggregateId: String(employee._id),
-    payload: { from: from.status, to: input.status },
-    actorUserId: actor.userId,
+    await logEvent(
+      employee._id,
+      'status_change',
+      actor,
+      {
+        from,
+        to: { status: input.status, secondment: input.secondment },
+        effectiveDate: input.effectiveDate,
+        reason: input.reason,
+      },
+      session,
+    );
+    await recordAudit(
+      actor,
+      {
+        action: 'update',
+        resource: 'hr.employees',
+        resourceId: String(employee._id),
+        before: from,
+        after: { status: input.status },
+      },
+      session,
+    );
+    await publish(
+      {
+        type: 'hr.employee.status_changed',
+        aggregateType: 'employee',
+        aggregateId: String(employee._id),
+        payload: { from: from.status, to: input.status },
+        actorUserId: actor.userId,
+      },
+      session,
+    );
   });
   return employee;
 }
