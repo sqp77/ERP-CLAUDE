@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
-import { get, patch, post } from '@/lib/api';
+import { ApiError, get, patch, post } from '@/lib/api';
 import { usePrefs } from '@/lib/preferences';
 import { errorMessage } from '@/lib/errors';
 import {
@@ -20,6 +20,7 @@ import {
   Td,
   Textarea,
   cx,
+  QueryError,
 } from '@/shared/ui';
 import { useToast } from '@/shared/ui/Toast';
 import { FileUploader, downloadAttachment } from '@/shared/files/FileUploader';
@@ -49,7 +50,13 @@ interface MyProfile extends EmployeeFull {
     probation: null | { endDate: string; inProbation: boolean };
   };
   pendingChanges: { _id: string; number: string; type: string; createdAt: string }[];
-  secondment?: { destination?: string; startDate?: string; endDate?: string; reportedAt?: string };
+  secondment?: {
+    destination?: string;
+    startDate?: string;
+    endDate?: string;
+    reportedAt?: string;
+    reportAttachmentId?: string;
+  };
 }
 interface ChangeReq {
   _id: string;
@@ -162,6 +169,9 @@ export function ProfilePage() {
   };
 
   if (me.isLoading) return <Spinner />;
+  // "No employee file" only when the server says so (404); any other failure is shown as such (review H9).
+  if (me.isError && !(me.error instanceof ApiError && me.error.status === 404))
+    return <QueryError error={me.error} onRetry={() => me.refetch()} />;
   if (!me.data) return <Alert kind="warning">{t('profile.noFile')}</Alert>;
   const e = me.data;
   const c = e.currentContract;
@@ -243,9 +253,32 @@ export function ProfilePage() {
                 <Row
                   label={t('profile.secondmentReport')}
                   value={
-                    e.secondment.reportedAt
-                      ? `${t('profile.reported')} ${formatDate(e.secondment.reportedAt)}`
-                      : t('profile.notReported')
+                    e.secondment.reportedAt ? (
+                      <span className="flex flex-wrap items-center gap-2">
+                        <span>
+                          {t('profile.reported')} {formatDate(e.secondment.reportedAt)}
+                        </span>
+                        {e.secondment.reportAttachmentId && (
+                          <button
+                            type="button"
+                            className="text-brand-700 underline"
+                            onClick={() => downloadAttachment(e.secondment!.reportAttachmentId!)}
+                          >
+                            {t('files.download')}
+                          </button>
+                        )}
+                        {/* A new upload replaces the old report (review H11) */}
+                        <button
+                          type="button"
+                          className="text-brand-700 underline"
+                          onClick={() => setReportOpen(true)}
+                        >
+                          {t('profile.replaceSecondmentReport')}
+                        </button>
+                      </span>
+                    ) : (
+                      t('profile.notReported')
+                    )
                   }
                 />
               </>
@@ -470,7 +503,7 @@ export function ProfilePage() {
               <Input dir="ltr" {...contact.register('extension')} />
             </Field>
           </div>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <Field label={t('hr.addressFields.buildingNo')}>
               <Input dir="ltr" {...contact.register('buildingNo')} />
             </Field>

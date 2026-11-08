@@ -7,6 +7,8 @@ export interface ExportField {
   labelAr: string;
   /** Needs field-level permission; hidden from users without it. */
   sensitive?: boolean;
+  /** How the web preview renders the column (review H7): dates in Riyadh time with the Hijri toggle, money in SAR. */
+  kind?: 'date' | 'datetime' | 'money';
   format?: (value: unknown, row: Record<string, unknown>) => unknown;
 }
 
@@ -55,10 +57,11 @@ export async function buildRows(
     return f;
   });
   const header = fields.map((f) => f.labelAr);
+  const columns = fields.map((f) => ({ key: f.key, labelAr: f.labelAr, kind: f.kind }));
   const data = rows.map((row) =>
     fields.map((f) => (f.format ? f.format(row[f.key], row) : (row[f.key] ?? ''))),
   );
-  return { header, data };
+  return { header, columns, data };
 }
 
 export async function toXlsx(sheetName: string, header: string[], data: unknown[][]): Promise<Buffer> {

@@ -4,7 +4,7 @@ import { OPEN_TASK_STATUSES, OPEN_TICKET_STATES } from '@eayni/shared';
 import { asyncHandler } from '../../core/http/async';
 import { startOfRiyadhWeek } from '../../core/dates/businessDays';
 import type { AuthedRequest } from '../../core/http/context';
-import { forbidden } from '../../core/http/errors';
+import { badRequest, forbidden } from '../../core/http/errors';
 import { requireAuth } from '../../core/auth/middleware';
 import { authorize } from '../../core/rbac/authorize';
 import { effectivePermission } from '../../core/rbac/service';
@@ -198,5 +198,77 @@ dashboardRouter.get(
         effectiveDate: e.effectiveDate,
       })),
     });
+  }),
+);
+
+/** Drill-down behind the HR expiry cards (go-live review H5): the records expiring within N days, by kind. */
+dashboardRouter.get(
+  '/expiring',
+  requireAuth(),
+  authorize('hr.employees', 'view'),
+  asyncHandler(async (req: AuthedRequest, res) => {
+    if (req.authz!.scope !== 'all') throw forbidden('لوحة الموارد البشرية لمن يرى كل الموظفين');
+    const kind = String(req.query.kind ?? 'contracts');
+    const within = Math.min(Math.max(Number(req.query.within ?? 90) || 90, 1), 365);
+    const now = new Date();
+    const until = new Date(now.getTime() + within * DAY);
+    const live = { deletedAt: null, status: { $nin: ['resigned', 'terminated'] } };
+    const employees = await Employee.find(live)
+      .select('fullNameAr employeeNumber departmentId identity.expiryDate identity.type')
+      .lean();
+    const byId = new Map(employees.map((e) => [String(e._id), e]));
+    type Row = {
+      employeeId: string;
+      fullNameAr: string;
+      employeeNumber: string;
+      departmentId?: unknown;
+      titleAr: string;
+      expiryDate: Date;
+      daysLeft: number;
+    };
+    const row = (employeeId: string, titleAr: string, expiryDate: Date): Row | undefined => {
+      const e = byId.get(employeeId);
+      if (!e) return undefined;
+      return {
+        employeeId,
+        fullNameAr: e.fullNameAr,
+        employeeNumber: e.employeeNumber,
+        departmentId: e.departmentId,
+        titleAr,
+        expiryDate,
+        daysLeft: Math.ceil((expiryDate.getTime() - now.getTime()) / DAY),
+      };
+    };
+    let items: (Row | undefined)[] = [];
+    if (kind === 'contracts') {
+      const contracts = await Contract.find({
+        status: { $in: ['active', 'renewing'] },
+        endDate: { $ne: null, $lte: until },
+      })
+        .select('employeeId type endDate number')
+        .lean();
+      items = contracts.map((c) => row(String(c.employeeId), c.number, c.endDate!));
+    } else if (kind === 'identities') {
+      items = employees
+        .filter((e) => e.identity?.expiryDate && e.identity.expiryDate <= until)
+        .map((e) => row(String(e._id), e.identity!.type ?? 'identity', e.identity!.expiryDate!));
+    } else if (kind === 'documents') {
+      const docs = await DocumentRecord.find({
+        deletedAt: null,
+        ownerType: 'employee',
+        expiryDate: { $ne: null, $lte: until },
+      })
+        .select('ownerId type version titleAr expiryDate')
+        .sort({ version: -1 })
+        .lean();
+      const latest = docs.filter(
+        (r, i, arr) => arr.findIndex((x) => x.ownerId === r.ownerId && x.type === r.type) === i,
+      );
+      items = latest.map((d) => row(d.ownerId, d.titleAr, d.expiryDate!));
+    } else throw badRequest('نوع غير معروف');
+    const rows = items
+      .filter((x): x is Row => !!x)
+      .sort((a, b) => a.expiryDate.getTime() - b.expiryDate.getTime());
+    res.json({ kind, within, items: rows, total: rows.length });
   }),
 );

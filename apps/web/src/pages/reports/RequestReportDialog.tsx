@@ -3,12 +3,18 @@ import { useMutation } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { post } from '@/lib/api';
 import { errorMessage } from '@/lib/errors';
-import { Button, Dialog, Field, Input, Select, Textarea } from '@/shared/ui';
+import { Button, Dialog, Field, Input, QueryError, Select, Textarea } from '@/shared/ui';
 import { useToast } from '@/shared/ui/Toast';
 import { useReportTypes } from './_data';
 
 /** The manager asks a team member for a report [EP §15.13]. */
-export function RequestReportDialog({ target, onClose }: { target: { userId: string; name: string } | null; onClose: () => void }) {
+export function RequestReportDialog({
+  target,
+  onClose,
+}: {
+  target: { userId: string; name: string } | null;
+  onClose: () => void;
+}) {
   const { t } = useTranslation();
   const toast = useToast();
   const types = useReportTypes();
@@ -16,7 +22,13 @@ export function RequestReportDialog({ target, onClose }: { target: { userId: str
   const [dueDate, setDueDate] = useState('');
   const [note, setNote] = useState('');
   const send = useMutation({
-    mutationFn: () => post('/hr/employee-reports/requests', { employeeUserId: target!.userId, type, dueDate: dueDate || undefined, note: note || undefined }),
+    mutationFn: () =>
+      post('/hr/employee-reports/requests', {
+        employeeUserId: target!.userId,
+        type,
+        dueDate: dueDate || undefined,
+        note: note || undefined,
+      }),
     onSuccess: () => {
       toast(t('reports.requestSent'));
       setNote('');
@@ -28,6 +40,7 @@ export function RequestReportDialog({ target, onClose }: { target: { userId: str
   return (
     <Dialog open={!!target} onClose={onClose} title={t('reports.requestFrom', { name: target?.name ?? '' })}>
       <div className="space-y-3">
+        {types.isError && <QueryError error={types.error} onRetry={() => types.refetch()} />}
         <Field label={t('reports.type')}>
           <Select value={type} onChange={(e) => setType(e.target.value)}>
             {types.data?.items.map((x) => (

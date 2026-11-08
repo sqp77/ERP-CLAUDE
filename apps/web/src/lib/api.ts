@@ -54,7 +54,7 @@ export async function api<T = unknown>(path: string, opts: Options = {}): Promis
     throw new ApiError(0, 'network', '');
   }
   if (res.status === 204) return undefined as T;
-  if (raw) return res as unknown as T;
+  if (raw && res.ok) return res as unknown as T;
   const data = (await res.json().catch(() => ({}))) as {
     error?: { code: string; message: string; details?: unknown };
   };

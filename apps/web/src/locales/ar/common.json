@@ -21,7 +21,8 @@
     "send": "إرسال",
     "markAllRead": "تعليم الكل كمقروء",
     "revoke": "إنهاء الجلسة",
-    "copy": "نسخ"
+    "copy": "نسخ",
+    "clear": "إزالة"
   },
   "nav": {
     "dashboard": "الرئيسية",
@@ -146,7 +147,8 @@
     "currency": "ر.س",
     "listSeparator": "، ",
     "number": "#",
-    "deleteConfirm": "هل تريد الحذف؟"
+    "deleteConfirm": "هل تريد الحذف؟",
+    "loadFailed": "تعذّر التحميل"
   },
   "tasks": {
     "title": "المهام",
@@ -234,7 +236,8 @@
     },
     "awayUnknownDate": "تاريخ غير محدد",
     "awayConfirm": "أعلم ذلك وأريد إسناد المهمة له رغم ذلك",
-    "awayConfirmRequired": "أكّد الإسناد رغم غياب الموظف أولًا"
+    "awayConfirmRequired": "أكّد الإسناد رغم غياب الموظف أولًا",
+    "overdueOnly": "المتأخرة فقط"
   },
   "calendar": {
     "title": "التقويم",
@@ -348,7 +351,42 @@
         "password_reset": "إعادة تعيين كلمة المرور",
         "new_login": "دخول جديد"
       },
-      "generic": "إشعار"
+      "generic": "إشعار",
+      "task.assigned": "إسناد مهمة",
+      "task.due_soon": "اقتراب موعد مهمة",
+      "task.overdue": "مهمة متأخرة",
+      "task.review_requested": "مهمة بانتظار المراجعة",
+      "task.approved": "اعتماد مهمة",
+      "task.returned": "إعادة مهمة",
+      "task.reassigned": "نقل مهمة",
+      "task.unassigned_reminder": "مهام غير مسندة",
+      "meeting.created": "اجتماع جديد",
+      "meeting.reminder": "تذكير باجتماع",
+      "training.added": "تدريب",
+      "ticket.created": "تذكرة جديدة",
+      "ticket.updated": "تحديث تذكرة",
+      "request.decided": "قرار على طلب",
+      "news.published": "خبر جديد",
+      "contract.expiring": "انتهاء عقد",
+      "probation.ending": "انتهاء فترة التجربة",
+      "employee.birthday": "عيد ميلاد",
+      "report.requested": "طلب تقرير",
+      "secondment.report_reminder": "تقرير انتداب",
+      "employee.manager_or_department_changed": "تغيير المدير أو القسم",
+      "employee.promotion": "ترقية",
+      "employee.data_updated": "تحديث بيانات",
+      "document.expiring": "انتهاء وثيقة",
+      "comment.mention": "إشارة في تعليق",
+      "auth.password_reset": "إعادة تعيين كلمة المرور",
+      "auth.new_login": "دخول جديد",
+      "security.alert": "تنبيه أمني",
+      "ticket.assigned": "إسناد تذكرة",
+      "ticket.info_requested": "طلب معلومات على تذكرة",
+      "ticket.resolved": "حل تذكرة",
+      "ticket.confirm_reminder": "تذكير بتأكيد الحل",
+      "ticket.auto_closed": "إغلاق تذكرة تلقائيًا",
+      "ticket.reopened": "إعادة فتح تذكرة",
+      "ticket.closed": "إغلاق تذكرة"
     },
     "today": "اليوم",
     "yesterday": "أمس",
@@ -506,7 +544,9 @@
     "required": "المرفق مطلوب",
     "typeNotAllowed": "نوع الملف غير مسموح (PDF أو صورة أو Excel أو Word)",
     "tooLarge": "حجم الملف يتجاوز {{mb}} ميغابايت",
-    "uploadFailed": "فشل رفع الملف"
+    "uploadFailed": "فشل رفع الملف",
+    "popupBlocked": "منع المتصفح فتح نافذة التنزيل.",
+    "openLink": "افتح الملف من هنا"
   },
   "hr": {
     "directory": "دليل الموظفين",
@@ -685,7 +725,26 @@
     "defaults": {
       "nationality": "سعودي"
     },
-    "branch": "الفرع"
+    "branch": "الفرع",
+    "fullNameEn": "الاسم بالإنجليزية",
+    "department": "القسم",
+    "probationFilter": "الموظفون الذين تنتهي فترة تجربتهم خلال {{days}} يومًا",
+    "expiring": {
+      "title": "الوثائق والعقود المنتهية قريبًا",
+      "hint": "ما ينتهي خلال المدة المختارة، مرتبًا بالأقرب. اضغط اسم الموظف لفتح ملفه.",
+      "kinds": {
+        "contracts": "العقود",
+        "identities": "الهويات والإقامات",
+        "documents": "الوثائق"
+      },
+      "withinDays": "{{days}} يومًا",
+      "item": "البند",
+      "expiryDate": "تاريخ الانتهاء",
+      "daysLeft": "المتبقي",
+      "inDays": "{{days}} يومًا",
+      "empty": "لا شيء ينتهي خلال هذه المدة"
+    },
+    "employee": "الموظف"
   },
   "profile": {
     "title": "ملفي الشخصي",
@@ -921,7 +980,8 @@
     "views": {
       "mine": "تذاكري",
       "assigned": "المسندة إليّ",
-      "department": "تذاكر القسم"
+      "department": "تذاكر القسم",
+      "team": "تذاكر فريقي"
     },
     "types": {
       "request": "طلب",
@@ -966,7 +1026,8 @@
       "stall": "تعليق",
       "resume": "استئناف",
       "claim": "استلام"
-    }
+    },
+    "openOnly": "المفتوحة فقط"
   },
   "departments": {
     "hr": "الموارد البشرية",
@@ -1037,7 +1098,9 @@
       "archived": "أرشفة",
       "pinned": "تثبيت",
       "unpinned": "إلغاء التثبيت"
-    }
+    },
+    "windowTo": "حتى",
+    "noPublisher": "لا يوجد قسم يمكنك النشر باسمه. اطلب من مدير قسمك تفعيل كتابة الأخبار للموظفين."
   },
   "reports": {
     "title": "التقارير",

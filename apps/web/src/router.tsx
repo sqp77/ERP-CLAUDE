@@ -40,6 +40,7 @@ import { ReportDetailPage } from './pages/reports/ReportDetailPage';
 import { ManagerDashboardPage } from './pages/dashboards/ManagerDashboardPage';
 import { HrDashboardPage } from './pages/dashboards/HrDashboardPage';
 import { ExportPage } from './pages/hr/ExportPage';
+import { ExpiringPage } from './pages/hr/ExpiringPage';
 import { RouteError } from './shared/layout/RouteError';
 
 export const router = createBrowserRouter([
@@ -127,6 +128,7 @@ export const router = createBrowserRouter([
                 children: [
                   { path: '/hr/dashboard', element: <HrDashboardPage /> },
                   { path: '/hr/export', element: <ExportPage /> },
+                  { path: '/hr/expiring', element: <ExpiringPage /> },
                   { path: '/hr/employees', element: <EmployeesPage /> },
                   { path: '/hr/employees/:id', element: <EmployeePage /> },
                   { path: '/hr/secondments', element: <SecondmentsPage /> },

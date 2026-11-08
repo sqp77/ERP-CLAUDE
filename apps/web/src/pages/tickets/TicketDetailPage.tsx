@@ -40,9 +40,16 @@ export function TicketDetailPage() {
   const comments = useQuery({
     queryKey: ['comments', 'ticket', id],
     queryFn: () =>
-      get<{ items: { _id: string; body: string; authorId: string; createdAt: string }[] }>(
-        `/comments?recordType=ticket&recordId=${id}`,
-      ),
+      get<{
+        items: {
+          _id: string;
+          body: string;
+          authorId: string;
+          authorName?: string;
+          authorEmail?: string;
+          createdAt: string;
+        }[];
+      }>(`/comments?recordType=ticket&recordId=${id}`),
   });
   const [mode, setMode] = useState<Mode>(null);
   const [text, setText] = useState('');
@@ -56,6 +63,7 @@ export function TicketDetailPage() {
     qc.invalidateQueries({ queryKey: ['ticket', id] });
     qc.invalidateQueries({ queryKey: ['tickets'] });
     qc.invalidateQueries({ queryKey: ['comments', 'ticket', id] });
+    qc.invalidateQueries({ queryKey: ['team'] }); // team page ticket counts (review H11)
   };
   const act = useMutation({
     mutationFn: (body: Record<string, unknown>) => post(`/tickets/${id}/transition`, body),
@@ -247,7 +255,12 @@ export function TicketDetailPage() {
               {comments.data?.items.map((c) => (
                 <li key={c._id} className="rounded-lg bg-slate-50 p-2">
                   <div className="whitespace-pre-wrap">{c.body}</div>
-                  <div className="mt-1 text-xs tabular text-slate-400">{formatDateTime(c.createdAt)}</div>
+                  <div className="mt-1 text-xs tabular text-slate-400">
+                    <span className="me-2 font-medium text-slate-600">
+                      {c.authorName ?? c.authorEmail ?? t('tickets.system')}
+                    </span>
+                    {formatDateTime(c.createdAt)}
+                  </div>
                 </li>
               ))}
               {!comments.data?.items.length && (

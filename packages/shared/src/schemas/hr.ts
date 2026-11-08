@@ -172,6 +172,8 @@ export const listEmployeesQuerySchema = z.object({
   branchId: objectIdSchema.optional(),
   status: z.enum(EMPLOYEE_STATUSES).optional(),
   managerId: objectIdSchema.optional(),
+  /** Employees whose probation ends within N days (go-live review H5, HR dashboard drill-down). */
+  probationWithinDays: z.coerce.number().int().min(1).max(365).optional(),
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(200).default(25),
 });

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link } from 'react-router';
+import { Link, useSearchParams } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { TICKET_STATES, TICKET_TYPES } from '@eayni/shared';
 import { usePrefs } from '@/lib/preferences';
@@ -19,17 +19,29 @@ import {
 import { NewTicketDialog } from './NewTicketDialog';
 import { ticketTone, useTicketTargets, useTickets } from './_data';
 
-type View = 'mine' | 'assigned' | 'department';
+type View = 'mine' | 'assigned' | 'team' | 'department';
+const VIEWS: View[] = ['mine', 'assigned', 'team', 'department'];
 
 /** Tickets list: my tickets [EP §9.5], the ones assigned to me, or my department's queue (managers). */
 export function TicketsListPage({ view: initial }: { view: View }) {
   const { t } = useTranslation();
   const { formatDateTime } = usePrefs();
   const { can, user } = useAuth();
-  const [view, setView] = useState<View>(initial);
-  const [state, setState] = useState('');
-  const [type, setType] = useState('');
-  const [unassigned, setUnassigned] = useState(false);
+  // View and filters live in the URL (review H5/H11): dashboard links and the back button land on the same list.
+  const [params, setParams] = useSearchParams();
+  const urlView = params.get('view');
+  const view: View = VIEWS.includes(urlView as View) ? (urlView as View) : initial;
+  const state = params.get('state') ?? '';
+  const type = params.get('type') ?? '';
+  const unassigned = params.get('unassigned') === 'true';
+  const openOnly = params.get('open') === 'true';
+  const setParam = (key: string, value: string | boolean) => {
+    const next = new URLSearchParams(params);
+    if (value === '' || value === false) next.delete(key);
+    else next.set(key, String(value));
+    setParams(next, { replace: true });
+  };
+  const setView = (v: View) => setParam('view', v === initial ? '' : v);
   const [open, setOpen] = useState(false);
   const targets = useTicketTargets();
   const manager = (user?.permissions.find((p) => p.resource === 'tickets')?.scope ?? 'own') !== 'own';
@@ -39,6 +51,7 @@ export function TicketsListPage({ view: initial }: { view: View }) {
     state: state || undefined,
     type: type || undefined,
     unassigned: view === 'department' && unassigned,
+    open: openOnly || undefined,
     limit: 200,
   });
   return (
@@ -48,7 +61,14 @@ export function TicketsListPage({ view: initial }: { view: View }) {
         actions={
           <>
             <div className="flex rounded-lg border border-slate-200 p-0.5 text-xs">
-              {(['mine', 'assigned', ...(queueVisible ? ['department' as const] : [])] as View[]).map((v) => (
+              {(
+                [
+                  'mine',
+                  'assigned',
+                  ...(view === 'team' ? ['team' as const] : []),
+                  ...(queueVisible ? ['department' as const] : []),
+                ] as View[]
+              ).map((v) => (
                 <button
                   key={v}
                   onClick={() => setView(v)}
@@ -63,7 +83,11 @@ export function TicketsListPage({ view: initial }: { view: View }) {
         }
       />
       <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
-        <Select value={state} onChange={(e) => setState(e.target.value)} aria-label={t('common.status')}>
+        <Select
+          value={state}
+          onChange={(e) => setParam('state', e.target.value)}
+          aria-label={t('common.status')}
+        >
           <option value="">{t('tasks.allStatuses')}</option>
           {TICKET_STATES.map((s) => (
             <option key={s} value={s}>
@@ -71,7 +95,11 @@ export function TicketsListPage({ view: initial }: { view: View }) {
             </option>
           ))}
         </Select>
-        <Select value={type} onChange={(e) => setType(e.target.value)} aria-label={t('tickets.type')}>
+        <Select
+          value={type}
+          onChange={(e) => setParam('type', e.target.value)}
+          aria-label={t('tickets.type')}
+        >
           <option value="">{t('tickets.allTypes')}</option>
           {TICKET_TYPES.map((s) => (
             <option key={s} value={s}>
@@ -81,10 +109,18 @@ export function TicketsListPage({ view: initial }: { view: View }) {
         </Select>
         {view === 'department' && (
           <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={unassigned} onChange={(e) => setUnassigned(e.target.checked)} />{' '}
+            <input
+              type="checkbox"
+              checked={unassigned}
+              onChange={(e) => setParam('unassigned', e.target.checked)}
+            />{' '}
             {t('tickets.unassignedOnly')}
           </label>
         )}
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={openOnly} onChange={(e) => setParam('open', e.target.checked)} />{' '}
+          {t('tickets.openOnly')}
+        </label>
       </div>
       <Card>
         {q.isError ? (

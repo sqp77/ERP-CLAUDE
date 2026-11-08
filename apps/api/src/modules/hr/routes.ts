@@ -77,6 +77,14 @@ hrRouter.get(
     if (q.branchId) filter.branchId = q.branchId;
     if (q.status) filter.status = q.status;
     if (q.managerId) filter.directManagerId = q.managerId;
+    if (q.probationWithinDays) {
+      const now = new Date();
+      const ids = await Contract.find({
+        status: { $in: ['active', 'renewing'] },
+        probationEndDate: { $gte: now, $lte: new Date(now.getTime() + q.probationWithinDays * 86_400_000) },
+      }).distinct('employeeId');
+      filter._id = { $in: ids };
+    }
     if (q.q)
       filter.$and = [
         {

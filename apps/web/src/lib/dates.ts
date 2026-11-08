@@ -13,6 +13,24 @@ export function localInputToIso(value?: string | null): string | undefined {
   return `${value.length === 16 ? `${value}:00` : value}+03:00`;
 }
 
+/** ISO instant → `datetime-local` value ("YYYY-MM-DDTHH:mm") in Riyadh time (review H3). Round-trips with `localInputToIso`. */
+export function isoToLocalInput(iso?: string | Date | null): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: TIMEZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(d);
+  const pick = (type: string) => parts.find((p) => p.type === type)?.value ?? '00';
+  return `${pick('year')}-${pick('month')}-${pick('day')}T${pick('hour')}:${pick('minute')}`;
+}
+
 /** Riyadh calendar parts of an instant. */
 export function riyadhParts(d: Date | string | number = new Date()): {
   year: number;
@@ -61,4 +79,39 @@ export function isBirthdayToday(birthDate?: string | null, now: Date = new Date(
   const b = riyadhParts(birthDate);
   const t = riyadhParts(now);
   return b.month === t.month && b.day === t.day;
+}
+
+/** Hijri (Umm al-Qura) calendar parts of an instant in Riyadh. */
+export function hijriParts(d: Date | string | number = new Date()): {
+  year: number;
+  month: number;
+  day: number;
+} {
+  const parts = new Intl.DateTimeFormat('en-US-u-ca-islamic-umalqura-nu-latn', {
+    timeZone: TIMEZONE,
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+  }).formatToParts(new Date(d));
+  const pick = (type: string) => Number(parts.find((p) => p.type === type)?.value);
+  return { year: pick('year'), month: pick('month'), day: pick('day') };
+}
+
+/**
+ * Instant at 00:00 Riyadh of the first day of the Hijri month containing `now`, shifted by `offset`
+ * months (review H4): the month grid and its title agree when the Hijri calendar is selected.
+ */
+export function startOfRiyadhHijriMonth(offset = 0, now: Date = new Date()): Date {
+  let start = startOfRiyadhDay(now);
+  while (hijriParts(start).day !== 1) start = addDays(start, -1);
+  for (let i = 0; i < Math.abs(offset); i++) {
+    if (offset > 0) {
+      start = addDays(start, 28);
+      while (hijriParts(start).day !== 1) start = addDays(start, 1);
+    } else {
+      start = addDays(start, -1);
+      while (hijriParts(start).day !== 1) start = addDays(start, -1);
+    }
+  }
+  return start;
 }

@@ -11,6 +11,7 @@ import { forbidden } from '../http/errors';
 import { canAccessRecord } from '../access/registry';
 import { notify } from '../notifications/service';
 import { Comment } from './model';
+import { User } from '../auth/model';
 
 export const commentsRouter = Router();
 
@@ -22,7 +23,19 @@ commentsRouter.get(
   asyncHandler(async (req: AuthedRequest, res) => {
     const { recordType, recordId } = req.query as { recordType: string; recordId: string };
     if (!(await canAccessRecord(req, recordType, recordId))) throw forbidden();
-    res.json({ items: await Comment.find({ recordType, recordId }).sort({ createdAt: 1 }).lean() });
+    const items = await Comment.find({ recordType, recordId }).sort({ createdAt: 1 }).lean();
+    // The author's name travels with the comment (go-live review H11).
+    const users = await User.find({ _id: { $in: [...new Set(items.map((c) => String(c.authorId)))] } })
+      .select('email displayNameAr')
+      .lean();
+    const byId = new Map(users.map((u) => [String(u._id), u]));
+    res.json({
+      items: items.map((c) => ({
+        ...c,
+        authorEmail: byId.get(String(c.authorId))?.email,
+        authorName: byId.get(String(c.authorId))?.displayNameAr,
+      })),
+    });
   }),
 );
 

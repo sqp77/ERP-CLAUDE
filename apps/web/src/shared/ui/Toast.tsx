@@ -1,20 +1,33 @@
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
+import { setPopupBlockedHandler } from '@/lib/download';
 import { cx } from './index';
 
 interface Toast {
   id: number;
   kind: 'success' | 'error' | 'info';
   text: string;
+  /** Optional link shown after the text (e.g. a blocked download — review H1). */
+  link?: { href: string; label: string };
 }
-const Ctx = createContext<{ toast: (text: string, kind?: Toast['kind']) => void } | null>(null);
+type ToastFn = (text: string, kind?: Toast['kind'], link?: Toast['link']) => void;
+const Ctx = createContext<{ toast: ToastFn } | null>(null);
 
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<Toast[]>([]);
-  const toast = useCallback((text: string, kind: Toast['kind'] = 'success') => {
+  const { t } = useTranslation();
+  const toast = useCallback<ToastFn>((text, kind = 'success', link) => {
     const id = Date.now() + Math.random();
-    setItems((s) => [...s, { id, kind, text }]);
-    setTimeout(() => setItems((s) => s.filter((t) => t.id !== id)), 4000);
+    setItems((s) => [...s, { id, kind, text, link }]);
+    setTimeout(() => setItems((s) => s.filter((t) => t.id !== id)), link ? 12_000 : 4000);
   }, []);
+  // A blocked download tab becomes a toast with the link (review H1); the app tab is never navigated.
+  useEffect(() => {
+    setPopupBlockedHandler((href) =>
+      toast(t('files.popupBlocked'), 'info', { href, label: t('files.openLink') }),
+    );
+    return () => setPopupBlockedHandler(undefined);
+  }, [toast, t]);
   const value = useMemo(() => ({ toast }), [toast]);
   return (
     <Ctx.Provider value={value}>
@@ -32,6 +45,16 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             )}
           >
             {t.text}
+            {t.link && (
+              <a
+                href={t.link.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="ms-2 underline underline-offset-2"
+              >
+                {t.link.label}
+              </a>
+            )}
           </div>
         ))}
       </div>

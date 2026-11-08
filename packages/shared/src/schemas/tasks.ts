@@ -56,6 +56,8 @@ export const listTasksQuerySchema = z.object({
   dueTo: z.coerce.date().optional(),
   unassigned: z.coerce.boolean().optional(),
   open: z.coerce.boolean().optional(),
+  /** Open tasks past their due date (go-live review H5). */
+  overdue: z.coerce.boolean().optional(),
   mine: z.coerce.boolean().optional(),
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(500).default(25),

@@ -42,7 +42,7 @@ export function DashboardPage() {
   const me = useQuery({ queryKey: ['me', 'profile'], queryFn: () => get<MyProfile>('/hr/me'), retry: false });
   const tasks = useQuery({
     queryKey: ['tasks', 'mine-open'],
-    queryFn: () => get<Paged<unknown>>('/tasks?mine=true&limit=1'),
+    queryFn: () => get<Paged<unknown>>('/tasks?mine=true&open=true&limit=1'), // open only (review H5)
     enabled: can('tasks', 'view'),
   });
   const myTickets = useQuery({
@@ -82,6 +82,15 @@ export function DashboardPage() {
   const p = me.data;
   const isBirthday = isBirthdayToday(p?.birthDate, now);
 
+  // A tile never shows "0" for a failed query (review H9): it says the load failed.
+  const countBody = (q: { isError: boolean; isLoading: boolean; data?: { total: number } }, label: string) =>
+    q.isError ? (
+      <span className="text-red-700">{t('common.loadFailed')}</span>
+    ) : q.isLoading ? (
+      t('common.loading')
+    ) : (
+      `${q.data?.total ?? 0} ${label}`
+    );
   const tile = (to: string, Icon: typeof Bell, title: string, body: React.ReactNode, soon = false) => (
     <Link
       to={to}
@@ -143,19 +152,19 @@ export function DashboardPage() {
           '/me/requests',
           Ticket,
           t('dashboard.sections.requests'),
-          `${myReq.data?.total ?? 0} ${t('dashboard.openRequests')}`,
+          countBody(myReq, t('dashboard.openRequests')),
         )}
         {tile(
           '/me/tickets',
           Ticket,
           t('dashboard.sections.tickets'),
-          `${myTickets.data?.total ?? 0} ${t('dashboard.openTickets')}`,
+          countBody(myTickets, t('dashboard.openTickets')),
         )}
         {tile(
           '/tasks',
           ClipboardList,
           t('dashboard.sections.tasks'),
-          `${tasks.data?.total ?? 0} ${t('dashboard.openTasks')}`,
+          countBody(tasks, t('dashboard.openTasks')),
         )}
         {tile(
           '/calendar',

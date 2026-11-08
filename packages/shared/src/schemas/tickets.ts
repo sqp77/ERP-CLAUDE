@@ -124,7 +124,8 @@ export const ticketTransitionSchema = z.object({
 export type TicketTransitionInput = z.infer<typeof ticketTransitionSchema>;
 
 export const listTicketsQuerySchema = z.object({
-  view: z.enum(['mine', 'assigned', 'department', 'all']).default('mine'),
+  /** 'team' = tickets assigned to my direct reports (go-live review H5: manager dashboard drill-down). */
+  view: z.enum(['mine', 'assigned', 'team', 'department', 'all']).default('mine'),
   state: z.enum(TICKET_STATES).optional(),
   departmentCode: z.string().optional(),
   type: z.enum(TICKET_TYPES).optional(),

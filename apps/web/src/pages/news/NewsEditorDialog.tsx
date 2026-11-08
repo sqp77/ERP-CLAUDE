@@ -5,9 +5,9 @@ import { useTranslation } from 'react-i18next';
 import { Paperclip } from 'lucide-react';
 import { patch, post } from '@/lib/api';
 import { errorMessage, fieldErrorsFrom } from '@/lib/errors';
-import { localInputToIso } from '@/lib/dates';
+import { isoToLocalInput, localInputToIso } from '@/lib/dates';
 import { useDepartments } from '@/lib/lookups';
-import { Alert, Button, Dialog, Field, Input, Select, Textarea } from '@/shared/ui';
+import { Alert, Button, Dialog, Field, Input, QueryError, Select, Textarea } from '@/shared/ui';
 import { useToast } from '@/shared/ui/Toast';
 import { FileUploader } from '@/shared/files/FileUploader';
 import { usePublishableDepartments, type NewsDetail } from './_data';
@@ -57,8 +57,8 @@ export function NewsEditorDialog({
         audience: existing.audienceAll ? 'all' : 'departments',
         audienceDepartmentIds: existing.audienceDepartmentIds,
         pinned: existing.pinned,
-        publishFrom: existing.publishFrom ? existing.publishFrom.slice(0, 16) : '',
-        publishTo: existing.publishTo ? existing.publishTo.slice(0, 16) : '',
+        publishFrom: isoToLocalInput(existing.publishFrom), // Riyadh wall time, not the UTC prefix (review H3)
+        publishTo: isoToLocalInput(existing.publishTo),
       });
       setCover(existing.coverAttachmentId ?? undefined);
     } else {
@@ -106,6 +106,8 @@ export function NewsEditorDialog({
     <Dialog open={open} onClose={onClose} title={existing ? t('news.edit') : t('news.new')}>
       <form onSubmit={submit} className="space-y-3" noValidate>
         {error && <Alert kind="error">{error}</Alert>}
+        {depts.isError && <QueryError error={depts.error} onRetry={() => depts.refetch()} />}
+        {depts.data && !depts.data.items.length && <Alert kind="error">{t('news.noPublisher')}</Alert>}
         <Field label={t('news.titleField')} required error={form.formState.errors.title?.message}>
           <Input {...form.register('title', { required, minLength: { value: 2, message: required } })} />
         </Field>
@@ -178,7 +180,11 @@ export function NewsEditorDialog({
           <Button type="button" variant="secondary" onClick={onClose}>
             {t('actions.cancel')}
           </Button>
-          <Button type="submit" loading={form.formState.isSubmitting}>
+          <Button
+            type="submit"
+            loading={form.formState.isSubmitting}
+            disabled={!!depts.data && !depts.data.items.length}
+          >
             {t('news.saveDraft')}
           </Button>
         </div>

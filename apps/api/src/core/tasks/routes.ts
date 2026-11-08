@@ -43,6 +43,11 @@ tasksRouter.get(
     if (q.mine) filter.assigneeId = userId;
     if (q.dueFrom || q.dueTo)
       filter.dueAt = { ...(q.dueFrom ? { $gte: q.dueFrom } : {}), ...(q.dueTo ? { $lte: q.dueTo } : {}) };
+    if (q.overdue) {
+      // Server-side "overdue" (review H5): open and past due, the same rule the manager dashboard counts.
+      filter.status = { $in: [...OPEN_TASK_STATUSES] };
+      filter.dueAt = { ...((filter.dueAt as object | undefined) ?? {}), $lt: new Date() };
+    }
     const [items, total] = await Promise.all([
       Task.find(filter)
         .sort({ dueAt: 1, createdAt: -1 })

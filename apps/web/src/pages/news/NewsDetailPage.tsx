@@ -91,7 +91,7 @@ export function NewsDetailPage() {
           )}
           {(n.publishFrom || n.publishTo) && (
             <p className="mt-3 text-xs text-slate-500">
-              {t('news.window')}: {n.publishFrom ? formatDateTime(n.publishFrom) : '—'} →{' '}
+              {t('news.window')}: {n.publishFrom ? formatDateTime(n.publishFrom) : '—'} {t('news.windowTo')}{' '}
               {n.publishTo ? formatDateTime(n.publishTo) : '—'}
             </p>
           )}

@@ -42,15 +42,22 @@ export function BoardPage() {
   const [priority, setPriority] = useState('');
   const [dueTo, setDueTo] = useState('');
   const [status, setStatus] = useState(search.get('status') ?? '');
+  const [overdue, setOverdue] = useState(search.get('overdue') === 'true'); // review H5: server-side overdue
   const [openId, setOpenId] = useState<string | null>(null);
   const [assignOpen, setAssignOpen] = useState<{ assigneeId?: string } | null>(null);
   const team = useTeam();
+  // The queue of THIS board (review H2): the department the manager role is scoped to, else the user's own.
+  const boardDepartmentId =
+    user?.roles.find((r) => r.role === 'department_manager' && r.departmentId)?.departmentId ??
+    user?.departmentId ??
+    undefined;
   const tasks = useTasks({
     limit: 500,
     assigneeId: assignee || undefined,
     priority: priority || undefined,
     dueTo: dueTo ? `${dueTo}T23:59:59+03:00` : undefined,
     status: status || undefined,
+    overdue: overdue || undefined,
   });
   const ticketQueue = useTickets({ view: 'department', open: true, limit: 100 });
   const workload = useQuery({
@@ -161,6 +168,10 @@ export function BoardPage() {
             </option>
           ))}
         </Select>
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={overdue} onChange={(e) => setOverdue(e.target.checked)} />
+          {t('tasks.overdueOnly')}
+        </label>
       </div>
 
       {tasks.isError ? (
@@ -293,6 +304,7 @@ export function BoardPage() {
         open={!!assignOpen}
         onClose={() => setAssignOpen(null)}
         initialAssigneeId={assignOpen?.assigneeId}
+        departmentId={boardDepartmentId}
       />
     </>
   );

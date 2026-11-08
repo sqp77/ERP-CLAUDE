@@ -77,6 +77,7 @@ export function EmployeesPage() {
   const [q, setQ] = useState('');
   const [dept, setDept] = useState(search.get('departmentId') ?? '');
   const [status, setStatus] = useState(search.get('status') ?? '');
+  const probation = search.get('probation'); // review H5: HR dashboard drill-down
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string>();
   const [temp, setTemp] = useState<{ email: string; password: string }>();
@@ -85,9 +86,10 @@ export function EmployeesPage() {
     ...(q ? { q } : {}),
     ...(dept ? { departmentId: dept } : {}),
     ...(status ? { status } : {}),
+    ...(probation ? { probationWithinDays: probation } : {}),
   });
   const list = useQuery({
-    queryKey: ['employees', q, dept, status],
+    queryKey: ['employees', q, dept, status, probation],
     queryFn: () => get<Paged<EmployeeRow>>(`/hr/employees?${params}`),
   });
   const form = useForm<NewEmployee>({
@@ -145,6 +147,14 @@ export function EmployeesPage() {
         }
       />
       <Card>
+        {probation && (
+          <Alert kind="info">
+            {t('hr.probationFilter', { days: probation })}{' '}
+            <Link to="/hr/employees" className="underline">
+              {t('actions.clear')}
+            </Link>
+          </Alert>
+        )}
         <div className="mb-3 grid gap-2 sm:grid-cols-3">
           <Input placeholder={t('hr.searchHint')} value={q} onChange={(e) => setQ(e.target.value)} />
           <Select value={dept} onChange={(e) => setDept(e.target.value)}>

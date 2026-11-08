@@ -7,7 +7,7 @@ import { Paperclip } from 'lucide-react';
 import { PRIORITIES, TICKET_TYPES } from '@eayni/shared';
 import { post } from '@/lib/api';
 import { errorMessage, fieldErrorsFrom } from '@/lib/errors';
-import { Alert, Button, Dialog, Field, Input, Select, Textarea } from '@/shared/ui';
+import { Alert, Button, Dialog, Field, Input, QueryError, Select, Textarea } from '@/shared/ui';
 import { useToast } from '@/shared/ui/Toast';
 import { FileUploader } from '@/shared/files/FileUploader';
 import { priorityLabel, useTicketTargets } from './_data';
@@ -50,7 +50,9 @@ export function NewTicketDialog({ open, onClose }: { open: boolean; onClose: () 
       onClose();
       nav(`/tickets/${r._id}`);
     } catch (e) {
-      for (const [name, message] of Object.entries(fieldErrorsFrom(e))) form.setError(`f_${name}`, { type: 'server', message });
+      // Server field errors land on the right input (review H9): `fields.x` → the department field x, others as named.
+      for (const [name, message] of Object.entries(fieldErrorsFrom(e)))
+        form.setError(name.startsWith('fields.') ? `f_${name.slice(7)}` : name, { type: 'server', message });
       setError(errorMessage(e));
     }
   });
@@ -59,6 +61,7 @@ export function NewTicketDialog({ open, onClose }: { open: boolean; onClose: () 
     <Dialog open={open} onClose={onClose} title={t('tickets.new')}>
       <form onSubmit={submit} className="space-y-3" noValidate>
         {error && <Alert kind="error">{error}</Alert>}
+        {targets.isError && <QueryError error={targets.error} onRetry={() => targets.refetch()} />}
         <Field label={t('tickets.department')} required error={err('departmentCode')}>
           <Select {...form.register('departmentCode', { required })}>
             <option value="">—</option>
@@ -109,7 +112,10 @@ export function NewTicketDialog({ open, onClose }: { open: boolean; onClose: () 
           <Input {...form.register('subject', { required, minLength: { value: 2, message: required } })} />
         </Field>
         <Field label={t('tickets.body')} required error={err('body')}>
-          <Textarea rows={4} {...form.register('body', { required, minLength: { value: 2, message: required } })} />
+          <Textarea
+            rows={4}
+            {...form.register('body', { required, minLength: { value: 2, message: required } })}
+          />
         </Field>
         <Field label={t('requests.attachments')}>
           <div className="space-y-1">

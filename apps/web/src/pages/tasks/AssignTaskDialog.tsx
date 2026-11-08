@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
@@ -9,7 +9,7 @@ import { errorMessage, fieldErrorsFrom } from '@/lib/errors';
 import { localInputToIso } from '@/lib/dates';
 import { usePositions, lookupName } from '@/lib/lookups';
 import { usePrefs } from '@/lib/preferences';
-import { Alert, Button, Dialog, Field, Input, Select, Textarea } from '@/shared/ui';
+import { Alert, Button, Dialog, Field, Input, QueryError, Select, Textarea } from '@/shared/ui';
 import { useToast } from '@/shared/ui/Toast';
 import { FileUploader } from '@/shared/files/FileUploader';
 import { awayNotice, useTeam, type TeamMember } from './_data';
@@ -52,6 +52,17 @@ export function AssignTaskDialog({
   const [attachments, setAttachments] = useState<{ attachmentId: string; fileName: string }[]>([]);
   const [error, setError] = useState<string>();
   const form = useForm<FormValues>({ defaultValues: { priority: 'medium' } });
+  // Every opening starts clean with the props of that opening (go-live review H2): no leftover assignee,
+  // search text, attachments or error from a previous task.
+  useEffect(() => {
+    if (!open) return;
+    form.reset({ priority: 'medium' });
+    setQ('');
+    setAwayConfirmed(false);
+    setAssigneeId(initialAssigneeId ?? '');
+    setAttachments([]);
+    setError(undefined);
+  }, [open, initialAssigneeId, form]);
   const members = useMemo(() => {
     const items = team.data?.items ?? [];
     const needle = q.trim();
@@ -123,6 +134,7 @@ export function AssignTaskDialog({
     <Dialog open={open} onClose={onClose} title={t('tasks.assign')}>
       <form onSubmit={submit} className="space-y-3" noValidate>
         {error && <Alert kind="error">{error}</Alert>}
+        {team.isError && <QueryError error={team.error} onRetry={() => team.refetch()} />}
         <Field label={t('tasks.assignee')} hint={t('tasks.assigneeHint')}>
           <div className="space-y-2">
             <Input placeholder={t('actions.search')} value={q} onChange={(e) => setQ(e.target.value)} />

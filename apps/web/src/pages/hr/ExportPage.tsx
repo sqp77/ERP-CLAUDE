@@ -19,6 +19,8 @@ import {
 } from '@/shared/ui';
 import { useToast } from '@/shared/ui/Toast';
 import { useHrLookups } from './_data';
+import { useReportTypes } from '../reports/_data';
+import { usePrefs } from '@/lib/preferences';
 
 interface Resource {
   resource: string;
@@ -32,6 +34,8 @@ export function ExportPage() {
   const { t } = useTranslation();
   const toast = useToast();
   const lk = useHrLookups();
+  const reportTypes = useReportTypes();
+  const { formatDate, formatDateTime } = usePrefs();
   const resources = useQuery({
     queryKey: ['export', 'resources'],
     queryFn: () => get<{ items: Resource[] }>('/export/resources'),
@@ -58,7 +62,12 @@ export function ExportPage() {
   const cleanFilters = Object.fromEntries(Object.entries(filters).filter(([, v]) => v));
   const preview = useMutation({
     mutationFn: () =>
-      api<{ header: string[]; rows: unknown[][]; total: number }>('/export', {
+      api<{
+        header: string[];
+        columns: { key: string; kind?: 'date' | 'datetime' | 'money' }[];
+        rows: unknown[][];
+        total: number;
+      }>('/export', {
         method: 'POST',
         body: { resource, fields, filters: cleanFilters, format: 'preview' },
       }),
@@ -71,17 +80,27 @@ export function ExportPage() {
         body: { resource, fields, filters: cleanFilters, format: 'xlsx', limit: 5000 },
         raw: true,
       });
-      if (!res.ok) throw new Error(t('common.error'));
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
       a.download = `${resource}.xlsx`;
       a.click();
-      URL.revokeObjectURL(url);
+      // Revoke after the browser had time to start the download (review H1); Safari drops an instantly revoked URL.
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
     },
     onError: (e) => toast(errorMessage(e), 'error'),
   });
+  // The preview reads like the Excel file (review H7): labelled columns, Riyadh dates (Hijri when toggled), SAR money.
+  const cell = (v: unknown, kind?: 'date' | 'datetime' | 'money') => {
+    if (v === null || v === undefined || v === '') return '';
+    if (kind === 'date') return formatDate(v as string);
+    if (kind === 'datetime') return formatDateTime(v as string);
+    if (kind === 'money' && typeof v === 'number')
+      return `${v.toLocaleString('ar-SA-u-nu-latn')} ${t('common.currency')}`;
+    if (typeof v === 'boolean') return v ? t('common.yes') : t('common.no');
+    return String(v);
+  };
   const toggle = (k: string) => setFields((s) => (s.includes(k) ? s.filter((x) => x !== k) : [...s, k]));
   const hasSensitive = fields.some((k) => current?.fields.find((f) => f.key === k)?.sensitive);
   return (
@@ -190,12 +209,17 @@ export function ExportPage() {
             {resource === 'employee_reports' && (
               <Card title={t('export.filters')}>
                 <Field label={t('reports.type')}>
-                  <Input
+                  <Select
                     value={filters.type ?? ''}
                     onChange={(e) => setFilters((s) => ({ ...s, type: e.target.value }))}
-                    placeholder="weekly"
-                    dir="ltr"
-                  />
+                  >
+                    <option value="">{t('common.all')}</option>
+                    {reportTypes.data?.items.map((x) => (
+                      <option key={x.code} value={x.code}>
+                        {x.labelAr}
+                      </option>
+                    ))}
+                  </Select>
                 </Field>
               </Card>
             )}
@@ -226,11 +250,7 @@ export function ExportPage() {
                   <tr key={i}>
                     {r.map((v, j) => (
                       <Td key={j} className="text-xs">
-                        {v instanceof Object && 'toISOString' in (v as object)
-                          ? String(v)
-                          : typeof v === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(v)
-                            ? v.slice(0, 10)
-                            : String(v ?? '')}
+                        {cell(v, preview.data!.columns[j]?.kind)}
                       </Td>
                     ))}
                   </tr>

@@ -93,7 +93,10 @@ export function AppShell() {
       to: '/hr/dashboard',
       label: t('nav.hrDashboard'),
       icon: Home,
-      show: can('hr.employees', 'create'),
+      // Same rule the API applies to the dashboard (review H5): whoever sees all employees.
+      show:
+        can('hr.employees', 'view') &&
+        user?.permissions.find((p) => p.resource === 'hr.employees')?.scope === 'all',
     },
     {
       to: '/hr/export',

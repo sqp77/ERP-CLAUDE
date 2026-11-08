@@ -97,3 +97,33 @@ describe('C19 — all copy lives in the translation files', () => {
     expect(offenders).toEqual([]);
   });
 });
+
+describe('H8 — every static translation key used in code exists in the Arabic locale', () => {
+  it("t('a.b.c') keys resolve", () => {
+    const locale = JSON.parse(read(join(webSrc, 'locales', 'ar', 'common.json'))) as Record<string, unknown>;
+    const has = (key: string) => {
+      let cur: unknown = locale;
+      for (const part of key.split('.')) {
+        if (!cur || typeof cur !== 'object' || !(part in (cur as Record<string, unknown>))) return false;
+        cur = (cur as Record<string, unknown>)[part];
+      }
+      return typeof cur === 'string' || typeof cur === 'object';
+    };
+    const missing: string[] = [];
+    for (const p of files) {
+      const src = read(p);
+      for (const m of src.matchAll(/\bt\(\s*'([a-zA-Z0-9_.]+)'/g))
+        if (!has(m[1])) missing.push(`${rel(p)}: ${m[1]}`);
+    }
+    expect(missing).toEqual([]);
+  });
+  it('every notification type has a badge label', () => {
+    const locale = JSON.parse(read(join(webSrc, 'locales', 'ar', 'common.json'))) as {
+      notifications: { types: Record<string, string> };
+    };
+    const shared = read(join(webSrc, '..', '..', '..', 'packages', 'shared', 'src', 'notifications.ts'));
+    const types = [...shared.matchAll(/^\s+'([a-z_]+\.[a-z_]+)':\s*'/gm)].map((m) => m[1]);
+    expect(types.length).toBeGreaterThan(20);
+    expect(types.filter((x) => !locale.notifications.types[x])).toEqual([]);
+  });
+});

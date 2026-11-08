@@ -9,12 +9,14 @@ import { useAuth } from '@/lib/auth';
 import { usePrefs } from '@/lib/preferences';
 import { get, patch, post } from '@/lib/api';
 import { errorMessage, fieldErrorsFrom } from '@/lib/errors';
+import { recordLink } from '@/lib/links';
 import {
   addDays,
   localInputToIso,
   riyadhParts,
   sameRiyadhDay,
   startOfRiyadhDay,
+  startOfRiyadhHijriMonth,
   startOfRiyadhWeek,
 } from '@/lib/dates';
 import {
@@ -84,14 +86,7 @@ function startOfRiyadhMonth(offset: number, now = new Date()): Date {
   const { year, month } = riyadhParts(now);
   return new Date(Date.UTC(year, month - 1 + offset, 1) - OFFSET_MS);
 }
-function linkTo(l?: { type: string; id: string }) {
-  if (!l) return undefined;
-  if (l.type === 'task') return `/tasks/${l.id}`;
-  if (l.type === 'ticket') return `/tickets/${l.id}`;
-  if (l.type === 'hr_request') return `/me/requests/${l.id}`;
-  if (l.type === 'employee') return '/me/profile';
-  return undefined;
-}
+const linkTo = (l?: { type: string; id: string }) => recordLink(l?.type, l?.id); // review H6
 
 /**
  * One calendar [EP §13]: day / week / month views in Riyadh time, Gregorian or Hijri labels (global toggle),
@@ -101,7 +96,7 @@ function linkTo(l?: { type: string; id: string }) {
 export function CalendarPage() {
   const { t } = useTranslation();
   const { can, user } = useAuth();
-  const { formatDate } = usePrefs();
+  const { formatDate, calendar } = usePrefs();
   const qc = useQueryClient();
   const [params, setParams] = useSearchParams();
   const [view, setView] = useState<View>('week');
@@ -118,9 +113,14 @@ export function CalendarPage() {
       const start = startOfRiyadhWeek(offset);
       return { start, end: addDays(start, 7) };
     }
+    if (calendar === 'hijri') {
+      // Hijri months in the grid when Hijri is selected (review H4): title and day numbers agree with the cells.
+      const start = startOfRiyadhHijriMonth(offset);
+      return { start, end: startOfRiyadhHijriMonth(offset + 1) };
+    }
     const start = startOfRiyadhMonth(offset);
     return { start, end: startOfRiyadhMonth(offset + 1) };
-  }, [view, offset]);
+  }, [view, offset, calendar]);
   const q = useQuery({
     queryKey: ['calendar', view, range.start.toISOString()],
     queryFn: () =>
@@ -129,14 +129,34 @@ export function CalendarPage() {
       ),
   });
   const items = useMemo(() => q.data?.items ?? [], [q.data]);
-  // Deep link from notifications: /calendar?event=<id>
+  // Deep link from notifications: /calendar?event=<id> (review H4). The event is fetched by id and the
+  // calendar jumps to its date before the dialog opens, so an old or far-away event is found too.
+  const deepId = params.get('event');
+  const deep = useQuery({
+    queryKey: ['calendar', 'event', deepId],
+    queryFn: () => get<Ev>(`/calendar/events/${deepId}`),
+    enabled: !!deepId,
+  });
+  const [jumpedTo, setJumpedTo] = useState<string | null>(null);
   useEffect(() => {
-    const id = params.get('event');
-    if (id && items.length) {
-      const ev = items.find((e) => e._id === id);
-      if (ev) setSelected(ev);
+    if (!deepId || !deep.data || jumpedTo === deepId) return;
+    const start = new Date(deep.data.startAt);
+    if (!(start >= range.start && start < range.end)) {
+      if (view === 'day')
+        setOffset(Math.round((startOfRiyadhDay(start).getTime() - startOfRiyadhDay().getTime()) / DAY_MS));
+      else if (view === 'week')
+        setOffset(
+          Math.round((startOfRiyadhWeek(0, start).getTime() - startOfRiyadhWeek(0).getTime()) / (7 * DAY_MS)),
+        );
+      else {
+        const { year, month } = riyadhParts(start);
+        const nowParts = riyadhParts();
+        setOffset((year - nowParts.year) * 12 + (month - nowParts.month));
+      }
     }
-  }, [params, items]);
+    setJumpedTo(deepId);
+    setSelected(deep.data);
+  }, [deepId, deep.data, jumpedTo, range.start, range.end, view]);
 
   const gridStart =
     view === 'month' ? startOfRiyadhWeek(0, new Date(range.start.getTime() + OFFSET_MS)) : range.start;

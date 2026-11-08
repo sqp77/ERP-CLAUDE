@@ -6,6 +6,7 @@ import { Paperclip } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { usePrefs } from '@/lib/preferences';
 import { get, patch, post } from '@/lib/api';
+import { recordLink } from '@/lib/links';
 import { errorMessage } from '@/lib/errors';
 import { Alert, Badge, Button, Dialog, Field, QueryError, Select, Spinner, Textarea } from '@/shared/ui';
 import { useToast } from '@/shared/ui/Toast';
@@ -86,7 +87,7 @@ export function TaskDialog({ id, onClose }: { id: string | null; onClose: () => 
             <Badge>{t(`tasks.priorities.${task.priority}`)}</Badge>
             {task.source && (
               <Link
-                to={task.source.type === 'hr_request' ? `/hr/requests/${task.source.id}` : '#'}
+                to={recordLink(task.source.type, task.source.id) ?? '#'}
                 className="text-xs text-brand-700 hover:underline"
               >
                 {t(`tasks.sources.${task.source.type}`)} {task.source.label ?? ''}

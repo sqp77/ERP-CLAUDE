@@ -6,7 +6,7 @@ import { useNavigate } from 'react-router';
 import { Paperclip } from 'lucide-react';
 import { post } from '@/lib/api';
 import { errorMessage, fieldErrorsFrom } from '@/lib/errors';
-import { Alert, Button, Dialog, Field, Input, Select, Textarea } from '@/shared/ui';
+import { Alert, Button, Dialog, Field, Input, QueryError, Select, Textarea } from '@/shared/ui';
 import { useToast } from '@/shared/ui/Toast';
 import { FileUploader } from '@/shared/files/FileUploader';
 import { useReportTypes, type ReportRequestRow } from './_data';
@@ -20,7 +20,15 @@ interface F {
 }
 
 /** "رفع تقرير" [EP §14.2]: type, title, period, details, files; the date and the manager come from the system. */
-export function NewReportDialog({ open, onClose, answering }: { open: boolean; onClose: () => void; answering?: ReportRequestRow | null }) {
+export function NewReportDialog({
+  open,
+  onClose,
+  answering,
+}: {
+  open: boolean;
+  onClose: () => void;
+  answering?: ReportRequestRow | null;
+}) {
   const { t } = useTranslation();
   const toast = useToast();
   const qc = useQueryClient();
@@ -51,7 +59,8 @@ export function NewReportDialog({ open, onClose, answering }: { open: boolean; o
       onClose();
       nav(`/reports/${r._id}`);
     } catch (e) {
-      for (const [name, message] of Object.entries(fieldErrorsFrom(e))) form.setError(name as keyof F, { type: 'server', message });
+      for (const [name, message] of Object.entries(fieldErrorsFrom(e)))
+        form.setError(name as keyof F, { type: 'server', message });
       setError(errorMessage(e));
     }
   });
@@ -59,7 +68,10 @@ export function NewReportDialog({ open, onClose, answering }: { open: boolean; o
     <Dialog open={open} onClose={onClose} title={t('reports.new')}>
       <form onSubmit={submit} className="space-y-3" noValidate>
         {error && <Alert kind="error">{error}</Alert>}
-        {answering && <Alert kind="info">{t('reports.answering', { manager: answering.managerName ?? '' })}</Alert>}
+        {types.isError && <QueryError error={types.error} onRetry={() => types.refetch()} />}
+        {answering && (
+          <Alert kind="info">{t('reports.answering', { manager: answering.managerName ?? '' })}</Alert>
+        )}
         <Field label={t('reports.type')} required>
           <Select {...form.register('type', { required })}>
             {types.data?.items.map((x) => (
@@ -81,7 +93,10 @@ export function NewReportDialog({ open, onClose, answering }: { open: boolean; o
           </Field>
         </div>
         <Field label={t('reports.body')} required error={form.formState.errors.body?.message}>
-          <Textarea rows={8} {...form.register('body', { required, minLength: { value: 2, message: required } })} />
+          <Textarea
+            rows={8}
+            {...form.register('body', { required, minLength: { value: 2, message: required } })}
+          />
         </Field>
         <Field label={t('requests.attachments')}>
           <div className="space-y-1">

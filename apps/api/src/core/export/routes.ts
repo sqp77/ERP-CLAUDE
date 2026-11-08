@@ -63,7 +63,7 @@ exportRouter.post(
       userId: String(user._id),
       limit: body.limit,
     });
-    const { header, data } = await buildRows(resource, body.fields, rows, hidden);
+    const { header, columns, data } = await buildRows(resource, body.fields, rows, hidden);
     const sensitiveFields = body.fields.filter((k) => resource.fields.find((f) => f.key === k)?.sensitive);
     await recordAudit(actorFrom(req), {
       action: 'export',
@@ -78,7 +78,8 @@ exportRouter.post(
       },
     });
 
-    if (body.format === 'preview') return res.json({ header, rows: data.slice(0, 50), total: data.length });
+    if (body.format === 'preview')
+      return res.json({ header, columns, rows: data.slice(0, 50), total: data.length });
     if (body.format === 'xlsx') {
       const buf = await toXlsx(resource.labelAr, header, data);
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');

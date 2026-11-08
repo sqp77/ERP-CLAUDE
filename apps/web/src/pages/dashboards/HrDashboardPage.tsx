@@ -18,9 +18,21 @@ interface Buckets {
   d90: number;
 }
 interface Data {
-  headcount: { total: number; byDepartment: Count[]; byBranch: Count[]; byNationality: Count[]; byContractType: Count[]; byStatus: Count[] };
+  headcount: {
+    total: number;
+    byDepartment: Count[];
+    byBranch: Count[];
+    byNationality: Count[];
+    byContractType: Count[];
+    byStatus: Count[];
+  };
   expiring: { contracts: Buckets; identities: Buckets; documents: Buckets };
-  requests: { open: number; byType: Count[]; byPendingWith: Count[]; byAge: { d0_2: number; d3_7: number; d8plus: number } };
+  requests: {
+    open: number;
+    byType: Count[];
+    byPendingWith: Count[];
+    byAge: { d0_2: number; d3_7: number; d8plus: number };
+  };
   secondmentsWithoutReport: number;
   probationEnding30: number;
   recentChanges: { _id: string; employeeId: string; type: string; at: string; effectiveDate?: string }[];
@@ -41,17 +53,57 @@ export function HrDashboardPage() {
       <PageHeader title={t('dash.hr.title')} subtitle={t('dash.hr.hint')} />
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Kpi to="/hr/employees" label={t('dash.hr.headcount')} value={d.headcount.total} />
-        <Kpi to="/hr/requests" label={t('dash.hr.openRequests')} value={d.requests.open} tone={d.requests.open ? 'amber' : 'slate'} hint={`${t('dash.hr.age8')}: ${d.requests.byAge.d8plus}`} />
-        <Kpi to="/hr/secondments" label={t('dash.hr.secondmentsNoReport')} value={d.secondmentsWithoutReport} tone={d.secondmentsWithoutReport ? 'red' : 'green'} />
-        <Kpi to="/hr/employees" label={t('dash.hr.probation30')} value={d.probationEnding30} tone="blue" />
-        <Kpi to="/hr/employees" label={t('dash.hr.contractsExpiring')} value={b(d.expiring.contracts)} hint={t('dash.hr.bucketsHint')} tone="amber" />
-        <Kpi to="/hr/employees" label={t('dash.hr.identitiesExpiring')} value={b(d.expiring.identities)} hint={t('dash.hr.bucketsHint')} tone="amber" />
-        <Kpi to="/hr/employees" label={t('dash.hr.documentsExpiring')} value={b(d.expiring.documents)} hint={t('dash.hr.bucketsHint')} tone="amber" />
+        <Kpi
+          to="/hr/requests"
+          label={t('dash.hr.openRequests')}
+          value={d.requests.open}
+          tone={d.requests.open ? 'amber' : 'slate'}
+          hint={`${t('dash.hr.age8')}: ${d.requests.byAge.d8plus}`}
+        />
+        <Kpi
+          to="/hr/secondments"
+          label={t('dash.hr.secondmentsNoReport')}
+          value={d.secondmentsWithoutReport}
+          tone={d.secondmentsWithoutReport ? 'red' : 'green'}
+        />
+        <Kpi
+          to="/hr/employees?probation=30"
+          label={t('dash.hr.probation30')}
+          value={d.probationEnding30}
+          tone="blue"
+        />
+        <Kpi
+          to="/hr/expiring?kind=contracts&within=90"
+          label={t('dash.hr.contractsExpiring')}
+          value={b(d.expiring.contracts)}
+          hint={t('dash.hr.bucketsHint')}
+          tone="amber"
+        />
+        <Kpi
+          to="/hr/expiring?kind=identities&within=90"
+          label={t('dash.hr.identitiesExpiring')}
+          value={b(d.expiring.identities)}
+          hint={t('dash.hr.bucketsHint')}
+          tone="amber"
+        />
+        <Kpi
+          to="/hr/expiring?kind=documents&within=90"
+          label={t('dash.hr.documentsExpiring')}
+          value={b(d.expiring.documents)}
+          hint={t('dash.hr.bucketsHint')}
+          tone="amber"
+        />
         <Kpi to="/hr/export" label={t('dash.hr.export')} value="↧" hint={t('dash.hr.exportHint')} />
       </div>
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
         <Card title={t('dash.hr.byDepartment')}>
-          <Bars items={d.headcount.byDepartment} linkFor={(k) => { const id = d.headcount.byDepartment.find((x) => x.key === k.key)?.departmentId; return id ? `/hr/employees?departmentId=${id}` : undefined; }} />
+          <Bars
+            items={d.headcount.byDepartment}
+            linkFor={(k) => {
+              const id = d.headcount.byDepartment.find((x) => x.key === k.key)?.departmentId;
+              return id ? `/hr/employees?departmentId=${id}` : undefined;
+            }}
+          />
         </Card>
         <Card title={t('dash.hr.byBranch')}>
           <Bars items={d.headcount.byBranch} />
@@ -60,17 +112,38 @@ export function HrDashboardPage() {
           <Bars items={d.headcount.byNationality} />
         </Card>
         <Card title={t('dash.hr.byContractType')}>
-          <Bars items={d.headcount.byContractType.map((x) => ({ ...x, key: t(`hr.contractTypes.${x.key}`, x.key) }))} />
+          <Bars
+            items={d.headcount.byContractType.map((x) => ({
+              ...x,
+              key: t(`hr.contractTypes.${x.key}`, x.key),
+            }))}
+          />
         </Card>
         <Card title={t('dash.hr.byStatus')}>
-          <Bars items={d.headcount.byStatus.map((x) => ({ key: t(`hr.status.${x.key}`, x.key), count: x.count, to: `/hr/employees?status=${x.key}` }))} />
+          <Bars
+            items={d.headcount.byStatus.map((x) => ({
+              key: t(`hr.status.${x.key}`, x.key),
+              count: x.count,
+              to: `/hr/employees?status=${x.key}`,
+            }))}
+          />
         </Card>
         <Card title={t('dash.hr.requestsByType')}>
-          <Bars items={d.requests.byType.map((x) => ({ key: t(`requests.types.${x.key}`, x.key), count: x.count, to: `/hr/requests?type=${x.key}` }))} />
+          <Bars
+            items={d.requests.byType.map((x) => ({
+              key: t(`requests.types.${x.key}`, x.key),
+              count: x.count,
+              to: `/hr/requests?type=${x.key}`,
+            }))}
+          />
           <div className="mt-3 text-xs text-slate-500">
-            {t('dash.hr.pendingWith')}: {d.requests.byPendingWith.map((x) => `${t(`requests.pendingWith.${x.key}`, x.key)} ${x.count}`).join(' · ') || '—'}
+            {t('dash.hr.pendingWith')}:{' '}
+            {d.requests.byPendingWith
+              .map((x) => `${t(`requests.pendingWith.${x.key}`, x.key)} ${x.count}`)
+              .join(' · ') || '—'}
             <br />
-            {t('dash.hr.age')}: 0–2: {d.requests.byAge.d0_2} · 3–7: {d.requests.byAge.d3_7} · 8+: {d.requests.byAge.d8plus}
+            {t('dash.hr.age')}: 0–2: {d.requests.byAge.d0_2} · 3–7: {d.requests.byAge.d3_7} · 8+:{' '}
+            {d.requests.byAge.d8plus}
           </div>
         </Card>
         <Card title={t('dash.hr.recentChanges')}>

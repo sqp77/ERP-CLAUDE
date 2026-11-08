@@ -25,11 +25,20 @@ type View = 'mine' | 'team' | 'all';
 /** My reports [EP §14] and, for managers / HR, the reports of my team; search by employee, period and type [EP §14.3]. */
 export function ReportsListPage({ view: initial }: { view: View }) {
   const { t } = useTranslation();
-  const [search] = useSearchParams();
+  const [search, setSearch] = useSearchParams();
   const { formatDate } = usePrefs();
   const { user, can } = useAuth();
-  const [view, setView] = useState<View>(initial);
-  const [type, setType] = useState(search.get('type') ?? '');
+  // View and type follow the URL (review H11) so dashboard links and the back button land on the same list.
+  const urlView = search.get('view') as View | null;
+  const type = search.get('type') ?? '';
+  const setParam = (key: string, value: string) => {
+    const next = new URLSearchParams(search);
+    if (value) next.set(key, value);
+    else next.delete(key);
+    setSearch(next, { replace: true });
+  };
+  const setType = (v: string) => setParam('type', v);
+  const setView = (v: View) => setParam('view', v === initial ? '' : v);
   const [q, setQ] = useState('');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
@@ -39,6 +48,7 @@ export function ReportsListPage({ view: initial }: { view: View }) {
   const scope = user?.permissions.find((p) => p.resource === 'hr.reports')?.scope ?? 'own';
   const views: View[] =
     scope === 'own' ? ['mine'] : scope === 'all' ? ['mine', 'team', 'all'] : ['mine', 'team'];
+  const view: View = urlView && views.includes(urlView) ? urlView : initial;
   const list = useReports({
     view,
     type: type || undefined,

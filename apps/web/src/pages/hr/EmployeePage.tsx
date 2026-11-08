@@ -199,7 +199,7 @@ function DataTab({ e, canEdit }: { e: EmployeeFull; canEdit: boolean }) {
       >
         <dl>
           <Row label={t('common.name')} value={e.fullNameAr} />
-          <Row label="Name (EN)" value={e.fullNameEn} dir="ltr" />
+          <Row label={t('hr.fullNameEn')} value={e.fullNameEn} dir="ltr" />
           <Row label={t('hr.gender')} value={t(`hr.genders.${e.gender}`)} />
           <Row label={t('hr.birthDate')} value={e.birthDate ? formatDate(e.birthDate) : undefined} />
           <Row label={t('hr.nationality')} value={e.nationality} />
@@ -277,7 +277,7 @@ function DataTab({ e, canEdit }: { e: EmployeeFull; canEdit: boolean }) {
             <Field label={t('hr.lastName')}>
               <Input {...form.register('lastNameAr')} />
             </Field>
-            <Field label="Name (EN)">
+            <Field label={t('hr.fullNameEn')}>
               <Input dir="ltr" {...form.register('fullNameEn')} />
             </Field>
             <Field label={t('hr.nationality')}>
@@ -314,7 +314,7 @@ function DataTab({ e, canEdit }: { e: EmployeeFull; canEdit: boolean }) {
               <Input dir="ltr" {...form.register('iban')} />
             </Field>
           </div>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <Field label={t('hr.addressFields.buildingNo')}>
               <Input dir="ltr" {...form.register('buildingNo')} />
             </Field>
@@ -597,7 +597,7 @@ function JobTab({ e, canEdit }: { e: EmployeeFull; canEdit: boolean }) {
                 </Select>
               </Field>
               {form.watch('status') === 'seconded' && (
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                   <Field label={t('hr.secondmentDestination')} required>
                     <Input {...form.register('destination', { required: true })} />
                   </Field>
@@ -1085,7 +1085,7 @@ function CustodyTab({ e }: { e: EmployeeFull }) {
           <Field label={t('hr.custodyItem')} required>
             <Input {...form.register('itemName', { required: true })} />
           </Field>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <Field label={t('hr.assetTag')}>
               <Input dir="ltr" {...form.register('assetTag')} />
             </Field>

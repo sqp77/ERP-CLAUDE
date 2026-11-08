@@ -207,7 +207,7 @@ export function BranchesPage() {
           <Field label={t('common.name')} required>
             <Input {...sf.register('nameAr', { required: true })} />
           </Field>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <Field label={t('admin.org.lat')}>
               <Input dir="ltr" inputMode="decimal" {...sf.register('lat')} />
             </Field>

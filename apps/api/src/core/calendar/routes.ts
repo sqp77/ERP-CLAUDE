@@ -137,6 +137,22 @@ calendarRouter.post(
 );
 
 /** Update / reschedule / status [EP §13.11]: a time change without an explicit status marks it rescheduled and tells the participants. */
+/** One event by id (go-live review H4): deep links from notifications open it on its own date. */
+calendarRouter.get(
+  '/events/:id',
+  requireAuth(),
+  authorize('calendar', 'view'),
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const ev = await CalendarEvent.findOne({
+      _id: req.params.id,
+      deletedAt: null,
+      ...(await visibilityFilter(req)),
+    }).lean();
+    if (!ev) throw notFound();
+    res.json({ ...ev, source: 'event', readOnly: false, startHijri: formatHijri(new Date(ev.startAt)) });
+  }),
+);
+
 calendarRouter.patch(
   '/events/:id',
   requireAuth(),
