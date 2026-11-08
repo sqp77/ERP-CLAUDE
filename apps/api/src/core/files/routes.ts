@@ -10,9 +10,10 @@ import { badRequest, forbidden, notFound } from '../http/errors';
 import { requireAuth } from '../auth/middleware';
 import { authorize } from '../rbac/authorize';
 import { recordAudit } from '../audit/service';
-import { canAccessRecord, isSensitiveOwnerType } from '../access/registry';
+import { canAccessRecord, canViewSensitive, isSensitiveOwnerType } from '../access/registry';
 import { Attachment, type AttachmentDoc } from './model';
 import { localStorageAdapter, signLocal, storage } from './storage';
+import { HTML_SECURITY_HEADERS } from '../templates/render';
 
 export const filesRouter = Router();
 
@@ -22,10 +23,15 @@ export const filesRouter = Router();
  */
 async function canReadAttachment(
   req: AuthedRequest,
-  att: Pick<AttachmentDoc, 'uploadedBy' | 'ownerType' | 'ownerId'>,
+  att: Pick<AttachmentDoc, 'uploadedBy' | 'ownerType' | 'ownerId' | 'sensitive'> & { _id?: unknown },
 ) {
   if (String(att.uploadedBy) === String(req.auth.user._id)) return true;
-  if (att.ownerType && att.ownerId) return canAccessRecord(req, att.ownerType, att.ownerId);
+  if (att.ownerType && att.ownerId) {
+    if (!(await canAccessRecord(req, att.ownerType, att.ownerId, { attachmentId: String(att._id ?? '') })))
+      return false;
+    // Sensitive files (ID scans, contracts, bank proofs…) need the owner module's sensitive-viewer rule (review E2).
+    return att.sensitive ? canViewSensitive(req, att.ownerType, att.ownerId) : true;
+  }
   return req.authz?.scope === 'all';
 }
 
@@ -174,6 +180,7 @@ filesRouter.get(
     const att = await Attachment.findOne({ key }).lean();
     const name = String(req.query.name ?? att?.originalName ?? 'file');
     res.setHeader('Content-Type', att?.mimeType ?? 'application/octet-stream');
+    for (const [k, v] of Object.entries(HTML_SECURITY_HEADERS)) res.setHeader(k, v); // certificates are HTML (review E10)
     res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(name)}`);
     local.read(key).pipe(res);
   }),

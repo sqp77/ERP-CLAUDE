@@ -127,30 +127,39 @@ export async function createTicket(req: AuthedRequest, input: CreateTicketInput)
   const workflowType = await workflowTypeFor(target.code);
   const def = await getWorkflow(workflowType);
   const wf = await initWorkflow(def);
-  const ticket = await Ticket.create({
-    number: await nextNumber('ticket'),
-    requesterUserId: user._id,
-    requesterEmployeeId: employee?._id,
-    requester: {
-      fullNameAr: employee?.fullNameAr ?? user.displayNameAr,
-      employeeNumber: employee?.employeeNumber,
-      departmentId: employee?.departmentId ?? user.departmentId,
-    },
-    departmentId: target.departmentId,
-    departmentCode: target.code,
-    workflowType,
-    type: input.type,
-    subject: input.subject,
-    body: input.body,
-    priority: input.priority,
-    fields,
-    attachmentIds: input.attachmentIds,
-    ...wf,
-    pendingWith: 'department',
-    lastActivityAt: new Date(),
+  // Record and attachment claims commit together (review E7): a foreign file leaves nothing behind.
+  const ticket = await withTransaction(async (session) => {
+    const [doc] = await Ticket.create(
+      [
+        {
+          number: await nextNumber('ticket', session),
+          requesterUserId: user._id,
+          requesterEmployeeId: employee?._id,
+          requester: {
+            fullNameAr: employee?.fullNameAr ?? user.displayNameAr,
+            employeeNumber: employee?.employeeNumber,
+            departmentId: employee?.departmentId ?? user.departmentId,
+          },
+          departmentId: target.departmentId,
+          departmentCode: target.code,
+          workflowType,
+          type: input.type,
+          subject: input.subject,
+          body: input.body,
+          priority: input.priority,
+          fields,
+          attachmentIds: input.attachmentIds,
+          ...wf,
+          pendingWith: 'department',
+          lastActivityAt: new Date(),
+        },
+      ],
+      { session },
+    );
+    if (input.attachmentIds.length)
+      await claimAttachments(input.attachmentIds, 'ticket', String(doc._id), user._id, session);
+    return doc;
   });
-  if (input.attachmentIds.length)
-    await claimAttachments(input.attachmentIds, 'ticket', String(ticket._id), user._id);
   const actor = actorFrom(req);
   await TicketAction.create({
     ticketId: ticket._id,
@@ -197,7 +206,8 @@ async function managesDepartment(user: UserDoc, departmentId: string): Promise<b
     String(user._id),
   );
   if (!eff) return false;
-  if (eff.scope === 'all') return true;
+  // Review E8: the department-manager relation comes from a department-scoped grant only; 'all' scope (system
+  // admin, executive) is view-only — no assigning, resolving or asking for information.
   return eff.scope === 'department' && eff.departmentIds.includes(departmentId);
 }
 
@@ -277,11 +287,13 @@ export async function transition(ticket: TicketDoc, code: string, opts: Transiti
   const now = new Date();
   const { input } = opts;
   // Authorization first (who may fire this transition from this state), then input checks.
-  const t = def.transitions.find((x) => x.code === code);
-  if (!t || !t.from.includes(fromState))
-    throw badRequest('لا يمكن تنفيذ هذا الإجراء في حالة التذكرة الحالية');
-  if (!(t.allow.includes('*') || t.allow.some((a) => opts.relations.includes(a))))
-    throw forbidden(`ليست لديك صلاحية تنفيذ "${t.labelAr}"`);
+  const defs = def.transitions.filter((x) => x.code === code);
+  if (!defs.length) throw badRequest('إجراء غير معروف');
+  // Who before when (review E8): a user with no right to this action gets 403 whatever the state.
+  if (!defs.some((x) => x.allow.includes('*') || x.allow.some((a) => opts.relations.includes(a))))
+    throw forbidden(`ليست لديك صلاحية تنفيذ "${defs[0].labelAr}"`);
+  const t = defs.find((x) => x.from.includes(fromState));
+  if (!t) throw badRequest('لا يمكن تنفيذ هذا الإجراء في حالة التذكرة الحالية');
   if (code === 'reopen' && !(await mayReopen(ticket))) throw badRequest('انتهت مهلة إعادة فتح التذكرة');
   if (code === 'assign') {
     if (!input.assigneeId) throw badRequest('حدّد الموظف المكلّف');

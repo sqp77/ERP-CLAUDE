@@ -33,7 +33,11 @@ export function NewsPage({ view: initial = 'feed' }: { view?: View }) {
           <>
             <div className="flex rounded-lg border border-slate-200 p-0.5 text-xs">
               {views.map((v) => (
-                <button key={v} onClick={() => setView(v)} className={`rounded-md px-2.5 py-1.5 ${view === v ? 'bg-brand-700 text-white' : 'text-slate-600'}`}>
+                <button
+                  key={v}
+                  onClick={() => setView(v)}
+                  className={`rounded-md px-2.5 py-1.5 ${view === v ? 'bg-brand-700 text-white' : 'text-slate-600'}`}
+                >
                   {t(`news.views.${v}`)}
                 </button>
               ))}
@@ -64,21 +68,30 @@ export function NewsPage({ view: initial = 'feed' }: { view?: View }) {
           {list.data.items.map((n) => (
             <Card key={n._id} className={n.pinned ? 'ring-1 ring-amber-300' : undefined}>
               <div className="flex items-start justify-between gap-2">
-                <Link to={`/news/${n._id}`} className="text-base font-semibold text-slate-900 hover:underline">
+                <Link
+                  to={`/news/${n._id}`}
+                  className="text-base font-semibold text-slate-900 hover:underline"
+                >
                   {n.pinned && <Pin className="me-1 inline size-4 text-amber-600" aria-hidden />}
                   {n.title}
                 </Link>
                 {view !== 'feed' && <Badge tone={newsTone[n.state]}>{t(`news.states.${n.state}`)}</Badge>}
               </div>
               <div className="mt-1 text-xs text-slate-500">
-                {n.departmentName ?? t(`departments.${n.departmentCode}`, n.departmentCode)} · {n.authorName} · {formatDate(n.publishedAt ?? n.createdAt, { dateStyle: 'medium' })}
+                {n.departmentName ?? t(`departments.${n.departmentCode}`, n.departmentCode)} · {n.authorName}{' '}
+                · {formatDate(n.publishedAt ?? n.createdAt, { dateStyle: 'medium' })}
                 {!n.audienceAll && <Badge tone="slate">{t('news.targeted')}</Badge>}
               </div>
             </Card>
           ))}
         </div>
       )}
-      <NewsEditorDialog open={editor} onClose={() => setEditor(false)} onSaved={(id) => nav(`/news/${id}`)} />
+      <NewsEditorDialog
+        open={editor}
+        onClose={() => setEditor(false)}
+        canPin={can('news', 'approve')}
+        onSaved={(id) => nav(`/news/${id}`)}
+      />
     </>
   );
 }

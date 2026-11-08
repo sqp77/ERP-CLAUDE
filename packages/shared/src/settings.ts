@@ -130,6 +130,13 @@ export const SETTING_DEFINITIONS = {
     schema: z.record(z.string(), z.boolean()),
     default: {}, // slice 5 review change: missing department = on [EP §12.2, §12.3.3]
   }),
+  'news.directPublishRoles': def({
+    key: 'news.directPublishRoles',
+    labelAr: 'الأدوار التي تنشر مباشرة دون اعتماد (مع قسم من أقسام النشر المباشر)',
+    group: 'general',
+    schema: z.array(z.string()),
+    default: ['hr_officer', 'hr_manager', 'executive'], // go-live review E4
+  }),
   'news.directPublishDepartments': def({
     key: 'news.directPublishDepartments',
     labelAr: 'أقسام تنشر أخبارها وتعاميمها مباشرة دون اعتماد',

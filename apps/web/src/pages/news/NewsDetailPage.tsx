@@ -6,7 +6,18 @@ import { Paperclip, Pin } from 'lucide-react';
 import { get, post } from '@/lib/api';
 import { usePrefs } from '@/lib/preferences';
 import { errorMessage } from '@/lib/errors';
-import { Alert, Badge, Button, Card, Dialog, Field, PageHeader, QueryError, Spinner, Textarea } from '@/shared/ui';
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  Dialog,
+  Field,
+  PageHeader,
+  QueryError,
+  Spinner,
+  Textarea,
+} from '@/shared/ui';
 import { useToast } from '@/shared/ui/Toast';
 import { downloadAttachment } from '@/shared/files/FileUploader';
 import { NewsEditorDialog } from './NewsEditorDialog';
@@ -27,7 +38,9 @@ export function NewsDetailPage() {
   useEffect(() => {
     const c = q.data?.coverAttachmentId;
     if (!c) return;
-    get<{ url: string }>(`/files/${c}/url`).then((r) => setCoverUrl(r.url)).catch(() => undefined);
+    get<{ url: string }>(`/files/${c}/url`)
+      .then((r) => setCoverUrl(r.url))
+      .catch(() => undefined);
   }, [q.data?.coverAttachmentId]);
   const act = useMutation({
     mutationFn: (p: { path: string; body?: unknown }) => post(`/news/${id}/${p.path}`, p.body),
@@ -78,7 +91,8 @@ export function NewsDetailPage() {
           )}
           {(n.publishFrom || n.publishTo) && (
             <p className="mt-3 text-xs text-slate-500">
-              {t('news.window')}: {n.publishFrom ? formatDateTime(n.publishFrom) : '—'} → {n.publishTo ? formatDateTime(n.publishTo) : '—'}
+              {t('news.window')}: {n.publishFrom ? formatDateTime(n.publishFrom) : '—'} →{' '}
+              {n.publishTo ? formatDateTime(n.publishTo) : '—'}
             </p>
           )}
         </Card>
@@ -96,19 +110,29 @@ export function NewsDetailPage() {
                 )}
                 {n.canApprove && n.state === 'pending_approval' && (
                   <>
-                    <Button onClick={() => act.mutate({ path: 'decide', body: { approve: true } })}>{t('news.approve')}</Button>
+                    <Button onClick={() => act.mutate({ path: 'decide', body: { approve: true } })}>
+                      {t('news.approve')}
+                    </Button>
                     <Button variant="danger" onClick={() => setRejecting(true)}>
                       {t('news.reject')}
                     </Button>
                   </>
                 )}
                 {n.canApprove && n.state === 'published' && (
-                  <Button variant="ghost" onClick={() => act.mutate({ path: 'pin', body: { pinned: !n.pinned } })}>
+                  <Button
+                    variant="ghost"
+                    onClick={() => act.mutate({ path: 'pin', body: { pinned: !n.pinned } })}
+                  >
                     {n.pinned ? t('news.unpin') : t('news.pin')}
                   </Button>
                 )}
                 {n.canEdit && n.state === 'published' && (
-                  <Button variant="ghost" onClick={() => window.confirm(t('news.archiveConfirm')) && act.mutate({ path: 'archive' })}>
+                  <Button
+                    variant="ghost"
+                    onClick={() =>
+                      window.confirm(t('news.archiveConfirm')) && act.mutate({ path: 'archive' })
+                    }
+                  >
                     {t('news.archive')}
                   </Button>
                 )}
@@ -135,7 +159,13 @@ export function NewsDetailPage() {
           )}
         </div>
       </div>
-      <NewsEditorDialog open={editor} onClose={() => setEditor(false)} existing={n} onSaved={() => qc.invalidateQueries({ queryKey: ['news'] })} />
+      <NewsEditorDialog
+        open={editor}
+        onClose={() => setEditor(false)}
+        existing={n}
+        canPin={n.canApprove}
+        onSaved={() => qc.invalidateQueries({ queryKey: ['news'] })}
+      />
       <Dialog open={rejecting} onClose={() => setRejecting(false)} title={t('news.reject')}>
         <div className="space-y-3">
           <Field label={t('requests.reasonRequired')} required>
@@ -145,7 +175,12 @@ export function NewsDetailPage() {
             <Button variant="secondary" onClick={() => setRejecting(false)}>
               {t('actions.cancel')}
             </Button>
-            <Button variant="danger" disabled={reason.trim().length < 2} loading={act.isPending} onClick={() => act.mutate({ path: 'decide', body: { approve: false, reason } })}>
+            <Button
+              variant="danger"
+              disabled={reason.trim().length < 2}
+              loading={act.isPending}
+              onClick={() => act.mutate({ path: 'decide', body: { approve: false, reason } })}
+            >
               {t('news.reject')}
             </Button>
           </div>

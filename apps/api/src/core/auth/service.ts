@@ -50,14 +50,23 @@ export async function login(email: string, password: string, meta: ClientMeta) {
   }
   const ok = await passwordCheck.verify(password, user.passwordHash);
   if (!ok) {
-    user.failedLogins += 1;
+    // Atomic counter (review E11): parallel wrong attempts cannot bypass the lock.
     const max = await getSetting('auth.maxFailedLogins');
-    if (user.failedLogins >= max) {
+    const bumped = await User.findOneAndUpdate(
+      { _id: user._id },
+      { $inc: { failedLogins: 1 } },
+      { new: true },
+    )
+      .select('failedLogins')
+      .lean();
+    if ((bumped?.failedLogins ?? 0) >= max) {
       const minutes = await getSetting('auth.lockoutMinutes');
-      user.lockedUntil = new Date(Date.now() + minutes * 60_000);
-      user.failedLogins = 0;
+      await User.updateOne(
+        { _id: user._id, failedLogins: { $gte: max } },
+        { $set: { lockedUntil: new Date(Date.now() + minutes * 60_000), failedLogins: 0 } },
+      );
+      await log('login_locked', { userId: user._id, email, ...meta });
     }
-    await user.save();
     await log('login_failed', { userId: user._id, email, ...meta });
     throw generic;
   }
@@ -125,17 +134,31 @@ export async function verifyMfa(
     await log(replayed ? 'mfa_replayed' : 'mfa_failed', base);
     // Per-user counter across sessions (follow-up 1): a fresh login does not give fresh attempts.
     const windowMs = (await getSetting('auth.mfaFailureWindowMinutes')) * 60_000;
-    if (!user.mfaFailedSince || now.getTime() - user.mfaFailedSince.getTime() > windowMs) {
-      user.mfaFailedSince = now;
-      user.mfaFailedCount = 0;
-    }
-    user.mfaFailedCount = (user.mfaFailedCount ?? 0) + 1;
-    if (user.mfaFailedCount >= (await getSetting('auth.mfaMaxFailuresPerUser'))) {
+    // Atomic per-user counter (review E11): reset an expired window, then $inc; the lock is a conditional update.
+    await User.updateOne(
+      {
+        _id: user._id,
+        $or: [{ mfaFailedSince: null }, { mfaFailedSince: { $lt: new Date(now.getTime() - windowMs) } }],
+      },
+      { $set: { mfaFailedSince: now, mfaFailedCount: 0 } },
+    );
+    const bumped = await User.findOneAndUpdate(
+      { _id: user._id },
+      { $inc: { mfaFailedCount: 1 } },
+      { new: true },
+    )
+      .select('mfaFailedCount')
+      .lean();
+    const maxFailures = await getSetting('auth.mfaMaxFailuresPerUser');
+    if ((bumped?.mfaFailedCount ?? 0) >= maxFailures) {
       const lockMinutes = await getSetting('auth.mfaLockMinutes');
-      user.mfaLockedUntil = new Date(now.getTime() + lockMinutes * 60_000);
-      user.mfaFailedCount = 0;
-      user.mfaFailedSince = undefined;
-      await user.save();
+      await User.updateOne(
+        { _id: user._id, mfaFailedCount: { $gte: maxFailures } },
+        {
+          $set: { mfaLockedUntil: new Date(now.getTime() + lockMinutes * 60_000), mfaFailedCount: 0 },
+          $unset: { mfaFailedSince: 1 },
+        },
+      );
       await revokeSession(session, 'mfa_user_locked');
       await log('mfa_user_locked', base);
       await notifySystemAdmins({
@@ -148,7 +171,6 @@ export async function verifyMfa(
         'mfa_user_locked',
       );
     }
-    await user.save();
     if (session.mfaFailedAttempts >= MFA_MAX_ATTEMPTS) {
       await revokeSession(session, 'mfa_locked');
       await log('mfa_locked', base);

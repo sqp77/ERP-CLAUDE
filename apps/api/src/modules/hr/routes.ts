@@ -29,6 +29,15 @@ import * as hr from './service';
 
 export const hrRouter = Router();
 
+/** Contract files are sensitive employee documents: owned by the employee record, sensitive flag on (review E2). */
+async function markSensitiveFile(attachmentId: string, employeeId: string) {
+  const { Attachment } = await import('../../core/files/model');
+  await Attachment.updateOne(
+    { _id: attachmentId },
+    { $set: { ownerType: 'employee', ownerId: employeeId, sensitive: true } },
+  );
+}
+
 /** Load an employee the viewer may see, or 404 (never reveal existence outside scope). */
 async function visibleEmployee(req: AuthedRequest, id: string) {
   const filter = await hr.employeeScopeFilter(req.authz!, req.auth.user);
@@ -183,8 +192,14 @@ hrRouter.get(
   requireAuth(),
   authorize('hr.employees', 'view'),
   asyncHandler(async (req: AuthedRequest, res) => {
-    await visibleEmployee(req, req.params.id);
-    res.json({ items: await hr.employeeHistory(req.params.id) });
+    const e = await visibleEmployee(req, req.params.id);
+    const self = !!e.userId && String(e.userId) === String(req.auth.user._id);
+    res.json({
+      items: await hr.employeeHistory(
+        req.params.id,
+        self ? new Set() : await hr.viewerRestrictions(req.auth.user),
+      ),
+    });
   }),
 );
 
@@ -322,6 +337,7 @@ hrRouter.post(
       previousId: previous?._id,
       createdBy: req.auth.user._id,
     });
+    if (body.attachmentId) await markSensitiveFile(body.attachmentId, req.params.id);
     if (previous) {
       previous.status = 'expired';
       previous.statusReason = 'renewed';
@@ -361,6 +377,8 @@ hrRouter.post(
       addedBy: req.auth.user._id,
     } as never);
     await c.save();
+    const addAtt = (req.body as { attachmentId?: string }).attachmentId;
+    if (addAtt) await markSensitiveFile(addAtt, req.params.id);
     await recordAudit(actorFrom(req), {
       action: 'update',
       resource: 'hr.contracts',

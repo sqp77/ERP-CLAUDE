@@ -15,6 +15,11 @@ const envSchema = z.object({
   /** scrypt cost as log2(N); 17 in deployed stages (review D20). Tests lower it to keep the suite fast. */
   SCRYPT_LOG2_N: z.coerce.number().int().min(12).max(20).default(17),
   APP_URL: z.string().default('http://localhost:5173'),
+  /**
+   * Proxy hops in front of the API whose X-Forwarded-For entries are trusted (review E11). Locally 1 (Vite proxy);
+   * CloudFront → API Gateway → Lambda = 2 (the client address is the entry before the two proxies).
+   */
+  TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(5).default(1),
   API_URL: z.string().default('http://localhost:4000'),
   COOKIE_SECURE: z
     .string()

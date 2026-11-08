@@ -8,6 +8,7 @@ import { notify } from '../../core/notifications/service';
 import { getSetting } from '../../core/settings/service';
 import { effectivePermission } from '../../core/rbac/service';
 import { claimAttachments } from '../../core/files/service';
+import { withTransaction } from '../../db';
 import { Department } from '../../core/org/model';
 import { User, type UserDoc } from '../../core/auth/model';
 import { News, NewsAction, type NewsDoc } from './model';
@@ -88,17 +89,28 @@ export async function createNews(req: AuthedRequest, input: CreateNewsInput): Pr
   const dept = allowed.find((d) => d.code === code);
   if (!dept) throw forbidden('لا يمكنك النشر باسم هذا القسم');
   if (!input.audienceAll && !input.audienceDepartmentIds.length) throw badRequest('حدّد الفئة المستهدفة');
-  const { departmentCode: _c, ...rest } = input;
-  const news = await News.create({
-    ...rest,
-    number: await nextNumber('news'),
-    departmentId: dept.departmentId,
-    departmentCode: dept.code,
-    authorUserId: user._id,
-    authorName: user.displayNameAr,
-  });
+  const { departmentCode: _c, pinned, ...rest } = input;
+  const canPin = (await perm(user, 'approve')) !== null; // review E4: only approvers pin
   const ids = [...input.attachmentIds, ...(input.coverAttachmentId ? [input.coverAttachmentId] : [])];
-  if (ids.length) await claimAttachments(ids, 'news', String(news._id), user._id);
+  // Record and attachment claims commit together (review E7).
+  const news = await withTransaction(async (session) => {
+    const [doc] = await News.create(
+      [
+        {
+          ...rest,
+          pinned: canPin ? pinned : false,
+          number: await nextNumber('news', session),
+          departmentId: dept.departmentId,
+          departmentCode: dept.code,
+          authorUserId: user._id,
+          authorName: user.displayNameAr,
+        },
+      ],
+      { session },
+    );
+    if (ids.length) await claimAttachments(ids, 'news', String(doc._id), user._id, session);
+    return doc;
+  });
   const actor = actorFrom(req);
   await log(news, 'created', actor);
   await recordAudit(actor, {
@@ -115,17 +127,27 @@ export async function updateNews(
   news: NewsDoc,
   input: Partial<CreateNewsInput>,
 ): Promise<NewsDoc> {
-  if (!(await canEdit(req.auth.user, news))) throw forbidden();
+  const user = req.auth.user;
+  const approver = await canApprove(user, news);
+  if (!(await canEdit(user, news))) throw forbidden();
   if (news.state === 'archived') throw badRequest('الخبر مؤرشف');
+  // Go-live review E4: authors edit drafts and rejected items; a pending item goes back to draft when edited;
+  // a published item is edited only by an approver (and the change is logged with before/after).
+  if (news.state === 'published' && !approver) throw forbidden('تعديل خبر منشور من صلاحية معتمِد القسم');
   const before = news.toObject();
-  const { departmentCode: _c, ...rest } = input;
+  const { departmentCode: _c, pinned, ...rest } = input;
   Object.assign(news, rest);
+  if (pinned !== undefined && approver) news.pinned = pinned; // `pinned` is ignored for non-approvers
   const ids = [...(input.attachmentIds ?? []), ...(input.coverAttachmentId ? [input.coverAttachmentId] : [])];
-  if (ids.length) await claimAttachments(ids, 'news', String(news._id), req.auth.user._id);
-  // An edit after rejection goes back to draft; an edit of a published item stays published.
-  if (news.state === 'rejected') news.state = 'draft';
+  if (ids.length) await claimAttachments(ids, 'news', String(news._id), user._id);
+  if (news.state === 'rejected' || news.state === 'pending_approval') news.state = 'draft';
   await news.save();
-  await log(news, 'updated', actorFrom(req));
+  await log(
+    news,
+    'updated',
+    actorFrom(req),
+    news.state === 'published' ? 'published item edited by approver' : undefined,
+  );
   await recordAudit(actorFrom(req), {
     action: 'update',
     resource: 'news',
@@ -140,7 +162,12 @@ export async function updateNews(
 export async function submitNews(req: AuthedRequest, news: NewsDoc): Promise<NewsDoc> {
   if (!(await canEdit(req.auth.user, news))) throw forbidden();
   if (!['draft', 'rejected'].includes(news.state)) throw badRequest('الخبر ليس مسودة');
-  const direct = (await getSetting('news.directPublishDepartments')).includes(news.departmentCode);
+  // Direct publishing needs both a direct-publish department and a role listed in news.directPublishRoles (review E4).
+  const directDept = (await getSetting('news.directPublishDepartments')).includes(news.departmentCode);
+  const directRole = (await getSetting('news.directPublishRoles')).some((r) =>
+    req.auth.roleCodes.includes(r),
+  );
+  const direct = directDept && directRole;
   if (direct || (await canApprove(req.auth.user, news)))
     return publish(news, actorFrom(req), direct ? 'direct_publish' : 'self_approve');
   const updated = await News.findOneAndUpdate(

@@ -15,6 +15,7 @@ import { forbidden } from '../../core/http/errors';
 import { requireAuth } from '../../core/auth/middleware';
 import { authorize } from '../../core/rbac/authorize';
 import { recordAudit } from '../../core/audit/service';
+import { sendHtml } from '../../core/templates/render';
 import { Attachment } from '../../core/files/model';
 import { User } from '../../core/auth/model';
 import { Employee } from './model';
@@ -163,7 +164,6 @@ employeeReportsRouter.get(
       res.send(await svc.renderReportXlsx(r));
       return;
     }
-    res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    res.send(await svc.renderReportHtml(r));
+    sendHtml(res, await svc.renderReportHtml(r));
   }),
 );

@@ -19,12 +19,28 @@ import { clearSessionCookie, revokeSession, setSessionCookie } from './session';
 
 export const authRouter = Router();
 
+const limited = { error: { code: 'rate_limited', message: 'محاولات كثيرة، حاول بعد قليل' } };
+/**
+ * Login limits (go-live review E11): failures only, keyed by client IP + email, so an office behind one NAT
+ * address is never locked out by successful logins; a coarse per-IP ceiling on failures catches sprays.
+ * Counters live per Lambda container; the durable guard is the per-user lock in the database.
+ */
 const loginLimiter = rateLimit({
   windowMs: 15 * 60_000,
-  limit: isTest() ? 1000 : 20,
+  limit: isTest() ? 1000 : 10,
+  skipSuccessfulRequests: true,
+  keyGenerator: (req) => `${req.ip}|${String((req.body as { email?: string })?.email ?? '').toLowerCase()}`,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { error: { code: 'rate_limited', message: 'محاولات كثيرة، حاول بعد قليل' } },
+  message: limited,
+});
+const loginIpLimiter = rateLimit({
+  windowMs: 15 * 60_000,
+  limit: isTest() ? 1000 : 200,
+  skipSuccessfulRequests: true,
+  standardHeaders: false,
+  legacyHeaders: false,
+  message: limited,
 });
 
 /** Second-factor codes: tight per-IP limit on top of the per-session lock (security review A2). */
@@ -40,6 +56,7 @@ const meta = (req: Request) => ({ ip: req.ip, userAgent: String(req.headers['use
 
 authRouter.post(
   '/login',
+  loginIpLimiter,
   loginLimiter,
   validate(loginSchema),
   asyncHandler(async (req, res) => {

@@ -11,6 +11,7 @@ import { claimAttachments } from '../../core/files/service';
 import { htmlDocument } from '../../core/templates/render';
 import { riyadhDate } from '../../core/dates/businessDays';
 import { assertAssignable } from '../../core/tasks/service';
+import { withTransaction } from '../../db';
 import { Department } from '../../core/org/model';
 import { User, type UserDoc } from '../../core/auth/model';
 import { Employee } from './model';
@@ -45,27 +46,40 @@ export async function submitReport(
     });
     if (!request) throw badRequest('طلب التقرير غير موجود أو تم الرد عليه');
   }
-  const report = await EmployeeReport.create({
-    number: await nextNumber('employeeReport'),
-    employeeId: employee._id,
-    userId: user._id,
-    departmentId: employee.departmentId,
-    managerUserId: manager?.userId,
-    managerEmployeeId: employee.directManagerId,
-    type: input.type,
-    title: input.title,
-    periodFrom: input.periodFrom,
-    periodTo: input.periodTo,
-    body: input.body,
-    attachmentIds: input.attachmentIds,
-    requestId: request?._id,
+  // Record, attachment claims and request fulfilment commit together (review E7, G9).
+  const report = await withTransaction(async (session) => {
+    const [doc] = await EmployeeReport.create(
+      [
+        {
+          number: await nextNumber('employeeReport', session),
+          employeeId: employee._id,
+          userId: user._id,
+          departmentId: employee.departmentId,
+          managerUserId: manager?.userId,
+          managerEmployeeId: employee.directManagerId,
+          type: input.type,
+          title: input.title,
+          periodFrom: input.periodFrom,
+          periodTo: input.periodTo,
+          body: input.body,
+          attachmentIds: input.attachmentIds,
+          requestId: request?._id,
+        },
+      ],
+      { session },
+    );
+    if (input.attachmentIds.length)
+      await claimAttachments(input.attachmentIds, 'employee_report', String(doc._id), user._id, session);
+    if (request) {
+      const linked = await ReportRequest.findOneAndUpdate(
+        { _id: request._id, fulfilledReportId: null },
+        { $set: { fulfilledReportId: doc._id } },
+        { session },
+      );
+      if (!linked) throw badRequest('طلب التقرير غير موجود أو تم الرد عليه');
+    }
+    return doc;
   });
-  if (input.attachmentIds.length)
-    await claimAttachments(input.attachmentIds, 'employee_report', String(report._id), user._id);
-  if (request) {
-    request.fulfilledReportId = report._id;
-    await request.save();
-  }
   await recordAudit(actorFrom(req), {
     action: 'create',
     resource: 'hr.reports',

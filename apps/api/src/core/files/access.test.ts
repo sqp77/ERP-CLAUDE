@@ -50,6 +50,20 @@ describe('security review A — file and comment access [EP §5.2, CS §6.6, gol
   it('A3: an attachment is reachable only through its owner record; sensitivity is set by the server', async () => {
     const { hr, me, other, employeeId } = await setup();
     const id = await upload(hr, { ownerType: 'employee', ownerId: employeeId, sensitive: false });
+    // Sensitivity is decided by the server when the document record is created (identity copies are sensitive).
+    expect((await Attachment.findById(id))!.sensitive).toBe(false);
+    const doc = await request(app())
+      .post('/api/v1/documents')
+      .set(auth(hr))
+      .send({
+        ownerType: 'employee',
+        ownerId: employeeId,
+        type: 'identity',
+        titleAr: 'صورة الهوية',
+        attachmentId: id,
+        sensitive: false,
+      });
+    expect(doc.status).toBe(201);
     expect((await Attachment.findById(id))!.sensitive).toBe(true);
     // The employee sees their own file; an unrelated employee does not; HR does.
     expect((await request(app()).get(`/api/v1/files/${id}/url`).set(auth(me))).status).toBe(200);

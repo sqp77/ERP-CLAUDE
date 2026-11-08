@@ -561,6 +561,14 @@ export async function changeStatus(
   return employee;
 }
 
-export async function employeeHistory(id: string) {
-  return EmployeeEvent.find({ employeeId: id }).sort({ at: -1 }).lean();
+export async function employeeHistory(id: string, hidden: Set<string> = new Set()) {
+  const items = await EmployeeEvent.find({ employeeId: id }).sort({ at: -1 }).lean();
+  const strip = (v: unknown) => {
+    if (!v || typeof v !== 'object') return v;
+    const o = { ...(v as Record<string, unknown>) };
+    for (const f of hidden) delete o[f.split('.')[0]];
+    return o;
+  };
+  // Pay data inside promotion events follows the same field rules as the record (go-live review E1).
+  return hidden.size ? items.map((e) => ({ ...e, from: strip(e.from), to: strip(e.to) })) : items;
 }

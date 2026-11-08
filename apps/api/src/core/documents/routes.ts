@@ -10,6 +10,8 @@ import { authorize } from '../rbac/authorize';
 import { recordAudit } from '../audit/service';
 import { DocumentRecord } from './model';
 import { canAccessDocuments } from './access';
+import { canViewSensitive } from '../access/registry';
+import { Attachment } from '../files/model';
 import { forbidden } from '../http/errors';
 
 export const documentsRouter = Router();
@@ -31,7 +33,11 @@ documentsRouter.get(
     const latest = q.includeOld
       ? items
       : items.filter((d, i, arr) => arr.findIndex((x) => x.type === d.type) === i);
-    if (latest.some((d) => d.sensitive)) {
+    // Sensitive documents: type and expiry for everyone who may see the record; the file only for sensitive viewers (review E2).
+    const sensitiveOk = latest.some((d) => d.sensitive)
+      ? await canViewSensitive(req, q.ownerType, q.ownerId)
+      : false;
+    if (sensitiveOk) {
       await recordAudit(actorFrom(req), {
         action: 'view',
         resource: 'documents',
@@ -39,7 +45,11 @@ documentsRouter.get(
         sensitive: true,
       });
     }
-    res.json({ items: latest });
+    res.json({
+      items: latest.map((d) =>
+        d.sensitive && !sensitiveOk ? { ...d, attachmentId: undefined, restricted: true } : d,
+      ),
+    });
   }),
 );
 
@@ -51,6 +61,8 @@ documentsRouter.post(
   asyncHandler(async (req: AuthedRequest, res) => {
     const body = req.body as z.infer<typeof createDocumentSchema>;
     if (!(await canAccessDocuments(req, body.ownerType, body.ownerId))) throw forbidden();
+    if (body.ownerType === 'employee' && ['identity', 'contract', 'bank_proof'].includes(body.type))
+      body.sensitive = true;
     const prev = await DocumentRecord.findOne({
       ownerType: body.ownerType,
       ownerId: body.ownerId,
@@ -63,6 +75,17 @@ documentsRouter.post(
       version: (prev?.version ?? 0) + 1,
       previousId: prev?._id,
     });
+    // The file inherits the document's sensitivity (review E2).
+    await Attachment.updateOne(
+      { _id: body.attachmentId },
+      {
+        $set: {
+          ownerType: body.ownerType,
+          ownerId: body.ownerId,
+          ...(body.sensitive ? { sensitive: true } : {}),
+        },
+      },
+    );
     await recordAudit(actorFrom(req), {
       action: 'create',
       resource: 'documents',

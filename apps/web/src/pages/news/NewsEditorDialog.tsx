@@ -29,11 +29,14 @@ export function NewsEditorDialog({
   onClose,
   existing,
   onSaved,
+  canPin = false,
 }: {
   open: boolean;
   onClose: () => void;
   existing?: NewsDetail | null;
   onSaved: (id: string) => void;
+  /** Pinning is for approvers (review E4); hidden otherwise. */
+  canPin?: boolean;
 }) {
   const { t } = useTranslation();
   const toast = useToast();
@@ -59,7 +62,12 @@ export function NewsEditorDialog({
       });
       setCover(existing.coverAttachmentId ?? undefined);
     } else {
-      form.reset({ audience: 'all', pinned: false, audienceDepartmentIds: [], departmentCode: depts.data?.items[0]?.code });
+      form.reset({
+        audience: 'all',
+        pinned: false,
+        audienceDepartmentIds: [],
+        departmentCode: depts.data?.items[0]?.code,
+      });
       setCover(undefined);
     }
     setAttachments([]);
@@ -81,13 +89,16 @@ export function NewsEditorDialog({
       coverAttachmentId: cover ?? null,
     };
     try {
-      const r = existing ? await patch<{ _id: string }>(`/news/${existing._id}`, body) : await post<{ _id: string }>('/news', body);
+      const r = existing
+        ? await patch<{ _id: string }>(`/news/${existing._id}`, body)
+        : await post<{ _id: string }>('/news', body);
       toast(t('actions.save'));
       qc.invalidateQueries({ queryKey: ['news'] });
       onSaved(r._id);
       onClose();
     } catch (e) {
-      for (const [name, message] of Object.entries(fieldErrorsFrom(e))) form.setError(name as keyof F, { type: 'server', message });
+      for (const [name, message] of Object.entries(fieldErrorsFrom(e)))
+        form.setError(name as keyof F, { type: 'server', message });
       setError(errorMessage(e));
     }
   });
@@ -108,7 +119,10 @@ export function NewsEditorDialog({
           </Select>
         </Field>
         <Field label={t('news.body')} required error={form.formState.errors.body?.message}>
-          <Textarea rows={8} {...form.register('body', { required, minLength: { value: 2, message: required } })} />
+          <Textarea
+            rows={8}
+            {...form.register('body', { required, minLength: { value: 2, message: required } })}
+          />
         </Field>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Field label={t('news.audience')}>
@@ -119,7 +133,11 @@ export function NewsEditorDialog({
           </Field>
           {audience === 'departments' && (
             <Field label={t('news.targetDepartments')}>
-              <select multiple className="min-h-24 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" {...form.register('audienceDepartmentIds')}>
+              <select
+                multiple
+                className="min-h-24 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                {...form.register('audienceDepartmentIds')}
+              >
                 {allDepts.data?.items.map((d) => (
                   <option key={d._id} value={d._id}>
                     {d.nameAr}
@@ -136,9 +154,11 @@ export function NewsEditorDialog({
           <Field label={t('news.publishTo')}>
             <Input type="datetime-local" dir="ltr" {...form.register('publishTo')} />
           </Field>
-          <label className="mt-7 flex items-center gap-2 text-sm">
-            <input type="checkbox" {...form.register('pinned')} /> {t('news.pinned')}
-          </label>
+          {canPin && (
+            <label className="mt-7 flex items-center gap-2 text-sm">
+              <input type="checkbox" {...form.register('pinned')} /> {t('news.pinned')}
+            </label>
+          )}
         </div>
         <Field label={t('news.cover')} hint={t('news.coverHint')}>
           <FileUploader onUploaded={(a) => setCover(a.attachmentId)} />

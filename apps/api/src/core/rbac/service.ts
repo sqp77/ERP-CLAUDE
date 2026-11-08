@@ -1,5 +1,6 @@
 import {
   maxScope,
+  SENSITIVE_FIELDS_BY_RESOURCE,
   TEAM_LEAD_GRANTS,
   type Action,
   type FieldRule,
@@ -49,12 +50,13 @@ export async function ensureCoreRoles(): Promise<void> {
     const missingGrants = def.grants.filter((g) => !known.has(g.resource));
     const knownRules = new Set((existing.fieldRules as FieldRule[]).map((r) => r.resource));
     const missingRules = def.fieldRules.filter((r) => !knownRules.has(r.resource));
-    if (missingGrants.length || missingRules.length) {
-      await Role.updateOne(
-        { code: def.code },
-        { $push: { grants: { $each: missingGrants }, fieldRules: { $each: missingRules } } },
-      );
+    if (missingGrants.length) {
+      await Role.updateOne({ code: def.code }, { $push: { grants: { $each: missingGrants } } });
     }
+    // Field-level rules of system roles are code-defined (default-deny for sensitive fields, review E1).
+    if (JSON.stringify(existing.fieldRules) !== JSON.stringify(def.fieldRules))
+      await Role.updateOne({ code: def.code }, { $set: { fieldRules: def.fieldRules } });
+    void missingRules;
   }
   clearRoleCache();
 }
@@ -123,7 +125,11 @@ export async function flattenPermissions(
   return [...merged.values()];
 }
 
-/** Field-level rules: fields the user may NOT view / edit for a resource, from all roles. */
+/**
+ * Field-level rules: fields the user may NOT view / edit for a resource, from all roles.
+ * Sensitive fields of the resource are hidden by default and revealed only by an explicit `view: true`
+ * rule on one of the assigned roles (go-live review E1); other fields follow the rules as before.
+ */
 export async function fieldRestrictions(
   assignments: RoleAssignment[],
   resource: string,
@@ -132,6 +138,7 @@ export async function fieldRestrictions(
   const hidden = new Set<string>();
   const readOnly = new Set<string>();
   const seen = new Map<string, { view: boolean; edit: boolean }>();
+  for (const f of SENSITIVE_FIELDS_BY_RESOURCE[resource] ?? []) seen.set(f, { view: false, edit: false });
   for (const a of assignments) {
     const role = roles.get(a.role);
     if (!role) continue;

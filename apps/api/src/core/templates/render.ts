@@ -28,3 +28,21 @@ export function htmlDocument(bodyHtml: string, title = ''): string {
 <style>body{font-family:"Noto Naskh Arabic","Tajawal",Arial,sans-serif;margin:32px;color:#111;line-height:1.7}table{border-collapse:collapse;width:100%}th,td{border:1px solid #ccc;padding:6px 10px;text-align:start}</style>
 </head><body>${bodyHtml}</body></html>`;
 }
+
+export function escapeHtml(value: unknown): string {
+  return String(value ?? '').replace(
+    /[&<>"']/g,
+    (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!,
+  );
+}
+
+/** Every HTML we serve (exports, reports, certificates) is inert: no scripts, no external loads (go-live review E10). */
+export const HTML_SECURITY_HEADERS = {
+  'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; img-src data:",
+  'X-Content-Type-Options': 'nosniff',
+} as const;
+export function sendHtml(res: import('express').Response, html: string, status = 200): void {
+  for (const [k, v] of Object.entries(HTML_SECURITY_HEADERS)) res.setHeader(k, v);
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.status(status).send(html);
+}

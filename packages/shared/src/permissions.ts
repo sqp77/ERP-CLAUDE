@@ -116,6 +116,14 @@ export function grantableRolesFor(actorRoles: readonly string[]): Set<string> | 
  * chart), without holding any role (DECISIONS §4; EP §10, EP §16). Applied by the RBAC service when the
  * user has at least one direct report.
  */
+/**
+ * Fields that are hidden unless an assigned role has an explicit `view: true` rule for them (go-live review E1).
+ * Default-deny: a scope grant alone never reveals them.
+ */
+export const SENSITIVE_FIELDS_BY_RESOURCE: Record<string, readonly string[]> = {
+  'hr.employees': ['identity.number', 'religion', 'birthDate', 'basicSalaryHalalas', 'allowances', 'bank'],
+};
+
 export const TEAM_LEAD_GRANTS: PermissionGrant[] = [
   { resource: 'hr.employees', actions: ['view'], scope: 'team' },
   { resource: 'tasks', actions: ['view', 'create', 'edit'], scope: 'team' },

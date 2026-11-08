@@ -9,7 +9,7 @@ import {
 import { asyncHandler } from '../http/async';
 import { validate } from '../http/validate';
 import { actorFrom, type AuthedRequest } from '../http/context';
-import { badRequest, notFound } from '../http/errors';
+import { badRequest, forbidden, notFound } from '../http/errors';
 import { requireAuth } from '../auth/middleware';
 import { authorize } from '../rbac/authorize';
 import { recordAudit } from '../audit/service';
@@ -38,6 +38,23 @@ async function visibilityFilter(req: AuthedRequest) {
 }
 
 const eventLink = (id: unknown) => `/calendar?event=${id}`;
+
+/** Department calendars: an event may be tagged only with the creator's own department or departments in their authz scope (review E6). */
+function assertDepartmentsAllowed(req: AuthedRequest, departmentIds: string[] | undefined) {
+  if (!departmentIds?.length) return;
+  if (req.authz!.scope === 'all') return;
+  const allowed = new Set([
+    ...req.authz!.departmentIds,
+    ...(req.auth.user.departmentId ? [String(req.auth.user.departmentId)] : []),
+  ]);
+  if (departmentIds.some((d) => !allowed.has(d))) throw forbidden('لا يمكنك إضافة موعد إلى تقويم قسم آخر');
+}
+
+async function ownerInDepartments(ownerId: unknown, departmentIds: string[]): Promise<boolean> {
+  const { User } = await import('../auth/model');
+  const owner = await User.findById(ownerId).select('departmentId').lean();
+  return !!owner?.departmentId && departmentIds.includes(String(owner.departmentId));
+}
 const participantsOf = (ev: { ownerId: unknown; participantIds: unknown[] }, except?: string) =>
   [...new Set([String(ev.ownerId), ...ev.participantIds.map(String)])].filter((id) => id !== except);
 
@@ -90,7 +107,7 @@ calendarRouter.post(
     const body = req.body as z.infer<typeof createEventSchema>;
     let link = body.link;
     if (link) {
-      const found = await resolveRecord(link.type, link.id); // customer / project / task [EP §13.12]
+      const found = await resolveRecord(link.type, link.id, req); // same 400 when not found or not allowed [EP §13.12]
       if (!found) throw badRequest('السجل المرتبط غير موجود');
       link = { type: link.type, ...found };
     }
@@ -132,6 +149,16 @@ calendarRouter.patch(
       ...(await visibilityFilter(req)),
     });
     if (!ev) throw notFound();
+    // Go-live review E6: the owner (or a manager whose scope covers the owner's department) edits the event;
+    // participants may only set status and outcome (DECISIONS §17).
+    const isOwner = String(ev.ownerId) === String(req.auth.user._id);
+    const managerOverOwner =
+      req.authz!.scope === 'all' ||
+      (req.authz!.scope === 'department' && (await ownerInDepartments(ev.ownerId, req.authz!.departmentIds)));
+    const contentKeys = Object.keys(body).filter((k) => !['status', 'outcome', 'nextFollowUpAt'].includes(k));
+    if (contentKeys.length && !isOwner && !managerOverOwner)
+      throw forbidden('تعديل الموعد من صلاحية منظّمه؛ يمكنك تحديث الحالة والنتيجة فقط');
+    if (body.departmentIds) assertDepartmentsAllowed(req, body.departmentIds);
     const before = ev.toObject();
     const timeChanged =
       (body.startAt && body.startAt.getTime() !== ev.startAt.getTime()) ||

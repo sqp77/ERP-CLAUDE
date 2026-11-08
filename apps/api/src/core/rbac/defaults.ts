@@ -6,6 +6,20 @@ const HIDE_SENSITIVE = {
   view: false,
   edit: false,
 };
+/** HR sees and edits every sensitive employee field (HR §6). */
+const HR_SENSITIVE = {
+  resource: 'hr.employees',
+  fields: [...EMPLOYEE_SENSITIVE_FIELDS],
+  view: true,
+  edit: true,
+};
+/** Finance sees pay and bank data only (FIN §12, DECISIONS §7); identity, religion and birth date stay hidden. */
+const FINANCE_SENSITIVE = {
+  resource: 'hr.employees',
+  fields: ['basicSalaryHalalas', 'allowances', 'bank'],
+  view: true,
+  edit: false,
+};
 
 /**
  * Seeded core roles (DECISIONS §4). Grants are data: the admin can edit them from the roles screen.
@@ -122,7 +136,7 @@ export const CORE_ROLES: RoleDefinition[] = [
       { resource: 'news', actions: ['view', 'create', 'edit', 'approve'], scope: 'all' },
       { resource: 'hr.reports', actions: ['view', 'export'], scope: 'all' },
     ],
-    fieldRules: [],
+    fieldRules: [HR_SENSITIVE],
   },
   {
     code: 'hr_manager',
@@ -152,7 +166,7 @@ export const CORE_ROLES: RoleDefinition[] = [
       { resource: 'news', actions: ['view', 'create', 'edit', 'approve'], scope: 'all' },
       { resource: 'hr.reports', actions: ['view', 'export'], scope: 'all' },
     ],
-    fieldRules: [],
+    fieldRules: [HR_SENSITIVE],
   },
   {
     code: 'finance_staff',
@@ -167,14 +181,7 @@ export const CORE_ROLES: RoleDefinition[] = [
       { resource: 'hr.profile_changes', actions: ['view', 'approve'], scope: 'all' },
       { resource: 'hr.requests', actions: ['view'], scope: 'all' },
     ],
-    fieldRules: [
-      {
-        resource: 'hr.employees',
-        fields: ['identity.number', 'religion', 'birthDate'],
-        view: false,
-        edit: false,
-      },
-    ],
+    fieldRules: [FINANCE_SENSITIVE],
   },
   {
     code: 'finance_manager',
@@ -190,14 +197,7 @@ export const CORE_ROLES: RoleDefinition[] = [
       { resource: 'hr.profile_changes', actions: ['view', 'approve'], scope: 'all' },
       { resource: 'hr.requests', actions: ['view', 'approve'], scope: 'all' },
     ],
-    fieldRules: [
-      {
-        resource: 'hr.employees',
-        fields: ['identity.number', 'religion', 'birthDate'],
-        view: false,
-        edit: false,
-      },
-    ],
+    fieldRules: [FINANCE_SENSITIVE],
   },
   {
     code: 'executive',

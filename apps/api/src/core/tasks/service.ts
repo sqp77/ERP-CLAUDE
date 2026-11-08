@@ -125,25 +125,34 @@ export async function createTask(req: AuthedRequest, body: CreateTaskInput) {
   if (!departmentId) throw badRequest('تعذر تحديد قسم المهمة');
   let source: { type: string; id: string; label?: string } | undefined;
   if (body.source) {
-    const found = await resolveRecord(body.source.type, body.source.id);
+    const found = await resolveRecord(body.source.type, body.source.id, req);
     if (!found) throw badRequest('السجل المرتبط غير موجود');
     source = { type: body.source.type, ...found };
   }
-  const task = await Task.create({
-    title: body.title,
-    description: body.description,
-    priority: body.priority,
-    startAt: body.startAt,
-    dueAt: body.dueAt,
-    attachmentIds: body.attachmentIds,
-    source,
-    number: await nextNumber('task'),
-    assignerId: req.auth.user._id,
-    assigneeId: body.assigneeId,
-    departmentId, // never from the client when an assignee exists (EP §16)
+  // Record and attachment claims commit together (review E7).
+  const task = await withTransaction(async (session) => {
+    const [doc] = await Task.create(
+      [
+        {
+          title: body.title,
+          description: body.description,
+          priority: body.priority,
+          startAt: body.startAt,
+          dueAt: body.dueAt,
+          attachmentIds: body.attachmentIds,
+          source,
+          number: await nextNumber('task', session),
+          assignerId: req.auth.user._id,
+          assigneeId: body.assigneeId,
+          departmentId, // never from the client when an assignee exists (EP §16)
+        },
+      ],
+      { session },
+    );
+    if (body.attachmentIds.length)
+      await claimAttachments(body.attachmentIds, 'task', String(doc._id), req.auth.user._id, session);
+    return doc;
   });
-  if (body.attachmentIds.length)
-    await claimAttachments(body.attachmentIds, 'task', String(task._id), req.auth.user._id);
   await logEvent(task, 'created', actor, { toStatus: 'new', toAssigneeId: task.assigneeId });
   await recordAudit(actor, {
     action: 'create',
@@ -276,8 +285,13 @@ export async function changeStatus(
   const isAssigner = String(task.assignerId) === me;
   const from = task.status as TaskStatus;
   if (from === next && progress === undefined) return task;
-  if (next === 'cancelled' && !isAssigner && req.authz?.scope === 'own')
-    throw forbidden('إلغاء المهمة من صلاحية من أسندها');
+  // Review E9: cancel belongs to the assigner, or to a manager with scope over the task who is not its assignee.
+  if (
+    next === 'cancelled' &&
+    !isAssigner &&
+    (req.authz?.scope === 'own' || req.authz?.scope === 'team' || isAssignee)
+  )
+    throw forbidden('إلغاء المهمة من صلاحية من أسندها أو مدير القسم');
   if (next === 'waiting_review' || next === 'late') throw badRequest('هذه الحالة يحددها النظام');
   if (!(OPEN_TASK_STATUSES as readonly string[]).includes(from) && next !== 'in_progress')
     throw badRequest('المهمة مغلقة');
@@ -342,6 +356,7 @@ export async function reviewTask(
   const isAssigner = String(task.assignerId) === me;
   if (!isAssigner && req.authz?.scope !== 'all' && req.authz?.scope !== 'department')
     throw forbidden('مراجعة المهمة من صلاحية من أسندها أو مدير القسم');
+  if (task.assigneeId && String(task.assigneeId) === me) throw forbidden('لا يمكنك مراجعة مهمة مسندة إليك'); // review E9
   if (task.status !== 'waiting_review') throw badRequest('المهمة ليست بانتظار المراجعة');
   if (!approve && !note?.trim()) throw badRequest('ملاحظة الإعادة مطلوبة');
   const before = task.toObject();

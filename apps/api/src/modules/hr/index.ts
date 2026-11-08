@@ -1,7 +1,11 @@
 import { registerJob } from '../../core/jobs/registry';
 import { registerTeamResolver } from '../../core/rbac/scope';
 import { registerExpiryRecipients } from '../../core/documents/service';
-import { registerRecordAccess, registerSensitiveOwnerType } from '../../core/access/registry';
+import {
+  registerRecordAccess,
+  registerSensitiveOwnerType,
+  registerSensitiveViewer,
+} from '../../core/access/registry';
 import { effectivePermission } from '../../core/rbac/service';
 import type { RoleAssignment } from '@eayni/shared';
 import type { AuthedRequest } from '../../core/http/context';
@@ -85,7 +89,7 @@ export function registerHrModule(): void {
       resource,
       'view',
     );
-  registerRecordAccess('employee', async (req, ownerId) => {
+  registerRecordAccess('employee', async (req, ownerId, ctx) => {
     const eff = await permissionOn(req, 'hr.employees');
     if (!eff) return false;
     if (eff.scope === 'all') return true;
@@ -94,9 +98,30 @@ export function registerHrModule(): void {
       req.auth.user,
     );
     if (await Employee.exists({ _id: ownerId, deletedAt: null, ...filter })) return true;
-    // The direct manager reads their reports' files (secondment reports) — the org chart, not a role [DECISIONS §4].
+    // A direct manager (org chart, not a role) sees the record; of its files only the photo and secondment reports (review E2).
     const me = await Employee.findOne({ userId: req.auth.user._id, deletedAt: null }).select('_id').lean();
-    return !!me && !!(await Employee.exists({ _id: ownerId, deletedAt: null, directManagerId: me._id }));
+    if (!me) return false;
+    const report = await Employee.findOne({ _id: ownerId, deletedAt: null, directManagerId: me._id })
+      .select('photoAttachmentId secondment.reportAttachmentId secondmentHistory.reportAttachmentId')
+      .lean();
+    if (!report) return false;
+    if (!ctx?.attachmentId) return true;
+    const allowed = [
+      report.photoAttachmentId,
+      report.secondment?.reportAttachmentId,
+      ...(report.secondmentHistory ?? []).map((s) => s.reportAttachmentId),
+    ]
+      .filter(Boolean)
+      .map(String);
+    return allowed.includes(ctx.attachmentId);
+  });
+  // Sensitive employee files and documents: the employee themself, or a role with an explicit right to sensitive fields (review E2).
+  registerSensitiveViewer('employee', async (req, ownerId) => {
+    const e = await Employee.findById(ownerId).select('userId').lean();
+    if (e?.userId && String(e.userId) === String(req.auth.user._id)) return true;
+    const { fieldRestrictions } = await import('../../core/rbac/service');
+    const { hidden } = await fieldRestrictions(req.auth.user.roles as RoleAssignment[], 'hr.employees');
+    return !hidden.has('identity.number');
   });
   registerRecordAccess('hr_request', async (req, id) => {
     const eff = await permissionOn(req, 'hr.requests');
@@ -110,7 +135,7 @@ export function registerHrModule(): void {
     const filter = eff.scope === 'own' ? { userId: req.auth.user._id } : {};
     return !!(await ProfileChangeRequest.exists({ _id: id, ...filter }));
   });
-  for (const t of ['employee', 'hr_request', 'profile_change']) registerSensitiveOwnerType(t);
+  for (const t of ['hr_request', 'profile_change']) registerSensitiveOwnerType(t);
   registerRecordAccess('employee_report', async (req, id) => {
     const eff = await permissionOn(req, 'hr.reports');
     if (!eff) return false;

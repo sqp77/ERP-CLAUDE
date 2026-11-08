@@ -9,7 +9,7 @@ import { requireAuth } from '../auth/middleware';
 import { authorize } from '../rbac/authorize';
 import { effectivePermission, fieldRestrictions } from '../rbac/service';
 import { recordAudit } from '../audit/service';
-import { htmlDocument } from '../templates/render';
+import { escapeHtml, htmlDocument, sendHtml } from '../templates/render';
 import { buildRows, getExportResource, listExportResources, toXlsx } from './service';
 
 export const exportRouter = Router();
@@ -88,14 +88,12 @@ exportRouter.post(
       );
       return res.send(buf);
     }
-    // PDF: until the Chromium renderer is configured we return printable HTML (the browser prints it).
-    const table = `<h2>${resource.labelAr}</h2><table><thead><tr>${header.map((h) => `<th>${h}</th>`).join('')}</tr></thead><tbody>${data
-      .map(
-        (r) =>
-          `<tr>${r.map((v) => `<td>${v instanceof Date ? v.toISOString().slice(0, 10) : String(v ?? '')}</td>`).join('')}</tr>`,
-      )
+    // PDF: until the Chromium renderer is configured we return printable HTML (the browser prints it). Every value is escaped (review E10).
+    const cell = (v: unknown) =>
+      escapeHtml(v instanceof Date ? v.toISOString().slice(0, 10) : String(v ?? ''));
+    const table = `<h2>${escapeHtml(resource.labelAr)}</h2><table><thead><tr>${header.map((h) => `<th>${escapeHtml(h)}</th>`).join('')}</tr></thead><tbody>${data
+      .map((r) => `<tr>${r.map((v) => `<td>${cell(v)}</td>`).join('')}</tr>`)
       .join('')}</tbody></table>`;
-    res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    res.send(htmlDocument(table, resource.labelAr));
+    sendHtml(res, htmlDocument(table, resource.labelAr));
   }),
 );

@@ -37,7 +37,7 @@ import { dashboardRouter } from './modules/hr/dashboard.routes';
  */
 export function createApp(): Express {
   const app = express();
-  app.set('trust proxy', 1);
+  app.set('trust proxy', env().TRUST_PROXY_HOPS);
   app.disable('x-powered-by');
   app.use(helmet({ contentSecurityPolicy: false }));
   app.use(cors({ origin: env().APP_URL, credentials: true }));

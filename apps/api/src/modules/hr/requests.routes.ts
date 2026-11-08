@@ -12,7 +12,7 @@ import {
 import { asyncHandler } from '../../core/http/async';
 import { validate } from '../../core/http/validate';
 import { actorFrom, type AuthedRequest } from '../../core/http/context';
-import { notFound } from '../../core/http/errors';
+import { forbidden, notFound } from '../../core/http/errors';
 import { requireAuth } from '../../core/auth/middleware';
 import { authorize } from '../../core/rbac/authorize';
 import { getSetting } from '../../core/settings/service';
@@ -177,6 +177,10 @@ requestsRouter.get(
   authorize('hr.requests', 'view'),
   asyncHandler(async (req: AuthedRequest, res) => {
     const r = await visible(req, req.params.id);
+    // The certificate carries the decrypted identity number and pay: requester and HR only (go-live review E3).
+    const isRequester = String(r.requesterUserId) === String(req.auth.user._id);
+    const isHr = req.auth.roleCodes.some((c) => svc.HR_ROLES.includes(c));
+    if (!isRequester && !isHr) throw forbidden('تنزيل الشهادة لمقدّم الطلب والموارد البشرية فقط');
     if (!r.certificate?.attachmentId) throw notFound('لم تُصدر الشهادة بعد');
     const att = await Attachment.findById(r.certificate.attachmentId).lean();
     if (!att) throw notFound();
