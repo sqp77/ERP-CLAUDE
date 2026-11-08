@@ -117,7 +117,9 @@ describe('work distribution [EP §16, EP §10]', () => {
     expect(q.body.departmentId).toBe(String(ops._id));
     expect((await create(lead.token, { title: 'بدون مكلّف' })).status).toBe(403);
     expect(await runUnassignedTaskReminders(new Date())).toBe(0);
-    const later = new Date(Date.now() + 5 * 86_400_000);
+    // At least 5 days ahead and on a Riyadh business day (queue reminders skip Fri/Sat, review F3).
+    let later = new Date(Date.now() + 5 * 86_400_000);
+    while ([5, 6].includes(new Date(later.getTime() + 3 * 3_600_000).getUTCDay())) later = new Date(later.getTime() + 86_400_000);
     expect(await runUnassignedTaskReminders(later)).toBe(1);
     expect(await runUnassignedTaskReminders(later)).toBe(0);
     expect(await Notification.countDocuments({ userId: mgr.userId, type: 'task.unassigned_reminder' })).toBe(
