@@ -111,6 +111,7 @@ calendarRouter.post(
       if (!found) throw badRequest('السجل المرتبط غير موجود');
       link = { type: link.type, ...found };
     }
+    assertDepartmentsAllowed(req, body.departmentIds);
     const ev = await CalendarEvent.create({
       ...body,
       link,

@@ -1,3 +1,4 @@
+import type { Response } from 'express';
 import Handlebars from 'handlebars';
 import { TIMEZONE } from '@eayni/shared';
 import { formatHijri } from '../dates/businessDays';
@@ -41,7 +42,7 @@ export const HTML_SECURITY_HEADERS = {
   'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; img-src data:",
   'X-Content-Type-Options': 'nosniff',
 } as const;
-export function sendHtml(res: import('express').Response, html: string, status = 200): void {
+export function sendHtml(res: Response, html: string, status = 200): void {
   for (const [k, v] of Object.entries(HTML_SECURITY_HEADERS)) res.setHeader(k, v);
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   res.status(status).send(html);
