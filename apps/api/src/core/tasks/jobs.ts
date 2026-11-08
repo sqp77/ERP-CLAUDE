@@ -1,7 +1,7 @@
 import { OPEN_TASK_STATUSES } from '@eayni/shared';
 import { getSetting } from '../settings/service';
 import { notify } from '../notifications/service';
-import { addBusinessDays, loadHolidaySet } from '../dates/businessDays';
+import { addBusinessDays, isBusinessDay, loadHolidaySet, riyadhDate } from '../dates/businessDays';
 import { User } from '../auth/model';
 import { Task } from './model';
 
@@ -55,12 +55,15 @@ export async function departmentManagerUserIds(departmentId: string): Promise<st
 export async function runUnassignedTaskReminders(now = new Date()): Promise<number> {
   const days = await getSetting('tasks.unassignedReminderBusinessDays');
   const holidays = await loadHolidaySet();
-  const queued = await Task.find({ assigneeId: null, status: 'new', deletedAt: null });
+  // Once per Riyadh business day (review F3): nothing on Fri/Sat or holidays, date-based not "24 h since".
+  if (!isBusinessDay(now, holidays)) return 0;
+  const today = riyadhDate(now);
+  const queued = await Task.find({ assigneeId: null, status: { $in: ['new', 'late'] }, deletedAt: null }); // G1: late queue tasks too
   let sent = 0;
   for (const t of queued) {
     const due = addBusinessDays(t.createdAt as Date, days, holidays);
     if (now < due) continue;
-    if (t.remindedUnassignedAt && now.getTime() - t.remindedUnassignedAt.getTime() < 86_400_000) continue;
+    if (t.remindedUnassignedOn === today) continue;
     const managers = await departmentManagerUserIds(String(t.departmentId));
     if (managers.length) {
       await notify({
@@ -72,7 +75,7 @@ export async function runUnassignedTaskReminders(now = new Date()): Promise<numb
       });
       sent++;
     }
-    t.remindedUnassignedAt = now;
+    t.remindedUnassignedOn = today;
     await t.save();
   }
   return sent;

@@ -18,8 +18,11 @@ provider:
     APP_SECRET: ${ssm:/eayni/${self:provider.stage}/app-secret}
     FILE_STORAGE: s3
     S3_BUCKET: ${self:service}-${self:provider.stage}-files
+    # The CloudFront origin below (or the custom domain pointed at it): web and API share this origin,
+    # so the SameSite=Lax session cookie and relative /api/v1 calls work (review F2).
     APP_URL: ${ssm:/eayni/${self:provider.stage}/app-url}
     COOKIE_SECURE: 'true'
+    TRUST_PROXY_HOPS: '2' # CloudFront → API Gateway (review E11)
   iam:
     role:
       statements:
@@ -47,7 +50,14 @@ functions:
     handler: apps/api/src/handlers/jobs.handler
     timeout: 300
     events:
-      - schedule: cron(0 3 * * ? *) # 06:00 Asia/Riyadh daily: reminders, document expiry, ticket timers
+      # Review F3: two cadences. Frequent (reminders, news windows, task due/overdue, account deactivation,
+      # ticket follow-ups) every 5 minutes; daily (birthdays, expiry alerts, overdue digests, queue reminders) at 06:00 Riyadh.
+      - schedule:
+          rate: rate(5 minutes)
+          input: { cadence: frequent }
+      - schedule:
+          rate: cron(0 3 * * ? *)
+          input: { cadence: daily }
 
 resources:
   Resources:
@@ -68,6 +78,88 @@ resources:
                 - ${ssm:/eayni/${self:provider.stage}/app-url}
               AllowedHeaders: [Content-Type, Content-Length]
               MaxAge: 3000
+
+    # ---- Web hosting (review F2): private S3 bucket behind CloudFront (OAC); /api/* goes to the HTTP API ----
+    WebBucket:
+      Type: AWS::S3::Bucket
+      Properties:
+        BucketName: ${self:service}-${self:provider.stage}-web
+        PublicAccessBlockConfiguration:
+          BlockPublicAcls: true
+          BlockPublicPolicy: true
+          IgnorePublicAcls: true
+          RestrictPublicBuckets: true
+    WebOriginAccessControl:
+      Type: AWS::CloudFront::OriginAccessControl
+      Properties:
+        OriginAccessControlConfig:
+          Name: ${self:service}-${self:provider.stage}-web-oac
+          OriginAccessControlOriginType: s3
+          SigningBehavior: always
+          SigningProtocol: sigv4
+    WebBucketPolicy:
+      Type: AWS::S3::BucketPolicy
+      Properties:
+        Bucket: !Ref WebBucket
+        PolicyDocument:
+          Statement:
+            - Effect: Allow
+              Principal: { Service: cloudfront.amazonaws.com }
+              Action: s3:GetObject
+              Resource: !Sub '${WebBucket.Arn}/*'
+              Condition:
+                StringEquals:
+                  AWS:SourceArn: !Sub 'arn:aws:cloudfront::${AWS::AccountId}:distribution/${WebDistribution}'
+    WebDistribution:
+      Type: AWS::CloudFront::Distribution
+      Properties:
+        DistributionConfig:
+          Enabled: true
+          Comment: ${self:service} ${self:provider.stage} — web + /api
+          HttpVersion: http2and3
+          DefaultRootObject: index.html
+          PriceClass: PriceClass_200
+          # Custom domain + ACM certificate (us-east-1) are added once DECISIONS §1 items 3 and 5 are decided:
+          # Aliases: [...] / ViewerCertificate: { AcmCertificateArn: ..., SslSupportMethod: sni-only, MinimumProtocolVersion: TLSv1.2_2021 }
+          Origins:
+            - Id: web
+              DomainName: !GetAtt WebBucket.RegionalDomainName
+              OriginAccessControlId: !GetAtt WebOriginAccessControl.Id
+              S3OriginConfig: { OriginAccessIdentity: '' }
+            - Id: api
+              DomainName: !Select [1, !Split ['//', !GetAtt HttpApi.ApiEndpoint]]
+              CustomOriginConfig:
+                OriginProtocolPolicy: https-only
+                OriginSSLProtocols: [TLSv1.2]
+          DefaultCacheBehavior:
+            TargetOriginId: web
+            ViewerProtocolPolicy: redirect-to-https
+            AllowedMethods: [GET, HEAD, OPTIONS]
+            Compress: true
+            CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6 # Managed-CachingOptimized
+          CacheBehaviors:
+            - PathPattern: /api/*
+              TargetOriginId: api
+              ViewerProtocolPolicy: https-only
+              AllowedMethods: [GET, HEAD, OPTIONS, PUT, POST, PATCH, DELETE]
+              CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad # Managed-CachingDisabled
+              OriginRequestPolicyId: b689b0a8-53d0-40ab-baf2-68738e2966ac # Managed-AllViewerExceptHostHeader: cookies, query strings, headers
+          # SPA fallback: unknown paths serve index.html with 200 (S3 answers 403/404 for missing keys).
+          CustomErrorResponses:
+            - ErrorCode: 403
+              ResponseCode: 200
+              ResponsePagePath: /index.html
+              ErrorCachingMinTTL: 0
+            - ErrorCode: 404
+              ResponseCode: 200
+              ResponsePagePath: /index.html
+              ErrorCachingMinTTL: 0
+  Outputs:
+    WebBucketName:
+      Value: !Ref WebBucket
+    WebDistributionDomain:
+      Value: !GetAtt WebDistribution.DomainName
+      Description: Set /eayni/<stage>/app-url to https://<this value> (or the custom domain) before the first deploy of the API
 
 build:
   esbuild:

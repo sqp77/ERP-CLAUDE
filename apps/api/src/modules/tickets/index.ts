@@ -34,7 +34,7 @@ export function registerTicketsModule(): void {
       .lean();
     return t ? { id: String(t._id), label: `${t.number} — ${t.subject}` } : null;
   });
-  registerJob('tickets.followups', (now) => runTicketFollowUps(now));
+  registerJob('tickets.followups', (now) => runTicketFollowUps(now), 'frequent');
 }
 
 /** Outbox subscribers of the tickets module: none in phase 1 (events are published for other modules). */

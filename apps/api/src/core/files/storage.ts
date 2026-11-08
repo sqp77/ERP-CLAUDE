@@ -96,10 +96,19 @@ export class LocalStorageAdapter implements StorageAdapter {
 
 export class S3StorageAdapter implements StorageAdapter {
   private client?: S3Client;
+  constructor(private readonly clientConfig: Record<string, unknown> = {}) {}
   private async s3() {
     if (!this.client) {
       const mod = await import('@aws-sdk/client-s3');
-      this.client = new mod.S3Client({ region: env().AWS_REGION });
+      // Go-live review F1: SDK v3.1161+ adds x-amz-checksum-crc32 (of an empty body) and
+      // x-amz-sdk-checksum-algorithm to presigned PutObject URLs unless checksums are "when required";
+      // with the defaults S3 rejects every real browser upload.
+      this.client = new mod.S3Client({
+        region: env().AWS_REGION,
+        requestChecksumCalculation: 'WHEN_REQUIRED',
+        responseChecksumValidation: 'WHEN_REQUIRED',
+        ...this.clientConfig,
+      });
     }
     return this.client;
   }

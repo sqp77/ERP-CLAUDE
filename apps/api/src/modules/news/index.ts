@@ -12,9 +12,19 @@ export function registerNewsModule(): void {
   registered = true;
   // Attachments and images follow the item's visibility (published → its audience; drafts → author / department).
   registerRecordAccess('news', async (req, id) => {
-    const eff = await effectivePermission(req.auth.user.roles as RoleAssignment[], req.auth.user.departmentId ? String(req.auth.user.departmentId) : undefined, 'news', 'view', String(req.auth.user._id));
+    const eff = await effectivePermission(
+      req.auth.user.roles as RoleAssignment[],
+      req.auth.user.departmentId ? String(req.auth.user.departmentId) : undefined,
+      'news',
+      'view',
+      String(req.auth.user._id),
+    );
     if (!eff) return false;
-    return !!(await News.exists({ _id: id, deletedAt: null, ...(await visibilityFilter(req.auth.user, { resource: 'news', action: 'view', ...eff })) }));
+    return !!(await News.exists({
+      _id: id,
+      deletedAt: null,
+      ...(await visibilityFilter(req.auth.user, { resource: 'news', action: 'view', ...eff })),
+    }));
   });
-  registerJob('news.windows', (now) => runNewsWindows(now));
+  registerJob('news.windows', (now) => runNewsWindows(now), 'frequent');
 }

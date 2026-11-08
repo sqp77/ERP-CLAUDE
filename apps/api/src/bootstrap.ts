@@ -23,11 +23,11 @@ export function registerModules(): void {
   if (jobsRegistered) return;
   jobsRegistered = true;
   registerSubscribers();
-  registerJob('tasks.reminders', (now) => runTaskReminders(now));
-  registerJob('tasks.unassigned', (now) => runUnassignedTaskReminders(now));
+  registerJob('tasks.reminders', (now) => runTaskReminders(now), 'frequent');
+  registerJob('tasks.unassigned', (now) => runUnassignedTaskReminders(now), 'daily');
   registerTaskAccess();
-  registerJob('calendar.reminders', (now) => runEventReminders(now));
-  registerJob('documents.expiry', (now) => runDocumentExpiryAlerts(now));
+  registerJob('calendar.reminders', (now) => runEventReminders(now), 'frequent');
+  registerJob('documents.expiry', (now) => runDocumentExpiryAlerts(now), 'daily');
   registerHrModule();
   registerTicketsModule();
   registerNewsModule();
@@ -60,4 +60,20 @@ export async function ensureBaseline(): Promise<void> {
   await ensureCoreRoles();
   for (const def of DEFAULT_WORKFLOWS) await ensureWorkflow(def);
   await backfillIdentityHashes();
+}
+
+/**
+ * Memoised per process; a failure is forgotten so the next request retries instead of answering 500
+ * until the container is recycled (go-live review F4).
+ */
+export const ensureBaselineOnce = memoiseUntilSuccess(ensureBaseline);
+export function memoiseUntilSuccess(fn: () => Promise<void>): () => Promise<void> {
+  let pending: Promise<void> | undefined;
+  return () => {
+    pending ??= fn().catch((err) => {
+      pending = undefined;
+      throw err;
+    });
+    return pending;
+  };
 }

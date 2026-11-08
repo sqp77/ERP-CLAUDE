@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import { env } from './config';
+import { env, isProd } from './config';
 import { logger } from './logger';
 
 /**
@@ -17,6 +17,7 @@ export async function connectDb(uri = env().MONGODB_URI): Promise<typeof mongoos
       .connect(uri, { maxPoolSize: 5, serverSelectionTimeoutMS: 10_000 })
       .then((m) => {
         logger.info({ host: m.connection.host, db: m.connection.name }, 'mongo connected');
+        assertTransactionSupport(isProd(), supportsTransactions()); // review F5
         return m;
       })
       .catch((err) => {
@@ -59,4 +60,12 @@ export async function withTransaction<T>(
   } finally {
     await session.endSession();
   }
+}
+
+/** In production a deployment without multi-document transactions (e.g. a directConnection URI) must not start (review F5). */
+export function assertTransactionSupport(production: boolean, supports: boolean): void {
+  if (production && !supports)
+    throw new Error(
+      'MongoDB transactions are required in production: connect to a replica set / Atlas without directConnection',
+    );
 }

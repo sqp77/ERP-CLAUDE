@@ -222,7 +222,7 @@ export function registerHrModule(): void {
   registerJob('hr.contracts.alerts', (now) => runContractAlerts(now));
   registerJob('hr.probation.alerts', (now) => runProbationAlerts(now));
   registerJob('hr.identity.alerts', (now) => runIdentityAlerts(now));
-  registerJob('hr.accounts.deactivate', (now) => runAccountDeactivation(now));
+  registerJob('hr.accounts.deactivate', (now) => runAccountDeactivation(now), 'frequent');
   registerJob('hr.birthdays', (now) => runBirthdayGreetings(now));
   registerJob('hr.secondments.reminders', (now) => runSecondmentReportReminders(now));
 

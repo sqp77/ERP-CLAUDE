@@ -26,7 +26,8 @@ const taskSchema = new Schema(
     attachmentIds: { type: [Schema.Types.ObjectId], default: [] },
     remindedDueSoon: { type: Boolean, default: false },
     remindedOverdue: { type: Boolean, default: false },
-    remindedUnassignedAt: { type: Date },
+    /** Riyadh date of the last queue reminder (review F3: once per business day). */
+    remindedUnassignedOn: { type: String },
     deletedAt: { type: Date },
   },
   { timestamps: true },

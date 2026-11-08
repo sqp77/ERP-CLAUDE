@@ -4,6 +4,7 @@ import { connectDb, disconnectDb } from './db';
 import { createApp } from './app';
 import { ensureBaseline } from './bootstrap';
 import { processOutbox } from './core/outbox/service';
+import { startLocalScheduler } from './core/jobs/registry';
 import { startDevMongo } from './devMongo';
 
 /** Local development server. Deployed stages use the Lambda handlers instead. */
@@ -15,6 +16,8 @@ async function main() {
   await ensureBaseline();
   const app = createApp();
   app.listen(env().PORT, () => logger.info(`API listening on http://localhost:${env().PORT}`));
+  // Scheduled jobs mirror the deployed cadence (review F3): frequent every 5 minutes, daily at 06:00 Riyadh.
+  startLocalScheduler();
   // Outbox worker loop (a scheduled Lambda in deployed stages).
   setInterval(
     () => processOutbox().catch((err) => logger.error({ err }, 'outbox tick failed')),

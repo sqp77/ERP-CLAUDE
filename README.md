@@ -70,3 +70,20 @@ packages/shared zod schemas, enums, permission model, workflow config, settings 
 docs/           SPECS.md (requirements), DECISIONS.md, original PDFs
 serverless.yml  AWS Lambda deployment (written; not run until DECISIONS §1 is cleared)
 ```
+
+## Deploying the web app (written, not run — DECISIONS §1)
+
+`serverless.yml` hosts the web build in a private S3 bucket behind CloudFront; `/api/*` on the same
+distribution goes to the HTTP API, so web and API share one origin (review F2). After `npx serverless deploy --stage staging`:
+
+```bash
+npm run build -w apps/web
+aws s3 sync apps/web/dist s3://eayni-erp-staging-web --delete
+aws cloudfront create-invalidation --distribution-id <id from the stack> --paths '/*'
+```
+
+Set the SSM parameter `/eayni/staging/app-url` to the distribution URL (or the custom domain pointed at it) before the
+first API deploy; it drives CORS on the files bucket and the cookie origin. The API sits behind two proxies
+(`TRUST_PROXY_HOPS=2`). Scheduled jobs run every 5 minutes (`cadence: frequent`) and daily at 06:00 Riyadh
+(`cadence: daily`); locally `npm run dev` runs the same schedule in-process.
+

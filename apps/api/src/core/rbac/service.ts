@@ -41,22 +41,21 @@ export async function loadRoles(): Promise<Map<string, RoleDoc>> {
  */
 export async function ensureCoreRoles(): Promise<void> {
   for (const def of CORE_ROLES) {
-    const existing = await Role.findOne({ code: def.code });
-    if (!existing) {
-      await Role.create(def);
-      continue;
-    }
-    const known = new Set((existing.grants as PermissionGrant[]).map((g) => g.resource));
+    // Race-safe for concurrent cold starts (review F4): upsert the role, add only missing grants, sync field rules.
+    await Role.updateOne(
+      { code: def.code },
+      { $setOnInsert: { ...def, grants: [], fieldRules: [] } },
+      { upsert: true },
+    );
+    const existing = await Role.findOne({ code: def.code }).lean();
+    const known = new Set(((existing?.grants ?? []) as PermissionGrant[]).map((g) => g.resource));
     const missingGrants = def.grants.filter((g) => !known.has(g.resource));
-    const knownRules = new Set((existing.fieldRules as FieldRule[]).map((r) => r.resource));
-    const missingRules = def.fieldRules.filter((r) => !knownRules.has(r.resource));
-    if (missingGrants.length) {
-      await Role.updateOne({ code: def.code }, { $push: { grants: { $each: missingGrants } } });
-    }
+    const update: Record<string, unknown> = {};
+    if (missingGrants.length) update.$addToSet = { grants: { $each: missingGrants } };
     // Field-level rules of system roles are code-defined (default-deny for sensitive fields, review E1).
-    if (JSON.stringify(existing.fieldRules) !== JSON.stringify(def.fieldRules))
-      await Role.updateOne({ code: def.code }, { $set: { fieldRules: def.fieldRules } });
-    void missingRules;
+    if (JSON.stringify(existing?.fieldRules ?? null) !== JSON.stringify(def.fieldRules))
+      update.$set = { fieldRules: def.fieldRules };
+    if (Object.keys(update).length) await Role.updateOne({ code: def.code }, update);
   }
   clearRoleCache();
 }
