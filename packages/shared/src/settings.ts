@@ -122,6 +122,13 @@ export const SETTING_DEFINITIONS = {
     schema: z.number().int().min(1),
     default: 1, // EP §16: the manager distributes department work
   }),
+  'news.directPublishDepartments': def({
+    key: 'news.directPublishDepartments',
+    labelAr: 'أقسام تنشر أخبارها وتعاميمها مباشرة دون اعتماد',
+    group: 'general',
+    schema: z.array(z.string()),
+    default: ['hr', 'executive'], // DECISIONS §10
+  }),
   'tickets.hiddenTargets': def({
     key: 'tickets.hiddenTargets',
     labelAr: 'أقسام لا تظهر كوجهة للتذاكر حتى تُبنى وحداتها (المالية والمشتريات)',

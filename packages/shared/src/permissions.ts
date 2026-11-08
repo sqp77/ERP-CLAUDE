@@ -32,6 +32,8 @@ export const CORE_RESOURCES = [
   'drafts',
   'exports',
   'tickets',
+  'news',
+  'hr.reports',
 ] as const;
 export type CoreResource = (typeof CORE_RESOURCES)[number];
 /** Any resource id (core or module). */

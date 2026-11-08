@@ -32,6 +32,8 @@ import { TeamPage } from './pages/manager/TeamPage';
 import { BoardPage } from './pages/tasks/BoardPage';
 import { TicketsListPage } from './pages/tickets/TicketsListPage';
 import { TicketDetailPage } from './pages/tickets/TicketDetailPage';
+import { NewsPage } from './pages/news/NewsPage';
+import { NewsDetailPage } from './pages/news/NewsDetailPage';
 import { RouteError } from './shared/layout/RouteError';
 
 export const router = createBrowserRouter([
@@ -67,6 +69,8 @@ export const router = createBrowserRouter([
               { path: '/me/tickets', element: <TicketsListPage view="mine" /> },
               { path: '/tickets', element: <TicketsListPage view="assigned" /> },
               { path: '/tickets/:id', element: <TicketDetailPage /> },
+              { path: '/news', element: <NewsPage /> },
+              { path: '/news/:id', element: <NewsDetailPage /> },
               { path: '/hr/requests', element: <RequestsListPage view="queue" /> },
               {
                 element: <RequirePermission resource="tasks" action="view" />,

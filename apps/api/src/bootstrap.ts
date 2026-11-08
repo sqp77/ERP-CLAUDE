@@ -10,6 +10,7 @@ import { registerExportResource } from './core/export/service';
 import { User } from './core/auth/model';
 import { registerHrModule } from './modules/hr';
 import { registerTicketsModule } from './modules/tickets';
+import { registerNewsModule } from './modules/news';
 import { backfillIdentityHashes } from './modules/hr/service';
 import { registerSubscribers } from './subscribers';
 
@@ -29,6 +30,7 @@ export function registerModules(): void {
   registerJob('documents.expiry', (now) => runDocumentExpiryAlerts(now));
   registerHrModule();
   registerTicketsModule();
+  registerNewsModule();
 
   registerExportResource({
     resource: 'users',

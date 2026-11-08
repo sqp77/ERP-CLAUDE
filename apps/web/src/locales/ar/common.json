@@ -53,7 +53,8 @@
     "calendarKind": "نوع التقويم",
     "team": "فريقي",
     "taskBoard": "لوحة مهام القسم",
-    "myTickets": "تذاكري"
+    "myTickets": "تذاكري",
+    "news": "الأخبار والتعاميم"
   },
   "auth": {
     "email": "البريد الإلكتروني الوظيفي",
@@ -863,5 +864,64 @@
     "procurement": "المشتريات",
     "finance": "المالية",
     "executive": "الإدارة التنفيذية"
+  },
+  "news": {
+    "title": "الأخبار والتعاميم",
+    "new": "نشر خبر",
+    "edit": "تعديل الخبر",
+    "titleField": "عنوان الخبر",
+    "body": "محتوى الخبر",
+    "publisher": "القسم الناشر",
+    "audience": "الفئة المستهدفة",
+    "audienceAll": "جميع الموظفين",
+    "audienceDepartments": "أقسام محددة",
+    "targetDepartments": "الأقسام المستهدفة",
+    "targeted": "موجّه",
+    "publishFrom": "بداية النشر",
+    "publishTo": "نهاية النشر",
+    "windowHint": "اتركها فارغة للنشر فورًا وبلا نهاية",
+    "pinned": "خبر مثبّت",
+    "cover": "صورة الخبر",
+    "coverHint": "صورة واحدة تظهر أعلى الخبر",
+    "coverSet": "تم اختيار الصورة",
+    "attachments": "المستندات والمرفقات (PDF وصور)",
+    "saveDraft": "حفظ",
+    "submit": "إرسال للنشر",
+    "approve": "اعتماد ونشر",
+    "reject": "رفض",
+    "rejectReason": "سبب الرفض",
+    "pin": "تثبيت",
+    "unpin": "إلغاء التثبيت",
+    "archive": "أرشفة",
+    "archiveConfirm": "سيُنقل الخبر إلى الأرشيف ولن يظهر في التغذية. متابعة؟",
+    "window": "فترة النشر",
+    "log": "سجل النشر",
+    "empty": "لا توجد أخبار",
+    "allDepartments": "كل الأقسام",
+    "views": {
+      "feed": "الأخبار",
+      "archive": "الأرشيف",
+      "manage": "إدارة النشر",
+      "pending": "بانتظار الاعتماد"
+    },
+    "states": {
+      "draft": "مسودة",
+      "pending_approval": "بانتظار الاعتماد",
+      "published": "منشور",
+      "rejected": "مرفوض",
+      "archived": "مؤرشف"
+    },
+    "actionsLog": {
+      "created": "إنشاء",
+      "updated": "تعديل",
+      "submitted": "إرسال للاعتماد",
+      "approved": "اعتماد ونشر",
+      "direct_publish": "نشر مباشر",
+      "self_approve": "نشر (مدير القسم)",
+      "rejected": "رفض",
+      "archived": "أرشفة",
+      "pinned": "تثبيت",
+      "unpinned": "إلغاء التثبيت"
+    }
   }
 }

@@ -1,0 +1,188 @@
+import type { FilterQuery } from 'mongoose';
+import type { CreateNewsInput, RoleAssignment } from '@eayni/shared';
+import { badRequest, conflict, forbidden, notFound } from '../../core/http/errors';
+import { actorFrom, type Actor, type Authz, type AuthedRequest } from '../../core/http/context';
+import { recordAudit } from '../../core/audit/service';
+import { nextNumber } from '../../core/numbering/service';
+import { notify } from '../../core/notifications/service';
+import { getSetting } from '../../core/settings/service';
+import { effectivePermission } from '../../core/rbac/service';
+import { claimAttachments } from '../../core/files/service';
+import { Department } from '../../core/org/model';
+import { User, type UserDoc } from '../../core/auth/model';
+import { News, NewsAction, type NewsDoc } from './model';
+
+async function log(news: NewsDoc, action: string, actor: Actor, note?: string) {
+  await NewsAction.create({ newsId: news._id, action, actorUserId: actor.userId, actorEmail: actor.email, note });
+}
+
+/** Effective permission on news for this user (implicit grants included). */
+async function perm(user: UserDoc, action: 'create' | 'edit' | 'approve' | 'view') {
+  return effectivePermission(user.roles as RoleAssignment[], user.departmentId ? String(user.departmentId) : undefined, 'news', action, String(user._id));
+}
+
+/** Departments this user may publish for: own / managed departments, or all for HR and executive management. */
+export async function publishableDepartments(user: UserDoc) {
+  const eff = await perm(user, 'create');
+  if (!eff) return [];
+  const filter: Record<string, unknown> = { active: { $ne: false } };
+  if (eff.scope !== 'all') filter._id = { $in: eff.departmentIds };
+  const depts = await Department.find(filter).select('code nameAr').sort({ code: 1 }).lean();
+  return depts.map((d) => ({ code: d.code, departmentId: String(d._id), nameAr: d.nameAr }));
+}
+
+async function canApprove(user: UserDoc, news: NewsDoc): Promise<boolean> {
+  const eff = await perm(user, 'approve');
+  if (!eff) return false;
+  return eff.scope === 'all' || (eff.scope === 'department' && eff.departmentIds.includes(String(news.departmentId)));
+}
+
+async function canEdit(user: UserDoc, news: NewsDoc): Promise<boolean> {
+  if (String(news.authorUserId) === String(user._id)) return true;
+  const eff = await perm(user, 'edit');
+  if (!eff) return false;
+  return eff.scope === 'all' || (eff.scope === 'department' && eff.departmentIds.includes(String(news.departmentId)));
+}
+
+export async function createNews(req: AuthedRequest, input: CreateNewsInput): Promise<NewsDoc> {
+  const user = req.auth.user;
+  const allowed = await publishableDepartments(user);
+  const code = input.departmentCode ?? (await Department.findById(user.departmentId).select('code').lean())?.code;
+  const dept = allowed.find((d) => d.code === code);
+  if (!dept) throw forbidden('لا يمكنك النشر باسم هذا القسم');
+  if (!input.audienceAll && !input.audienceDepartmentIds.length) throw badRequest('حدّد الفئة المستهدفة');
+  const { departmentCode: _c, ...rest } = input;
+  const news = await News.create({
+    ...rest,
+    number: await nextNumber('news'),
+    departmentId: dept.departmentId,
+    departmentCode: dept.code,
+    authorUserId: user._id,
+    authorName: user.displayNameAr,
+  });
+  const ids = [...input.attachmentIds, ...(input.coverAttachmentId ? [input.coverAttachmentId] : [])];
+  if (ids.length) await claimAttachments(ids, 'news', String(news._id), user._id);
+  const actor = actorFrom(req);
+  await log(news, 'created', actor);
+  await recordAudit(actor, { action: 'create', resource: 'news', resourceId: String(news._id), after: { number: news.number, title: news.title } });
+  return news;
+}
+
+export async function updateNews(req: AuthedRequest, news: NewsDoc, input: Partial<CreateNewsInput>): Promise<NewsDoc> {
+  if (!(await canEdit(req.auth.user, news))) throw forbidden();
+  if (news.state === 'archived') throw badRequest('الخبر مؤرشف');
+  const before = news.toObject();
+  const { departmentCode: _c, ...rest } = input;
+  Object.assign(news, rest);
+  const ids = [...(input.attachmentIds ?? []), ...(input.coverAttachmentId ? [input.coverAttachmentId] : [])];
+  if (ids.length) await claimAttachments(ids, 'news', String(news._id), req.auth.user._id);
+  // An edit after rejection goes back to draft; an edit of a published item stays published.
+  if (news.state === 'rejected') news.state = 'draft';
+  await news.save();
+  await log(news, 'updated', actorFrom(req));
+  await recordAudit(actorFrom(req), { action: 'update', resource: 'news', resourceId: String(news._id), before, after: news });
+  return news;
+}
+
+/** Submit for approval; HR and executive circulars (setting) and approvers themselves publish directly [DECISIONS §10]. */
+export async function submitNews(req: AuthedRequest, news: NewsDoc): Promise<NewsDoc> {
+  if (!(await canEdit(req.auth.user, news))) throw forbidden();
+  if (!['draft', 'rejected'].includes(news.state)) throw badRequest('الخبر ليس مسودة');
+  const direct = (await getSetting('news.directPublishDepartments')).includes(news.departmentCode);
+  if (direct || (await canApprove(req.auth.user, news))) return publish(news, actorFrom(req), direct ? 'direct_publish' : 'self_approve');
+  const updated = await News.findOneAndUpdate({ _id: news._id, state: news.state }, { $set: { state: 'pending_approval', submittedAt: new Date() } }, { new: true });
+  if (!updated) throw conflict('تغيّرت حالة الخبر، حدّث الصفحة');
+  await log(updated, 'submitted', actorFrom(req));
+  // The department manager(s) approve.
+  const { departmentManagerUserIds } = await import('../../core/tasks/jobs');
+  const managers = (await departmentManagerUserIds(String(news.departmentId))).filter((id) => id !== String(req.auth.user._id));
+  await notify({ userIds: managers, type: 'generic', titleAr: 'خبر بانتظار اعتمادك', bodyAr: `${updated.number} — ${updated.title}`, link: `/news/${updated._id}` });
+  return updated;
+}
+
+export async function decideNews(req: AuthedRequest, news: NewsDoc, approve: boolean, reason?: string): Promise<NewsDoc> {
+  if (!(await canApprove(req.auth.user, news))) throw forbidden('اعتماد الأخبار من صلاحية مدير القسم الناشر');
+  if (String(news.authorUserId) === String(req.auth.user._id) && !approve) throw badRequest('لا يمكنك رفض خبرك؛ عدّله أو احذفه');
+  if (news.state !== 'pending_approval') throw badRequest('الخبر ليس بانتظار الاعتماد');
+  if (!approve) {
+    if (!reason?.trim()) throw badRequest('سبب الرفض مطلوب');
+    const updated = await News.findOneAndUpdate({ _id: news._id, state: 'pending_approval' }, { $set: { state: 'rejected', rejectReason: reason } }, { new: true });
+    if (!updated) throw conflict('تغيّرت حالة الخبر، حدّث الصفحة');
+    await log(updated, 'rejected', actorFrom(req), reason);
+    await notify({ userIds: [String(news.authorUserId)], type: 'generic', titleAr: 'لم يُعتمد خبرك', bodyAr: `${news.number} — ${reason}`, link: `/news/${news._id}` });
+    return updated;
+  }
+  return publish(news, actorFrom(req), 'approved');
+}
+
+async function audienceUserIds(news: NewsDoc): Promise<string[]> {
+  const filter: Record<string, unknown> = { status: 'active', deletedAt: null };
+  if (!news.audienceAll) filter.departmentId = { $in: news.audienceDepartmentIds };
+  const users = await User.find(filter).select('_id').lean();
+  return users.map((u) => String(u._id));
+}
+
+/** Publish now (or schedule when publishFrom is in the future); the audience is told when the window opens [EP §12.3.5]. */
+async function publish(news: NewsDoc, actor: Actor, how: string): Promise<NewsDoc> {
+  const now = new Date();
+  const updated = await News.findOneAndUpdate(
+    { _id: news._id, state: { $in: ['draft', 'rejected', 'pending_approval'] } },
+    { $set: { state: 'published', publishedAt: now, approvedBy: actor.userId, approvedAt: now, publishFrom: news.publishFrom ?? now } },
+    { new: true },
+  );
+  if (!updated) throw conflict('تغيّرت حالة الخبر، حدّث الصفحة');
+  await log(updated, how, actor);
+  await recordAudit(actor, { action: 'approve', resource: 'news', resourceId: String(updated._id), meta: { how } });
+  if (!updated.publishFrom || updated.publishFrom <= now) await announce(updated);
+  return updated;
+}
+
+export async function announce(news: NewsDoc): Promise<void> {
+  const ids = await audienceUserIds(news);
+  await notify({ userIds: ids, type: 'news.published', bodyAr: news.title, link: `/news/${news._id}`, data: { newsId: String(news._id), departmentCode: news.departmentCode } });
+  await News.updateOne({ _id: news._id }, { $set: { notifiedAt: new Date() } });
+}
+
+export async function archiveNews(req: AuthedRequest, news: NewsDoc): Promise<NewsDoc> {
+  if (!(await canEdit(req.auth.user, news))) throw forbidden();
+  news.state = 'archived';
+  news.archivedAt = new Date();
+  news.pinned = false;
+  await news.save();
+  await log(news, 'archived', actorFrom(req));
+  return news;
+}
+
+export async function setPinned(req: AuthedRequest, news: NewsDoc, pinned: boolean): Promise<NewsDoc> {
+  if (!(await canApprove(req.auth.user, news))) throw forbidden('تثبيت الأخبار من صلاحية مدير القسم');
+  news.pinned = pinned;
+  await news.save();
+  await log(news, pinned ? 'pinned' : 'unpinned', actorFrom(req));
+  return news;
+}
+
+/** What the viewer may read: published items in their audience and window; plus their department's items when they manage / publish. */
+export async function visibilityFilter(user: UserDoc, authz: Authz, now = new Date()): Promise<FilterQuery<unknown>> {
+  const audience = { $or: [{ audienceAll: true }, ...(user.departmentId ? [{ audienceDepartmentIds: user.departmentId }] : [])] };
+  const published = { state: { $in: ['published', 'archived'] }, publishFrom: { $lte: now }, ...audience };
+  const or: Record<string, unknown>[] = [published, { authorUserId: user._id }];
+  const edit = await perm(user, 'edit');
+  if (edit?.scope === 'all') return {};
+  if (edit?.scope === 'department') or.push({ departmentId: { $in: edit.departmentIds } });
+  void authz;
+  return { $or: or };
+}
+
+export async function findVisible(req: AuthedRequest, id: string): Promise<NewsDoc> {
+  const n = await News.findOne({ _id: id, deletedAt: null, ...(await visibilityFilter(req.auth.user, req.authz!)) });
+  if (!n) throw notFound('الخبر غير موجود');
+  return n;
+}
+
+export async function history(newsId: string) {
+  return NewsAction.find({ newsId }).sort({ at: 1 }).lean();
+}
+
+export async function viewerCapabilities(user: UserDoc, news: NewsDoc) {
+  return { canEdit: await canEdit(user, news), canApprove: await canApprove(user, news) };
+}

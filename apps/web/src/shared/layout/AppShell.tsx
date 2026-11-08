@@ -22,6 +22,7 @@ import {
   ShieldCheck,
   Users,
   Workflow,
+  Newspaper,
   Ticket,
   X,
 } from 'lucide-react';
@@ -65,6 +66,7 @@ export function AppShell() {
     { to: '/tasks', label: t('nav.tasks'), icon: ClipboardList, show: can('tasks', 'view') },
     { to: '/tasks/board', label: t('nav.taskBoard'), icon: ClipboardList, show: can('tasks', 'create') },
     { to: '/calendar', label: t('nav.calendar'), icon: CalendarDays, show: can('calendar', 'view') },
+    { to: '/news', label: t('nav.news'), icon: Newspaper, show: can('news', 'view') },
     { to: '/notifications', label: t('nav.notifications'), icon: Bell, show: true },
     { to: '/me/security', label: t('nav.security'), icon: ShieldCheck, show: true },
   ];
