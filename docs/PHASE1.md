@@ -52,7 +52,8 @@ HR, Finance and admin accounts must enrol an authenticator on first login.
 3. **mohammed** (IT staff): "تذاكري" → "تذاكر القسم" → "استلام التذكرة" → request information → resolve. Then as **omar**: close with a rating or reopen (it returns to mohammed).
 4. **noura** (HR manager, TOTP): "لوحة الموارد البشرية" → employee file (contracts, documents, custody, reports tab) → transfer / promotion → "طلبات الموظفين" queue → "تصدير البيانات" (pick fields, note the sensitive badge, preview, Excel) → publish a circular.
 5. **abdulaziz** (Finance manager, TOTP): approve the pending bank change → decide the advance handed off from HR.
-6. **admin**: users (grantable roles, MFA reset), settings (SLA, ticket follow-ups, routes), workflows, audit log (sensitive views and exports).
+6. **admin**: users (grantable roles, MFA reset), settings (SLA, ticket follow-ups, routes, outbox retention and replay window), workflows, audit log (sensitive views and exports), **صندوق الأحداث** (`/admin/outbox`: failed / expired / unhandled events, requeue).
+7. **Go-live review checks** (D§19): as **khalid**, open the manager dashboard and click "المتأخرة" (board filtered server-side), "التذاكر المفتوحة" (tickets of his team), a meeting notification (`/calendar?event=…` jumps to its date; switch to Hijri and open the month view). As **noura**, open the HR dashboard and click the contracts / identities / documents expiry cards (`/hr/expiring`) and "فترة التجربة" (`/hr/employees?probation=30`); try the export preview with a date and a salary column and the Hijri toggle. As **omar**, download a certificate with popups blocked (a toast with the link appears; the app tab stays). As a plain employee, open a colleague's file: no sensitive fields, documents without download links.
 
 ## 3. Decisions made in phase 1
 
@@ -73,6 +74,7 @@ HR, Finance and admin accounts must enrol an authenticator on first login.
 | Work distribution, team scope, follow-ups | D§15 |
 | Calendar, news, reports, notification center | D§17 |
 | Dashboards and export | D§18 |
+| Go-live review: sensitive-field default deny, news edit rules, job schedule, outbox retention and replay | D§19 |
 
 ## 4. Known limitations (phase 1)
 
@@ -82,9 +84,11 @@ HR, Finance and admin accounts must enrol an authenticator on first login.
 - **Finance and Procurement ticket targets** are hidden until those modules exist; an approved advance is handed off to Finance on the same number but has no disbursement screen yet (D§13).
 - **Leave balances** and the attendance effect of approved leave come with phase 2.
 - **Trainings** exist only as calendar events (no training module). Customer / project links on meetings arrive with CRM.
-- **Outbox events with no subscriber** are parked as `unhandled` and replayed when a module subscribes; types nobody will ever consume accumulate until a cleanup policy is decided (D§14.B).
+- **Outbox events with no subscriber** are parked as `unhandled` and replayed when a module subscribes within `outbox.replayWindowDays` (30); older ones are marked `expired` and can be requeued from `/admin/outbox`. Delivered events are purged after `outbox.retentionDays` (90) (D§19).
 - **Charts** are simple bars; Recharts dashboards arrive with the KPI framework.
-- **Tests** cover the API (109) and web logic (19) but there is no browser end-to-end suite; RTL/phone layouts were checked manually.
+- **Tests** cover the API (142) and web logic (28, incl. source-hygiene checks for translation keys, links and date handling) but there is no browser end-to-end suite; RTL/phone layouts were checked by reading the layout code and manually at desktop width, not in a device lab.
+- **Field-level rules are code-defined for system roles** (D§19): the admin can edit a system role's grants, but its sensitive-field rules follow the code on every start. Custom roles get default-deny on sensitive fields until a field rule is added.
+- **Email, push and WhatsApp** stay off; failed outbox hand-offs reach system admins only as in-app `security.alert` notifications.
 
 ## 5. Pending before staging
 
