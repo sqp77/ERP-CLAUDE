@@ -11,6 +11,8 @@ export const notificationsRouter = Router();
 
 const listQuery = z.object({
   unread: z.coerce.boolean().optional(),
+  /** Comma-separated notification types (EP §15 groups are built on the client). */
+  types: z.string().optional(),
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(20),
 });
@@ -23,6 +25,7 @@ notificationsRouter.get(
     const q = req.query as unknown as z.infer<typeof listQuery>;
     const filter: Record<string, unknown> = { userId: req.auth.user._id };
     if (q.unread) filter.readAt = null;
+    if (q.types) filter.type = { $in: q.types.split(',').filter(Boolean) };
     const [items, total, unread] = await Promise.all([
       Notification.find(filter)
         .sort({ createdAt: -1 })

@@ -280,7 +280,85 @@
   "notifications": {
     "title": "مركز الإشعارات",
     "unreadOnly": "غير المقروءة فقط",
-    "empty": "لا توجد إشعارات"
+    "empty": "لا توجد إشعارات",
+    "types": {
+      "task": {
+        "assigned": "إسناد مهمة",
+        "due_soon": "اقتراب موعد مهمة",
+        "overdue": "تأخر مهمة",
+        "review_requested": "مهمة للمراجعة",
+        "approved": "اعتماد إنجاز",
+        "returned": "إعادة مهمة",
+        "reassigned": "إعادة إسناد",
+        "unassigned_reminder": "مهام بلا مكلّف"
+      },
+      "meeting": {
+        "created": "اجتماع جديد",
+        "reminder": "تذكير باجتماع"
+      },
+      "training": {
+        "added": "دورة تدريبية"
+      },
+      "ticket": {
+        "created": "تذكرة جديدة",
+        "updated": "تحديث تذكرة",
+        "assigned": "إسناد تذكرة",
+        "info_requested": "طلب معلومات",
+        "resolved": "تم الحل",
+        "confirm_reminder": "تذكير بالتأكيد",
+        "auto_closed": "إغلاق تلقائي",
+        "reopened": "إعادة فتح",
+        "closed": "إغلاق تذكرة"
+      },
+      "request": {
+        "decided": "البت في طلب"
+      },
+      "news": {
+        "published": "خبر جديد"
+      },
+      "contract": {
+        "expiring": "انتهاء عقد"
+      },
+      "probation": {
+        "ending": "فترة التجربة"
+      },
+      "employee": {
+        "birthday": "يوم ميلاد",
+        "manager_or_department_changed": "تغيير المدير/القسم",
+        "promotion": "تغيير وظيفي",
+        "data_updated": "تحديث بيانات"
+      },
+      "report": {
+        "requested": "طلب تقرير"
+      },
+      "secondment": {
+        "report_reminder": "تقرير انتداب"
+      },
+      "document": {
+        "expiring": "انتهاء وثيقة"
+      },
+      "security": {
+        "alert": "تنبيه أمني"
+      },
+      "auth": {
+        "password_reset": "إعادة تعيين كلمة المرور",
+        "new_login": "دخول جديد"
+      },
+      "generic": "إشعار"
+    },
+    "today": "اليوم",
+    "yesterday": "أمس",
+    "unreadCount": "{{count}} غير مقروء",
+    "markRead": "تعليم كمقروء",
+    "loadMore": "عرض المزيد",
+    "groups": {
+      "tasks": "المهام",
+      "meetings": "الاجتماعات والتدريب",
+      "tickets": "التذاكر والطلبات",
+      "hr": "الموارد البشرية",
+      "news": "الأخبار",
+      "security": "الأمان"
+    }
   },
   "admin": {
     "users": {
