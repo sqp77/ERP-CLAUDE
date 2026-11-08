@@ -12,6 +12,9 @@ import { Employee } from './model';
 import { employeeScopeFilter, hrUserIds, teamUserIdsOf } from './service';
 import { registerRequestHandlers, runRequestOverdueReminders, visibilityFilter } from './requests.service';
 import { registerAssigneeDirectory, registerTaskSourceResolver } from '../../core/tasks/service';
+import { registerPeopleSearch } from '../../core/records/resolvers';
+import { registerCalendarSource } from '../../core/calendar/sources';
+import { arabicSearchRegex } from '@eayni/shared';
 import { ON_DUTY_STATUSES } from './service';
 import {
   runAccountDeactivation,
@@ -106,6 +109,47 @@ export function registerHrModule(): void {
     return !!(await ProfileChangeRequest.exists({ _id: id, ...filter }));
   });
   for (const t of ['employee', 'hr_request', 'profile_change']) registerSensitiveOwnerType(t);
+
+  // People picker (participants, assignees) over the employee file; secondments on the calendar [EP §13.7].
+  registerPeopleSearch(async (q, limit) => {
+    const filter: Record<string, unknown> = {
+      deletedAt: null,
+      userId: { $ne: null },
+      status: { $nin: ['resigned', 'terminated'] },
+    };
+    if (q) filter.fullNameAr = arabicSearchRegex(q);
+    const rows = await Employee.find(filter)
+      .select('userId fullNameAr departmentId positionId')
+      .sort({ fullNameAr: 1 })
+      .limit(limit)
+      .lean();
+    return rows.map((r) => ({
+      userId: String(r.userId),
+      fullNameAr: r.fullNameAr,
+      departmentId: String(r.departmentId),
+      positionId: r.positionId ? String(r.positionId) : undefined,
+    }));
+  });
+  registerCalendarSource('secondments', async (req, from, to) => {
+    const e = await Employee.findOne({ userId: req.auth.user._id, deletedAt: null })
+      .select('secondment secondmentHistory')
+      .lean();
+    if (!e) return [];
+    const all = [...(e.secondmentHistory ?? []), ...(e.secondment?.destination ? [e.secondment] : [])];
+    return all
+      .filter((s) => s.startDate && s.endDate && s.startDate < to && s.endDate >= from)
+      .map((s, i) => ({
+        _id: `secondment:${e._id}:${i}`,
+        title: `انتداب — ${s.destination}`,
+        type: 'secondment',
+        status: s.endDate! < new Date() ? 'done' : 'scheduled',
+        startAt: s.startDate!,
+        endAt: s.endDate!,
+        allDay: true,
+        readOnly: true as const,
+        link: { type: 'employee', id: String(e._id) },
+      }));
+  });
 
   registerJob('hr.contracts.alerts', (now) => runContractAlerts(now));
   registerJob('hr.probation.alerts', (now) => runProbationAlerts(now));

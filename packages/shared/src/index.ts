@@ -16,3 +16,4 @@ export * from './schemas/hr';
 export * from './schemas/portal';
 export * from './schemas/hrRequests';
 export * from './schemas/tickets';
+export * from './arabic';

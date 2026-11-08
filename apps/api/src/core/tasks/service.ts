@@ -9,6 +9,8 @@ import { publish } from '../outbox/service';
 import { scopeFilter } from '../rbac/scope';
 import { effectivePermission } from '../rbac/service';
 import { registerRecordAccess } from '../access/registry';
+import { registerRecordResolver, resolveRecord } from '../records/resolvers';
+import { registerCalendarSource } from '../calendar/sources';
 import { claimAttachments } from '../files/service';
 import { withTransaction } from '../../db';
 import type { RoleAssignment } from '@eayni/shared';
@@ -55,12 +57,8 @@ export function registerAssigneeDirectory(d: AssigneeDirectory): void {
 /** Employee facts for a user (department, direct manager, on duty) from the registered directory. */
 export const lookupAssignee = (userId: string) => directory.lookup(userId);
 
-/** Source records a task may link to; the owning module registers a resolver (number or id → id + label). */
-export type SourceResolver = (idOrNumber: string) => Promise<{ id: string; label: string } | null>;
-const sourceResolvers = new Map<string, SourceResolver>();
-export function registerTaskSourceResolver(type: string, fn: SourceResolver): void {
-  sourceResolvers.set(type, fn);
-}
+/** Source records a task may link to; the owning module registers a resolver (core records registry). */
+export const registerTaskSourceResolver = registerRecordResolver;
 
 /**
  * The assignee must be an active employee in a department the actor manages, or one of the actor's
@@ -127,8 +125,7 @@ export async function createTask(req: AuthedRequest, body: CreateTaskInput) {
   if (!departmentId) throw badRequest('تعذر تحديد قسم المهمة');
   let source: { type: string; id: string; label?: string } | undefined;
   if (body.source) {
-    const resolve = sourceResolvers.get(body.source.type);
-    const found = resolve ? await resolve(body.source.id) : null;
+    const found = await resolveRecord(body.source.type, body.source.id);
     if (!found) throw badRequest('السجل المرتبط غير موجود');
     source = { type: body.source.type, ...found };
   }
@@ -425,10 +422,40 @@ export async function findVisibleTask(req: AuthedRequest, id: string) {
 }
 
 let registered = false;
-/** Attachments on tasks follow the task's visibility. */
+/** Attachments on tasks follow the task's visibility; tasks are resolvable records and a calendar source [EP §13.4]. */
 export function registerTaskAccess(): void {
   if (registered) return;
   registered = true;
+  registerRecordResolver('task', async (idOrNumber) => {
+    const t = await Task.findOne({
+      deletedAt: null,
+      $or: [...(/^[0-9a-f]{24}$/i.test(idOrNumber) ? [{ _id: idOrNumber }] : []), { number: idOrNumber }],
+    })
+      .select('number title')
+      .lean();
+    return t ? { id: String(t._id), label: `${t.number} — ${t.title}` } : null;
+  });
+  registerCalendarSource('tasks', async (req, from, to) => {
+    const tasks = await Task.find({
+      assigneeId: req.auth.user._id,
+      deletedAt: null,
+      dueAt: { $gte: from, $lt: to },
+      status: { $ne: 'cancelled' },
+    })
+      .select('number title dueAt status priority')
+      .lean();
+    return tasks.map((t) => ({
+      _id: `task:${t._id}`,
+      title: `${t.number} · ${t.title}`,
+      type: 'task',
+      status: t.status === 'done' ? 'done' : 'scheduled',
+      startAt: t.dueAt!,
+      endAt: t.dueAt!,
+      allDay: false,
+      readOnly: true,
+      link: { type: 'task', id: String(t._id) },
+    }));
+  });
   registerRecordAccess('task', async (req, id) => {
     const eff = await effectivePermission(
       req.auth.user.roles as RoleAssignment[],

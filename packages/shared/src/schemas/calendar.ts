@@ -43,4 +43,7 @@ export const listEventsQuerySchema = z.object({
   departmentId: objectIdSchema.optional(),
   userId: objectIdSchema.optional(),
   type: z.enum(EVENT_TYPES).optional(),
+  /** Extra sources to merge (comma-separated: tasks, secondments…); default all [EP §13.4–13.7]. */
+  include: z.string().optional(),
 });
+export const peopleQuerySchema = z.object({ q: z.string().trim().max(60).default('') });
