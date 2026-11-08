@@ -41,7 +41,7 @@ export async function seedNews(): Promise<number> {
   let n = 0;
   const noura = await reqOf('noura@eayni.local'); // HR manager → direct publish
   const khalid = await reqOf('khalid@eayni.local'); // Operations manager → self-approve
-  const lama = await reqOf('lama@eayni.local'); // Marketing manager
+  const hind = await reqOf('hind@eayni.local'); // Marketing manager
   const abdullah = await reqOf('abdullah@eayni.local'); // executive
 
   const c1 = await createNews(noura, {
@@ -75,7 +75,7 @@ export async function seedNews(): Promise<number> {
   });
   await submitNews(khalid, c3);
   n++;
-  const c4 = await createNews(lama, {
+  const c4 = await createNews(hind, {
     title: 'حملة "عيني تدوّر" في المدارس',
     body: 'تنطلق الحملة في 15 مدرسة بالمنطقة الشرقية خلال الأسبوعين القادمين.',
     audienceAll: true,
@@ -84,10 +84,10 @@ export async function seedNews(): Promise<number> {
     publishFrom: d(3),
     attachmentIds: [],
   });
-  await submitNews(lama, c4);
+  await submitNews(hind, c4);
   n++;
   // A pending item (manager-authored would self-approve; put it directly in the approval queue of Marketing).
-  const c5 = await createNews(lama, {
+  const c5 = await createNews(hind, {
     title: 'مسوّدة: نتائج حملة التبرع بالملابس',
     body: 'تم جمع 12 طنًا من الملابس خلال الحملة الأخيرة.',
     audienceAll: true,
