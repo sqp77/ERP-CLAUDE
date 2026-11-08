@@ -25,6 +25,11 @@ const envSchema = z.object({
    * check must carry it, and the client IP is read from `CloudFront-Viewer-Address`. Required in production.
    */
   ORIGIN_SECRET: z.string().min(16).optional(),
+  /** The previous origin secret, accepted during a rotation (empty string = none). */
+  ORIGIN_SECRET_PREVIOUS: z
+    .string()
+    .optional()
+    .transform((v) => (v && v.length >= 16 ? v : undefined)),
   API_URL: z.string().default('http://localhost:4000'),
   COOKIE_SECURE: z
     .string()

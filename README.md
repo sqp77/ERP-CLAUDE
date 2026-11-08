@@ -77,9 +77,8 @@ serverless.yml  AWS Lambda deployment (written; not run until DECISIONS §1 is c
 distribution goes to the HTTP API, so web and API share one origin (review F2). After `npx serverless deploy --stage staging`:
 
 ```bash
-npm run build -w apps/web
-aws s3 sync apps/web/dist s3://eayni-erp-staging-web --delete
-aws cloudfront create-invalidation --distribution-id <id from the stack> --paths '/*'
+scripts/deploy-web.sh staging      # build, upload (assets immutable, index.html no-cache), invalidate
+scripts/smoke-staging.sh https://<distribution> https://<id>.execute-api.<region>.amazonaws.com you@eayni.local
 ```
 
 Set the SSM parameters `/eayni/staging/app-url` (distribution URL or custom domain; drives CORS and the cookie origin)

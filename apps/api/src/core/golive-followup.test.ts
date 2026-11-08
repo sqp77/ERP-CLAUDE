@@ -1,11 +1,13 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import request from 'supertest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import yaml from 'js-yaml';
 import { createApp } from '../app';
 import { resetEnvCache } from '../config';
-import { parseViewerAddress } from './http/origin';
+import { parseViewerAddress, resetViewerAddressWarning } from './http/origin';
+import { logger } from '../logger';
+import { existsSync, statSync } from 'node:fs';
 import { activateAccount, auth, loginAs, makeDepartment, makeUser, testApp, PASSWORD } from '../test/helpers';
 import { setSetting } from './settings/service';
 import { SYSTEM_ACTOR } from './http/context';
@@ -119,13 +121,15 @@ describe('go-live review follow-up (b02191a)', () => {
     const api = dist.Origins.find((o) => o.Id === 'api')!;
     expect(api.OriginCustomHeaders?.map((h) => h.HeaderName)).toEqual(['x-origin-secret']);
     expect(api.OriginCustomHeaders![0].HeaderValue).toContain('origin-secret');
-    expect(
-      JSON.stringify(dist.CacheBehaviors.find((b) => b.PathPattern === '/api/*')!.OriginRequestPolicyId),
-    ).toContain('ApiOriginRequestPolicy');
-    const policy = Resources.ApiOriginRequestPolicy.Properties.OriginRequestPolicyConfig as {
-      HeadersConfig: { Headers: string[] };
-    };
-    expect(policy.HeadersConfig.Headers).toContain('CloudFront-Viewer-Address');
+    // Managed AllViewerExceptHostHeader (follow-up on fffae18 item 1): API Gateway needs its own Host; this managed
+    // policy is built for it and already forwards the CloudFront viewer headers (incl. CloudFront-Viewer-Address).
+    expect(dist.CacheBehaviors.find((b) => b.PathPattern === '/api/*')!.OriginRequestPolicyId).toBe(
+      'b689b0a8-53d0-40ab-baf2-68738e2966ac',
+    );
+    expect(Resources.ApiOriginRequestPolicy).toBeUndefined();
+    expect(Object.values(Resources).some((r) => r.Type === 'AWS::CloudFront::OriginRequestPolicy')).toBe(
+      false,
+    );
     const env = (
       yaml.load(readFileSync(fileURLToPath(new URL('../../../../serverless.yml', import.meta.url)), 'utf8'), {
         schema: CFN,
@@ -307,16 +311,13 @@ describe('go-live review follow-up (b02191a)', () => {
       { departmentId: ops._id },
     );
     const opsmgr = await loginAs('opsmgr@eayni.local');
-    const created = await request(app())
-      .post('/api/v1/tickets')
-      .set(auth(itStaff.token))
-      .send({
-        departmentCode: 'ops',
-        type: 'request',
-        subject: 'نقل حاوية',
-        body: 'نحتاج نقل حاوية الفرع',
-        priority: 'medium',
-      });
+    const created = await request(app()).post('/api/v1/tickets').set(auth(itStaff.token)).send({
+      departmentCode: 'ops',
+      type: 'request',
+      subject: 'نقل حاوية',
+      body: 'نحتاج نقل حاوية الفرع',
+      priority: 'medium',
+    });
     expect(created.status).toBe(201);
     expect(
       (
@@ -345,5 +346,87 @@ describe('go-live review follow-up (b02191a)', () => {
     expect((await request(app()).get('/api/v1/tickets?view=team').set(auth(hr))).body.items).toEqual([]);
     expect(PASSWORD).toBeTruthy();
     expect(await User.countDocuments({ email: 'boss@eayni.local' })).toBe(1);
+  });
+
+  it('fffae18 follow-up 2d/4: the previous origin secret is accepted during rotation; a missing viewer address leaves the IP unknown (no shared limiter key) and warns once', async () => {
+    await makeUser('v@eayni.local');
+    process.env.ORIGIN_SECRET = 'origin-secret-current-0123456789';
+    process.env.ORIGIN_SECRET_PREVIOUS = 'origin-secret-previous-0123456789';
+    resetEnvCache();
+    resetViewerAddressWarning();
+    const warn = vi.spyOn(logger, 'warn');
+    try {
+      const guarded = createApp();
+      expect(
+        (
+          await request(guarded)
+            .get('/api/v1/auth/me')
+            .set('x-origin-secret', 'origin-secret-current-0123456789')
+        ).status,
+      ).toBe(401);
+      expect(
+        (
+          await request(guarded)
+            .get('/api/v1/auth/me')
+            .set('x-origin-secret', 'origin-secret-previous-0123456789')
+        ).status,
+      ).toBe(401);
+      expect(
+        (
+          await request(guarded)
+            .get('/api/v1/auth/me')
+            .set('x-origin-secret', 'origin-secret-older-0123456789')
+        ).status,
+      ).toBe(403);
+      // Through CloudFront but without CloudFront-Viewer-Address: login still works, the IP is not a made-up value.
+      for (let i = 0; i < 2; i++) {
+        const r = await request(guarded)
+          .post('/api/v1/auth/login')
+          .set('x-origin-secret', 'origin-secret-current-0123456789')
+          .set('x-forwarded-for', '10.0.0.1')
+          .send({ email: 'v@eayni.local', password: 'wrong-password' });
+        expect(r.status).toBe(401);
+      }
+      const log = await LoginLog.findOne({ email: 'v@eayni.local', event: 'login_failed' })
+        .sort({ at: -1 })
+        .lean();
+      expect(log?.ip ?? undefined).toBeUndefined();
+      const ok = await request(guarded)
+        .post('/api/v1/auth/login')
+        .set('x-origin-secret', 'origin-secret-current-0123456789')
+        .send({ email: 'v@eayni.local', password: PASSWORD });
+      expect(ok.status).toBe(200);
+      const missingWarnings = warn.mock.calls.filter((c) =>
+        String(c[1] ?? c[0]).includes('CloudFront-Viewer-Address missing'),
+      );
+      expect(missingWarnings).toHaveLength(1); // once per container, not per request
+    } finally {
+      warn.mockRestore();
+      delete process.env.ORIGIN_SECRET;
+      delete process.env.ORIGIN_SECRET_PREVIOUS;
+      resetEnvCache();
+    }
+  });
+
+  it('fffae18 follow-up 2/3: the smoke and deploy scripts exist, are executable, and upload index.html with no-cache and assets as immutable', () => {
+    const root = fileURLToPath(new URL('../../../../', import.meta.url));
+    for (const f of ['scripts/smoke-staging.sh', 'scripts/deploy-web.sh']) {
+      expect(existsSync(root + f), f).toBe(true);
+      expect(statSync(root + f).mode & 0o111, `${f} executable`).not.toBe(0);
+    }
+    const deploy = readFileSync(root + 'scripts/deploy-web.sh', 'utf8');
+    expect(deploy).toMatch(/--exclude ['"]?index\.html/);
+    expect(deploy).toMatch(/max-age=31536000,\s*immutable/);
+    expect(deploy).toMatch(/index\.html[\s\S]*--cache-control ['"]no-cache/);
+    const smoke = readFileSync(root + 'scripts/smoke-staging.sh', 'utf8');
+    for (const must of [
+      '/api/health',
+      '/api/v1/auth/me',
+      'forbidden_origin',
+      '/api/v1/auth/sessions',
+      'execute-api',
+    ]) {
+      expect(smoke, must).toContain(must);
+    }
   });
 });

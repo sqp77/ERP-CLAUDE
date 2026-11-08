@@ -25,6 +25,8 @@ provider:
     # Requests must come through CloudFront (follow-up 2): the distribution adds this secret origin header and the
     # API rejects anything without it; the client IP is read from CloudFront-Viewer-Address, not from X-Forwarded-For.
     ORIGIN_SECRET: ${ssm:/eayni/${self:provider.stage}/origin-secret}
+    # Accepted during a rotation while CloudFront propagates the new header (empty when not rotating).
+    ORIGIN_SECRET_PREVIOUS: ${ssm:/eayni/${self:provider.stage}/origin-secret-previous, ''}
     TRUST_PROXY_HOPS: '0'
   iam:
     role:
@@ -155,19 +157,9 @@ resources:
               ViewerProtocolPolicy: https-only
               AllowedMethods: [GET, HEAD, OPTIONS, PUT, POST, PATCH, DELETE]
               CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad # Managed-CachingDisabled
-              OriginRequestPolicyId: !Ref ApiOriginRequestPolicy
-    # Forwards everything the viewer sent plus CloudFront-Viewer-Address, the API's source of the client IP (follow-up 2).
-    ApiOriginRequestPolicy:
-      Type: AWS::CloudFront::OriginRequestPolicy
-      Properties:
-        OriginRequestPolicyConfig:
-          Name: ${self:service}-${self:provider.stage}-api-origin
-          Comment: all viewer headers except Host, plus CloudFront-Viewer-Address
-          CookiesConfig: { CookieBehavior: all }
-          QueryStringsConfig: { QueryStringBehavior: all }
-          HeadersConfig:
-            HeaderBehavior: allViewerAndWhitelistCloudFront
-            Headers: [CloudFront-Viewer-Address]
+              # Managed-AllViewerExceptHostHeader (follow-up 2 of fffae18): made for API Gateway origins — forwards cookies,
+              # query strings and all viewer headers except Host, plus the CloudFront viewer headers incl. CloudFront-Viewer-Address.
+              OriginRequestPolicyId: b689b0a8-53d0-40ab-baf2-68738e2966ac
     WebSpaRewriteFunction:
       Type: AWS::CloudFront::Function
       Properties:
@@ -188,6 +180,8 @@ resources:
   Outputs:
     WebBucketName:
       Value: !Ref WebBucket
+    WebDistributionId:
+      Value: !Ref WebDistribution
     WebDistributionDomain:
       Value: !GetAtt WebDistribution.DomainName
       Description: Set /eayni/<stage>/app-url to https://<this value> (or the custom domain) before the first deploy of the API

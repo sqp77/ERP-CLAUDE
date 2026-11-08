@@ -13,6 +13,7 @@ import { actorFrom, type AuthedRequest } from '../http/context';
 import { notFound } from '../http/errors';
 import { isTest } from '../../config';
 import * as auth from './service';
+import { clientIp } from '../http/origin';
 import { requireAuth } from './middleware';
 import { Session } from './model';
 import { clearSessionCookie, revokeSession, setSessionCookie } from './session';
@@ -29,7 +30,9 @@ const loginLimiter = rateLimit({
   windowMs: 15 * 60_000,
   limit: isTest() ? 1000 : 10,
   skipSuccessfulRequests: true,
-  keyGenerator: (req) => `${req.ip}|${String((req.body as { email?: string })?.email ?? '').toLowerCase()}`,
+  // Unknown IP (viewer header missing) → key on the email alone, never on a shared placeholder (follow-up 2d).
+  keyGenerator: (req) =>
+    `${clientIp(req) ?? 'ip-unknown'}|${String((req.body as { email?: string })?.email ?? '').toLowerCase()}`,
   standardHeaders: true,
   legacyHeaders: false,
   message: limited,
@@ -38,6 +41,8 @@ const loginIpLimiter = rateLimit({
   windowMs: 15 * 60_000,
   limit: isTest() ? 1000 : 200,
   skipSuccessfulRequests: true,
+  skip: (req) => !clientIp(req), // no IP → no per-IP ceiling (would be one bucket for everyone)
+  keyGenerator: (req) => clientIp(req) ?? 'ip-unknown',
   standardHeaders: false,
   legacyHeaders: false,
   message: limited,
@@ -47,12 +52,14 @@ const loginIpLimiter = rateLimit({
 const mfaLimiter = rateLimit({
   windowMs: 15 * 60_000,
   limit: isTest() ? 1000 : 30,
+  skip: (req) => !clientIp(req),
+  keyGenerator: (req) => clientIp(req) ?? 'ip-unknown',
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: { code: 'rate_limited', message: 'محاولات كثيرة، حاول بعد قليل' } },
 });
 
-const meta = (req: Request) => ({ ip: req.ip, userAgent: String(req.headers['user-agent'] ?? '') });
+const meta = (req: Request) => ({ ip: clientIp(req), userAgent: String(req.headers['user-agent'] ?? '') });
 
 authRouter.post(
   '/login',
