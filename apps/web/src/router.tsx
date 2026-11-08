@@ -36,6 +36,9 @@ import { NewsPage } from './pages/news/NewsPage';
 import { NewsDetailPage } from './pages/news/NewsDetailPage';
 import { ReportsListPage } from './pages/reports/ReportsListPage';
 import { ReportDetailPage } from './pages/reports/ReportDetailPage';
+import { ManagerDashboardPage } from './pages/dashboards/ManagerDashboardPage';
+import { HrDashboardPage } from './pages/dashboards/HrDashboardPage';
+import { ExportPage } from './pages/hr/ExportPage';
 import { RouteError } from './shared/layout/RouteError';
 
 export const router = createBrowserRouter([
@@ -76,6 +79,7 @@ export const router = createBrowserRouter([
               { path: '/me/reports', element: <ReportsListPage view="mine" /> },
               { path: '/reports', element: <ReportsListPage view="team" /> },
               { path: '/reports/:id', element: <ReportDetailPage /> },
+              { path: '/manager/dashboard', element: <ManagerDashboardPage /> },
               { path: '/hr/requests', element: <RequestsListPage view="queue" /> },
               {
                 element: <RequirePermission resource="tasks" action="view" />,
@@ -120,6 +124,8 @@ export const router = createBrowserRouter([
               {
                 element: <RequirePermission resource="hr.employees" action="view" />,
                 children: [
+                  { path: '/hr/dashboard', element: <HrDashboardPage /> },
+                  { path: '/hr/export', element: <ExportPage /> },
                   { path: '/hr/employees', element: <EmployeesPage /> },
                   { path: '/hr/employees/:id', element: <EmployeePage /> },
                   { path: '/hr/secondments', element: <SecondmentsPage /> },

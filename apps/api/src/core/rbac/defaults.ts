@@ -71,7 +71,7 @@ export const CORE_ROLES: RoleDefinition[] = [
       { resource: 'hr.profile_changes', actions: ['view', 'create'], scope: 'own' },
       { resource: 'hr.requests', actions: ['view', 'create'], scope: 'own' },
       { resource: 'tickets', actions: ['view', 'create'], scope: 'own' },
-      { resource: 'news', actions: ['view'], scope: 'all' },
+      { resource: 'news', actions: ['view', 'create'], scope: 'all' },
       { resource: 'hr.reports', actions: ['view', 'create'], scope: 'own' },
     ],
     fieldRules: [],

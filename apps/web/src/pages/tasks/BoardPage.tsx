@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
+import { useSearchParams } from 'react-router';
 import { TASK_STATUSES, PRIORITIES, type TaskStatus } from '@eayni/shared';
 import { get } from '@/lib/api';
 import { usePrefs } from '@/lib/preferences';
@@ -33,13 +34,14 @@ const COLUMNS: TaskStatus[] = ['new', 'in_progress', 'waiting_review', 'late', '
  */
 export function BoardPage() {
   const { t } = useTranslation();
+  const [search] = useSearchParams();
   const { user } = useAuth();
   const { formatDate } = usePrefs();
   const [view, setView] = useState<'kanban' | 'table'>('kanban');
-  const [assignee, setAssignee] = useState('');
+  const [assignee, setAssignee] = useState(search.get('assigneeId') ?? '');
   const [priority, setPriority] = useState('');
   const [dueTo, setDueTo] = useState('');
-  const [status, setStatus] = useState('');
+  const [status, setStatus] = useState(search.get('status') ?? '');
   const [openId, setOpenId] = useState<string | null>(null);
   const [assignOpen, setAssignOpen] = useState<{ assigneeId?: string } | null>(null);
   const team = useTeam();

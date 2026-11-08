@@ -29,6 +29,7 @@ import { requestsRouter } from './modules/hr/requests.routes';
 import { ticketsRouter } from './modules/tickets/routes';
 import { newsRouter } from './modules/news/routes';
 import { employeeReportsRouter } from './modules/hr/reports.routes';
+import { dashboardRouter } from './modules/hr/dashboard.routes';
 
 /**
  * Express app. Staff realm under /api/v1; the external realm (/api/portal) is added with the
@@ -73,6 +74,7 @@ export function createApp(): Express {
   v1.use('/hr/profile-changes', profileChangesRouter);
   v1.use('/hr/requests', requestsRouter);
   v1.use('/hr/employee-reports', employeeReportsRouter);
+  v1.use('/hr/dashboard', dashboardRouter);
   v1.use('/tickets', ticketsRouter);
   v1.use('/news', newsRouter);
   v1.use('/hr', hrRouter);

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
+import { useSearchParams } from 'react-router';
 import { HR_REQUEST_TYPES } from '@eayni/shared';
 import { get, type Paged } from '@/lib/api';
 import { usePrefs } from '@/lib/preferences';
@@ -25,9 +26,10 @@ type View = 'mine' | 'inbox' | 'queue' | 'all';
 /** Requests list in three guises: my requests [HR §3.5], the direct manager's inbox, the HR/Finance queue. */
 export function RequestsListPage({ view }: { view: View }) {
   const { t } = useTranslation();
+  const [search] = useSearchParams();
   const { formatDate } = usePrefs();
-  const [type, setType] = useState('');
-  const [state, setState] = useState('');
+  const [type, setType] = useState(search.get('type') ?? '');
+  const [state, setState] = useState(search.get('state') ?? '');
   const [open, setOpen] = useState(false);
   const params = new URLSearchParams({
     view,

@@ -11,9 +11,9 @@ describe('export builder [HR §4]', () => {
     await makeUser('adm@eayni.local', [{ role: 'system_admin' }]);
     const t = await loginAs('adm@eayni.local');
     const res = await request(testApp()).get('/api/v1/export/resources').set(auth(t));
-    expect(res.body.items.map((r: { resource: string }) => r.resource)).toEqual(
-      expect.arrayContaining(['users', 'employees']),
-    );
+    // The system admin may export users but not employee files (no hr.employees export grant, HR §6).
+    expect(res.body.items.map((r: { resource: string }) => r.resource)).toContain('users');
+    expect(res.body.items.map((r: { resource: string }) => r.resource)).not.toContain('employees');
     const preview = await request(testApp())
       .post('/api/v1/export')
       .set(auth(t))

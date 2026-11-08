@@ -3,6 +3,7 @@ import { Link } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
+import { useSearchParams } from 'react-router';
 import {
   EMPLOYEE_STATUSES,
   EMPLOYMENT_TYPES,
@@ -67,14 +68,15 @@ type NewEmployee = {
 /** Employee directory [HR §3.3]: search, filters, create. Scope is enforced by the API (own/team/department/all). */
 export function EmployeesPage() {
   const { t } = useTranslation();
+  const [search] = useSearchParams();
   const { can } = useAuth();
   const { formatDate } = usePrefs();
   const toast = useToast();
   const qc = useQueryClient();
   const lk = useHrLookups();
   const [q, setQ] = useState('');
-  const [dept, setDept] = useState('');
-  const [status, setStatus] = useState('');
+  const [dept, setDept] = useState(search.get('departmentId') ?? '');
+  const [status, setStatus] = useState(search.get('status') ?? '');
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string>();
   const [temp, setTemp] = useState<{ email: string; password: string }>();

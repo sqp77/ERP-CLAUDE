@@ -18,8 +18,24 @@ exportRouter.get(
   '/resources',
   requireAuth(),
   authorize('exports', 'view'),
-  asyncHandler(async (_req, res) => {
-    res.json({ items: listExportResources() });
+  asyncHandler(async (req: AuthedRequest, res) => {
+    // Only resources the caller may export, and only the fields they may see [HR §4, HR §6].
+    const user = req.auth.user;
+    const items = [];
+    for (const r of listExportResources()) {
+      const def = getExportResource(r.resource);
+      const eff = await effectivePermission(
+        user.roles as RoleAssignment[],
+        user.departmentId ? String(user.departmentId) : undefined,
+        def.permissionResource,
+        'export',
+        String(user._id),
+      );
+      if (!eff) continue;
+      const { hidden } = await fieldRestrictions(user.roles as RoleAssignment[], def.permissionResource);
+      items.push({ ...r, scope: eff.scope, fields: r.fields.filter((f) => !hidden.has(f.key)) });
+    }
+    res.json({ items });
   }),
 );
 
@@ -37,6 +53,7 @@ exportRouter.post(
       user.departmentId ? String(user.departmentId) : undefined,
       resource.permissionResource,
       'export',
+      String(user._id),
     );
     if (!eff) throw forbidden('ليست لديك صلاحية تصدير هذا المصدر');
     const { hidden } = await fieldRestrictions(user.roles as RoleAssignment[], resource.permissionResource);
@@ -47,10 +64,18 @@ exportRouter.post(
       limit: body.limit,
     });
     const { header, data } = await buildRows(resource, body.fields, rows, hidden);
+    const sensitiveFields = body.fields.filter((k) => resource.fields.find((f) => f.key === k)?.sensitive);
     await recordAudit(actorFrom(req), {
       action: 'export',
       resource: resource.permissionResource,
-      meta: { fields: body.fields, filters: body.filters, rows: data.length, format: body.format },
+      sensitive: sensitiveFields.length > 0,
+      meta: {
+        fields: body.fields,
+        sensitiveFields,
+        filters: body.filters,
+        rows: data.length,
+        format: body.format,
+      },
     });
 
     if (body.format === 'preview') return res.json({ header, rows: data.slice(0, 50), total: data.length });

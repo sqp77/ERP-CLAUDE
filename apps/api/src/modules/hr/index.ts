@@ -217,8 +217,17 @@ export function registerHrModule(): void {
       { key: 'hireDate', labelAr: 'تاريخ المباشرة' },
       { key: 'workEmail', labelAr: 'البريد الوظيفي' },
       { key: 'mobile', labelAr: 'الجوال' },
-      { key: 'departmentId', labelAr: 'القسم (معرّف)' },
+      { key: 'departmentName', labelAr: 'القسم' },
+      { key: 'positionName', labelAr: 'المسمى الوظيفي' },
+      { key: 'branchName', labelAr: 'الفرع' },
+      { key: 'directManagerName', labelAr: 'المدير المباشر' },
+      { key: 'contractType', labelAr: 'نوع العقد' },
+      { key: 'contractEndDate', labelAr: 'نهاية العقد' },
+      { key: 'identityType', labelAr: 'نوع الهوية' },
+      { key: 'identityExpiry', labelAr: 'انتهاء الهوية' },
       { key: 'birthDate', labelAr: 'تاريخ الميلاد', sensitive: true },
+      { key: 'identity.number', labelAr: 'رقم الهوية', sensitive: true },
+      { key: 'religion', labelAr: 'الديانة', sensitive: true },
       {
         key: 'basicSalaryHalalas',
         labelAr: 'الراتب الأساسي (ر.س)',
@@ -233,7 +242,45 @@ export function registerHrModule(): void {
       const f: Record<string, unknown> = { deletedAt: null, ...scope };
       if (typeof filters.departmentId === 'string') f.departmentId = filters.departmentId;
       if (typeof filters.status === 'string') f.status = filters.status;
-      return Employee.find(f).limit(limit).lean() as unknown as Promise<Record<string, unknown>[]>;
+      if (typeof filters.branchId === 'string') f.branchId = filters.branchId;
+      if (typeof filters.nationality === 'string' && filters.nationality) f.nationality = filters.nationality;
+      const rows = await Employee.find(f).limit(limit).lean();
+      const { Department, Position, Branch } = await import('../../core/org/model');
+      const { Contract } = await import('./model');
+      const { decrypt } = await import('../../core/auth/crypto');
+      const [depts, positions, branches, managers, contracts] = await Promise.all([
+        Department.find().select('nameAr').lean(),
+        Position.find().select('titleAr').lean(),
+        Branch.find().select('nameAr').lean(),
+        Employee.find({ _id: { $in: rows.map((r) => r.directManagerId).filter(Boolean) } })
+          .select('fullNameAr')
+          .lean(),
+        Contract.find({
+          employeeId: { $in: rows.map((r) => r._id) },
+          status: { $in: ['active', 'renewing'] },
+        })
+          .select('employeeId type endDate')
+          .lean(),
+      ]);
+      const name = <T extends { _id: unknown }>(list: T[], pick: (x: T) => string) =>
+        new Map(list.map((x) => [String(x._id), pick(x)]));
+      const dn = name(depts, (x) => x.nameAr);
+      const pn = name(positions, (x) => x.titleAr);
+      const bn = name(branches, (x) => x.nameAr);
+      const mn = name(managers, (x) => x.fullNameAr);
+      const ct = new Map(contracts.map((c) => [String(c.employeeId), c]));
+      return rows.map((r) => ({
+        ...r,
+        departmentName: dn.get(String(r.departmentId)) ?? '',
+        positionName: r.positionId ? (pn.get(String(r.positionId)) ?? '') : '',
+        branchName: r.branchId ? (bn.get(String(r.branchId)) ?? '') : '',
+        directManagerName: r.directManagerId ? (mn.get(String(r.directManagerId)) ?? '') : '',
+        contractType: ct.get(String(r._id))?.type ?? '',
+        contractEndDate: ct.get(String(r._id))?.endDate ?? '',
+        identityType: r.identity?.type ?? '',
+        identityExpiry: r.identity?.expiryDate ?? '',
+        'identity.number': r.identity?.numberEnc ? decrypt(r.identity.numberEnc) : '',
+      })) as unknown as Record<string, unknown>[];
     },
   });
 }

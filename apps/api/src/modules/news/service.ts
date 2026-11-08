@@ -33,12 +33,28 @@ async function perm(user: UserDoc, action: 'create' | 'edit' | 'approve' | 'view
   );
 }
 
-/** Departments this user may publish for: own / managed departments, or all for HR and executive management. */
+/**
+ * Departments this user may write for: managed departments (approve + publish), all for HR and executive
+ * management, or — for plain staff when `news.staffAuthoringDepartments` allows it — their own department,
+ * whose manager then approves [EP §12.2 "اسم الموظف الناشر", §12.3.3].
+ */
 export async function publishableDepartments(user: UserDoc) {
   const eff = await perm(user, 'create');
   if (!eff) return [];
   const filter: Record<string, unknown> = { active: { $ne: false } };
-  if (eff.scope !== 'all') filter._id = { $in: eff.departmentIds };
+  const approve = await perm(user, 'approve');
+  if (approve?.scope === 'all') {
+    // HR / executive: any department
+  } else if (approve?.scope === 'department' && approve.departmentIds.length)
+    filter._id = { $in: approve.departmentIds };
+  else {
+    if (!user.departmentId) return [];
+    const own = await Department.findById(user.departmentId).select('code').lean();
+    if (!own) return [];
+    const cfg = await getSetting('news.staffAuthoringDepartments');
+    if (!(cfg[own.code] ?? true)) return [];
+    filter._id = user.departmentId;
+  }
   const depts = await Department.find(filter).select('code nameAr').sort({ code: 1 }).lean();
   return depts.map((d) => ({ code: d.code, departmentId: String(d._id), nameAr: d.nameAr }));
 }

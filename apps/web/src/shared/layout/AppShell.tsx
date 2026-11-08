@@ -64,6 +64,12 @@ export function AppShell() {
     { to: '/me/tickets', label: t('nav.myTickets'), icon: Ticket, show: can('tickets', 'view') },
     { to: '/manager/requests', label: t('nav.teamRequests'), icon: Inbox, show: !!inbox.data?.total },
     { to: '/manager/team', label: t('nav.team'), icon: Users, show: !!team.data?.items.length },
+    {
+      to: '/manager/dashboard',
+      label: t('nav.managerDashboard'),
+      icon: Home,
+      show: !!team.data?.items.length,
+    },
     { to: '/tasks', label: t('nav.tasks'), icon: ClipboardList, show: can('tasks', 'view') },
     { to: '/tasks/board', label: t('nav.taskBoard'), icon: ClipboardList, show: can('tasks', 'create') },
     { to: '/calendar', label: t('nav.calendar'), icon: CalendarDays, show: can('calendar', 'view') },
@@ -82,6 +88,18 @@ export function AppShell() {
         (can('hr.employees', 'create') ||
           can('hr.employees', 'export') ||
           user?.roles.some((r) => r.role === 'department_manager' || r.role === 'executive')),
+    },
+    {
+      to: '/hr/dashboard',
+      label: t('nav.hrDashboard'),
+      icon: Home,
+      show: can('hr.employees', 'create'),
+    },
+    {
+      to: '/hr/export',
+      label: t('nav.export'),
+      icon: FileText,
+      show: can('hr.employees', 'export'),
     },
     {
       to: '/hr/requests',

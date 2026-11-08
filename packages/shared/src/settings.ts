@@ -123,6 +123,13 @@ export const SETTING_DEFINITIONS = {
     schema: z.number().int().min(1),
     default: 1, // EP §16: the manager distributes department work
   }),
+  'news.staffAuthoringDepartments': def({
+    key: 'news.staffAuthoringDepartments',
+    labelAr: 'موظفو القسم يكتبون أخبار قسمهم ويرسلونها لاعتماد المدير (لكل قسم؛ الافتراضي مفعّل)',
+    group: 'general',
+    schema: z.record(z.string(), z.boolean()),
+    default: {}, // slice 5 review change: missing department = on [EP §12.2, §12.3.3]
+  }),
   'news.directPublishDepartments': def({
     key: 'news.directPublishDepartments',
     labelAr: 'أقسام تنشر أخبارها وتعاميمها مباشرة دون اعتماد',
