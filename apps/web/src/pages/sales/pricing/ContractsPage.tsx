@@ -352,6 +352,7 @@ export function ContractPage() {
   const qc = useQueryClient();
   const q = useContract(id);
   const [schedule, setSchedule] = useState({ plannedAt: '', kind: 'delivery', note: '' });
+  const [doneFor, setDoneFor] = useState<string | null>(null);
   const [renewOpen, setRenewOpen] = useState(false);
   const [sendCert, setSendCert] = useState<{ certId: string; to: string } | null>(null);
   const [mailto, setMailto] = useState('');
@@ -378,6 +379,12 @@ export function ContractPage() {
           <>
             <Badge tone={contractTone[c.state]}>{c.stateAr}</Badge>
             {c.yearOrMore && <Badge tone="brand">{t('sales.contracts.yearOrMore')}</Badge>}
+            <Link
+              to={`/sales/invoices?contractId=${c._id}`}
+              className="text-sm text-brand-700 hover:underline"
+            >
+              {t('sales.invoices.title')}
+            </Link>
             {c.canEdit && ['active', 'expiring', 'expired'].includes(c.state) && (
               <Button variant="secondary" onClick={() => setRenewOpen(true)}>
                 {t('sales.contracts.renew')}
@@ -466,19 +473,30 @@ export function ContractPage() {
                     {t(`sales.contracts.scheduleKinds.${s.kind}`)} ·{' '}
                     <span className="tabular">{formatDateTime(s.plannedAt)}</span>
                     {s.note && <span className="text-slate-500"> — {s.note}</span>}
+                    {s.quantities && s.quantities.length > 0 && (
+                      <span className="block text-xs text-slate-500">
+                        {t('sales.contracts.recordedQuantities')}:{' '}
+                        {s.quantities
+                          .map(
+                            (qty) =>
+                              `${qty.descriptionAr ?? c.items.find((it) => it.itemId && it.itemId === qty.itemId)?.descriptionAr ?? ''} ${qty.quantity}`,
+                          )
+                          .join(t('common.listSeparator'))}
+                      </span>
+                    )}
                   </span>
                   <span className="flex items-center gap-1">
                     <Badge tone={s.status === 'done' ? 'green' : s.status === 'missed' ? 'red' : 'slate'}>
                       {t(`sales.contracts.scheduleStatuses.${s.status}`)}
                     </Badge>
+                    {s.invoiceId && (
+                      <Link to={`/sales/invoices/${s.invoiceId}`}>
+                        <Badge tone="blue">{t('sales.contracts.invoiced')}</Badge>
+                      </Link>
+                    )}
                     {c.canEdit && s.status === 'planned' && (
                       <>
-                        <Button
-                          variant="secondary"
-                          onClick={() =>
-                            act.mutate({ path: `schedule/${s._id}/status`, body: { status: 'done' } })
-                          }
-                        >
+                        <Button variant="secondary" onClick={() => setDoneFor(s._id)}>
                           {t('sales.contracts.scheduleStatuses.done')}
                         </Button>
                         <Button
@@ -599,6 +617,15 @@ export function ContractPage() {
         </Card>
       </div>
       <ContractDialog open={renewOpen} onClose={() => setRenewOpen(false)} renewalOf={id} />
+      <ScheduleDoneDialog
+        contract={c}
+        entryId={doneFor}
+        onClose={() => setDoneFor(null)}
+        onSave={(body) => {
+          act.mutate({ path: `schedule/${doneFor}/status`, body: { status: 'done', ...body } });
+          setDoneFor(null);
+        }}
+      />
       <Dialog
         open={!!sendCert}
         onClose={() => {
@@ -652,5 +679,69 @@ function Row({ k, v }: { k: string; v: ReactNode }) {
       <dt className="shrink-0 text-slate-500">{k}:</dt>
       <dd className="min-w-0 break-words">{v}</dd>
     </div>
+  );
+}
+
+/** Marking a schedule date «تم» records the quantities delivered / collected per contract item; they feed the period invoice [SAL §7.3, §7.4]. */
+function ScheduleDoneDialog({
+  contract,
+  entryId,
+  onClose,
+  onSave,
+}: {
+  contract: { items: { itemId?: string; descriptionAr: string; unit?: string }[] };
+  entryId: string | null;
+  onClose: () => void;
+  onSave: (body: Record<string, unknown>) => void;
+}) {
+  const { t } = useTranslation();
+  const [note, setNote] = useState('');
+  const [qty, setQty] = useState<Record<number, string>>({});
+  if (!entryId) return null;
+  return (
+    <Dialog open onClose={onClose} title={t('sales.contracts.markDone')}>
+      <form
+        className="space-y-3"
+        onSubmit={(e) => {
+          e.preventDefault();
+          const quantities = contract.items
+            .map((it, i) => ({
+              itemId: it.itemId || undefined,
+              descriptionAr: it.descriptionAr,
+              quantity: qty[i] === undefined || qty[i] === '' ? NaN : Number(qty[i]),
+            }))
+            .filter((x) => Number.isInteger(x.quantity) && x.quantity >= 0);
+          onSave({ note: note || undefined, quantities: quantities.length ? quantities : undefined });
+          setNote('');
+          setQty({});
+        }}
+      >
+        <p className="text-sm text-slate-600">{t('sales.contracts.quantitiesHint')}</p>
+        {contract.items.map((it, i) => (
+          <Field
+            key={i}
+            label={`${it.descriptionAr}${it.unit ? ` (${t(`sales.pricelist.units.${it.unit}`)})` : ''}`}
+          >
+            <Input
+              type="number"
+              min={0}
+              step={1}
+              dir="ltr"
+              value={qty[i] ?? ''}
+              onChange={(e) => setQty({ ...qty, [i]: e.target.value })}
+            />
+          </Field>
+        ))}
+        <Field label={t('sales.requests.notes')}>
+          <Input value={note} onChange={(e) => setNote(e.target.value)} />
+        </Field>
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="secondary" onClick={onClose}>
+            {t('actions.cancel')}
+          </Button>
+          <Button type="submit">{t('sales.contracts.scheduleStatuses.done')}</Button>
+        </div>
+      </form>
+    </Dialog>
   );
 }

@@ -208,7 +208,25 @@ export function QuotePage() {
             {internal && d.approval && (
               <Row
                 k={t('sales.quotes.requiredApproval')}
-                v={t(`sales.quotes.levels.${d.approval.requiredLevel}`)}
+                v={
+                  <span>
+                    {t(`sales.quotes.levels.${d.approval.requiredLevel}`)}
+                    {d.approval.escalatedFrom && (
+                      <span className="block text-xs text-amber-700">
+                        {t('sales.quotes.escalated', {
+                          from: t(`sales.quotes.levels.${d.approval.escalatedFrom}`),
+                        })}
+                      </span>
+                    )}
+                    {d.approval.approvedLevel && d.approval.approvedByName && (
+                      <span className="block text-xs text-slate-500">
+                        {t('sales.quotes.approvedAtLevel', {
+                          level: t(`sales.quotes.levels.${d.approval.approvedLevel}`),
+                        })}
+                      </span>
+                    )}
+                  </span>
+                }
               />
             )}
             {d.notesForCustomer && <Row k={t('sales.quotes.notesForCustomer')} v={d.notesForCustomer} />}

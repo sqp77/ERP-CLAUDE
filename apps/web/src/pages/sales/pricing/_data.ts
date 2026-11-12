@@ -59,6 +59,9 @@ export interface QuoteRow {
   approval?: {
     requiredLevel: QuoteApprovalLevel;
     limitsUnset: boolean;
+    escalatedFrom?: QuoteApprovalLevel;
+    escalationReason?: string;
+    approvedLevel?: QuoteApprovalLevel;
     approvedByName?: string;
     approvedAt?: string;
     note?: string;
@@ -124,6 +127,8 @@ export interface ContractDetail extends ContractRow {
     status: string;
     doneAt?: string;
     note?: string;
+    quantities?: { itemId?: string; descriptionAr?: string; quantity: number }[];
+    invoiceId?: string;
   }[];
   signedFileAttachmentId?: string;
   notes?: string;
@@ -142,12 +147,49 @@ export interface ContractDetail extends ContractRow {
   }[];
   files: { _id: string; originalName: string }[];
 }
+export interface InvoiceLineRow {
+  itemId?: string;
+  descriptionAr: string;
+  unit?: string;
+  quantity: number;
+  unitPriceHalalas: number;
+  lineTotalHalalas: number;
+  vatRateBp: number;
+  vatHalalas: number;
+}
+export interface InvoiceTotals {
+  subtotalHalalas: number;
+  vatTotalHalalas: number;
+  totalHalalas: number;
+}
+/** Prefilled from the order or the contract period before Finance registers the issued invoice (S3 fix 1). */
+export interface InvoicePrefill {
+  source: 'order' | 'contract';
+  sourceNumber: string;
+  salesOrderId?: string;
+  contractId?: string;
+  lines: InvoiceLineRow[];
+  totals: InvoiceTotals;
+  remainingHalalas: number | null;
+  periodFrom?: string;
+  periodTo?: string;
+  scheduleEntryIds: string[];
+  scheduleEntries: { _id: string; plannedAt: string; kind: string; doneAt?: string }[];
+  previousInvoices: { _id: string; number: string; externalNumber: string; totalHalalas: number }[];
+}
 export interface InvoiceRow {
   _id: string;
   number: string;
   externalNumber: string;
   kind: string;
-  salesOrderId: string;
+  source: 'order' | 'contract';
+  sourceNumber?: string;
+  salesOrderId?: string;
+  contractId?: string;
+  periodFrom?: string;
+  periodTo?: string;
+  prefilled?: InvoiceTotals;
+  difference?: { halalas: number; reason: string };
   customerId: string;
   customer?: { nameAr?: string; legalNameAr?: string; vatNumber?: string };
   issueDateTime: string;

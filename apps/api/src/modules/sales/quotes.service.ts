@@ -424,8 +424,9 @@ export async function getQuote(req: AuthedRequest, id: string) {
   ];
   const canApprove =
     q.state === 'pending_approval' &&
-    myLevels.includes(q.approval?.requiredLevel ?? 'none') &&
-    String(q.ownerUserId) !== String(req.auth.user._id);
+    (myLevels.includes(q.approval?.requiredLevel ?? 'none') || codes.includes('executive')) &&
+    String(q.ownerUserId) !== String(req.auth.user._id) &&
+    String(q.createdByUserId ?? '') !== String(req.auth.user._id);
   const isOwner = String(q.ownerUserId) === String(req.auth.user._id) || isManagerScope(eff.scope);
   const rejectionReasons = await getSetting('sales.quoteRejectionReasons');
   return serialize(req, q.toObject() as never, eff, {
@@ -482,8 +483,20 @@ async function logAndAudit(
     meta: { type, ...(data ?? {}) },
   });
 }
-async function moveState(q: QuoteHydrated, from: string, to: string, set: Record<string, unknown> = {}) {
-  const r = await Quote.updateOne({ _id: q._id, state: from }, { $set: { state: to, ...set } });
+async function moveState(
+  q: QuoteHydrated,
+  from: string,
+  to: string,
+  set: Record<string, unknown> = {},
+  unset: string[] = [],
+) {
+  const r = await Quote.updateOne(
+    { _id: q._id, state: from },
+    {
+      $set: { state: to, ...set },
+      ...(unset.length ? { $unset: Object.fromEntries(unset.map((k) => [k, 1])) } : {}),
+    },
+  );
   if (!r.matchedCount) throw conflict('تغيّرت حالة العرض من مستخدم آخر، حدّث الصفحة');
 }
 async function approversFor(level: QuoteApprovalLevel, q: QuoteDoc): Promise<string[]> {
@@ -498,38 +511,72 @@ async function approversFor(level: QuoteApprovalLevel, q: QuoteDoc): Promise<str
 export async function submitQuote(req: AuthedRequest, id: string) {
   const { q } = await loadFor(req, id, 'edit');
   if (q.state !== 'draft') throw conflict('العرض ليس مسودة');
-  const { level, limitsUnset } = await approvalLevelFor(q.maxDiscountBp ?? 0);
+  const matrix = await approvalLevelFor(q.maxDiscountBp ?? 0);
+  const { limitsUnset } = matrix;
+  let level = matrix.level;
+  const escalationUnset = ['approval.escalatedFrom', 'approval.escalationReason', 'approval.approvedLevel'];
   if (level === 'none') {
-    await moveState(q, 'draft', 'approved', {
-      'approval.requiredLevel': 'none',
-      'approval.limitsUnset': limitsUnset,
-      'approval.approvedAt': new Date(),
-    });
+    await moveState(
+      q,
+      'draft',
+      'approved',
+      {
+        'approval.requiredLevel': 'none',
+        'approval.limitsUnset': limitsUnset,
+        'approval.approvedAt': new Date(),
+      },
+      escalationUnset,
+    );
     await logAndAudit(q, 'auto_approved', 'draft', 'approved', req, undefined, { level });
     return getQuote(req, id);
   }
-  await moveState(q, 'draft', 'pending_approval', {
-    'approval.requiredLevel': level,
-    'approval.limitsUnset': limitsUnset,
-    'approval.requestedAt': new Date(),
-  });
+  // S3 fix 3: when the only holder of the required level is the quote's author (e.g. the Sales manager's own quote),
+  // nobody could approve it — escalate to the executive at submit time and record why.
+  const excluded = new Set([
+    String(q.ownerUserId),
+    String(q.createdByUserId ?? ''),
+    String(req.auth.user._id),
+  ]);
+  let escalatedFrom: QuoteApprovalLevel | undefined;
+  if (level === 'manager' && !(await approversFor('manager', q)).some((u) => !excluded.has(u))) {
+    escalatedFrom = 'manager';
+    level = 'executive';
+  }
+  await moveState(
+    q,
+    'draft',
+    'pending_approval',
+    {
+      'approval.requiredLevel': level,
+      'approval.limitsUnset': limitsUnset,
+      'approval.requestedAt': new Date(),
+      ...(escalatedFrom
+        ? { 'approval.escalatedFrom': escalatedFrom, 'approval.escalationReason': 'author_is_only_approver' }
+        : {}),
+    },
+    escalatedFrom ? ['approval.approvedLevel'] : escalationUnset,
+  );
   await logAndAudit(q, 'approval_requested', 'draft', 'pending_approval', req, undefined, {
     level,
     limitsUnset,
     maxDiscountBp: q.maxDiscountBp,
+    ...(escalatedFrom ? { escalatedFrom, escalationReason: 'author_is_only_approver' } : {}),
   });
-  const approvers = (await approversFor(level, q)).filter((u) => u !== String(req.auth.user._id));
+  const approvers = (await approversFor(level, q)).filter((u) => !excluded.has(u));
   await notify({
     userIds: approvers,
     type: 'sales.quote.approval_requested',
-    bodyAr: `${q.number} — خصم ${((q.maxDiscountBp ?? 0) / 100).toFixed(1)}%${limitsUnset ? ' (حدود الخصم غير محددة)' : ''}`,
+    bodyAr: `${q.number} — خصم ${((q.maxDiscountBp ?? 0) / 100).toFixed(1)}%${limitsUnset ? ' (حدود الخصم غير محددة)' : ''}${escalatedFrom ? ' — مُصعَّد إليك لأن مُعِدّ العرض هو المعتمد الوحيد في مستواه' : ''}`,
     link: `/sales/quotes/${q._id}`,
     data: { quoteId: id },
   });
   return getQuote(req, id);
 }
 
-/** Approve or refuse: the level's holder only, never the quote's author; the approver's name is kept [SAL §7.2]. */
+/**
+ * Approve or refuse: the level's holder (the executive, as the higher authority, may decide any level), never the
+ * quote's author or creator; the approver's name and the level they acted at are kept [SAL §7.2; S3 fix 3].
+ */
 export async function decideQuote(
   req: AuthedRequest,
   id: string,
@@ -543,12 +590,13 @@ export async function decideQuote(
   if (q.state !== 'pending_approval') throw conflict('العرض ليس بانتظار الاعتماد');
   const level = q.approval?.requiredLevel ?? 'none';
   const codes = req.auth.roleCodes;
-  const may =
-    (level === 'manager' &&
-      codes.includes('sales_manager') &&
-      (eff.scope === 'all' || eff.departmentIds.includes(String(q.departmentId)))) ||
-    (level === 'executive' && codes.includes('executive'));
-  if (!may) throw forbidden('اعتماد هذا الخصم ليس من صلاحياتك');
+  const asManager =
+    level === 'manager' &&
+    codes.includes('sales_manager') &&
+    (eff.scope === 'all' || eff.departmentIds.includes(String(q.departmentId)));
+  const asExecutive = codes.includes('executive');
+  if (!asManager && !asExecutive) throw forbidden('اعتماد هذا الخصم ليس من صلاحياتك');
+  const approvedLevel: QuoteApprovalLevel = asManager ? 'manager' : 'executive';
   if (
     String(q.ownerUserId) === String(req.auth.user._id) ||
     String(q.createdByUserId ?? '') === String(req.auth.user._id)
@@ -565,6 +613,7 @@ export async function decideQuote(
           'approval.approvedByUserId': req.auth.user._id,
           'approval.approvedByName': req.auth.user.displayNameAr,
           'approval.approvedAt': new Date(),
+          'approval.approvedLevel': approvedLevel,
           'approval.note': note,
         }
       : { 'approval.note': note },
@@ -576,7 +625,7 @@ export async function decideQuote(
     to,
     req,
     note,
-    { level },
+    { level, approvedLevel },
   );
   await notify({
     userIds: [String(q.ownerUserId)].filter((u) => u !== String(req.auth.user._id)),

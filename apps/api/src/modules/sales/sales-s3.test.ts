@@ -255,11 +255,15 @@ describe('Sales S3 — price list, discount matrix, quotes, orders, contracts, i
         .requiredLevel,
     ).toBe('manager');
     expect(
-      (await request(app()).post(`/api/v1/sales/quotes/${mid._id}/approve`).set(auth(t.ceo))).status,
-    ).toBe(403); // executive is not the manager level
+      (await request(app()).post(`/api/v1/sales/quotes/${mid._id}/approve`).set(auth(t.reem))).status,
+    ).toBe(403); // the author never approves; another rep holds no level
+    expect(
+      (await request(app()).post(`/api/v1/sales/quotes/${mid._id}/approve`).set(auth(t.majed))).status,
+    ).toBe(403);
     const midOk = await request(app()).post(`/api/v1/sales/quotes/${mid._id}/approve`).set(auth(t.mgr));
     expect(midOk.body.state).toBe('approved');
     expect(midOk.body.approval.approvedByName).toBe('sultan');
+    expect(midOk.body.approval.approvedLevel).toBe('manager');
     const high = await mk(2000);
     expect(
       (await request(app()).post(`/api/v1/sales/quotes/${high._id}/submit`).set(auth(t.reem))).body.approval
@@ -390,15 +394,12 @@ describe('Sales S3 — price list, discount matrix, quotes, orders, contracts, i
       .post(`/api/v1/sales/quotes/${q2._id}/respond`)
       .set(auth(t.reem))
       .send({ response: 'accepted' });
-    const inv2 = await request(app())
-      .post('/api/v1/finance/invoices')
-      .set(auth(t.shahad))
-      .send({
-        salesOrderId: acc2.body.salesOrder._id,
-        externalNumber: 'INV-2026-0043',
-        issueDateTime: '2026-10-01T09:00:00+03:00',
-        dueDate: '2026-10-31',
-      });
+    const inv2 = await request(app()).post('/api/v1/finance/invoices').set(auth(t.shahad)).send({
+      salesOrderId: acc2.body.salesOrder._id,
+      externalNumber: 'INV-2026-0043',
+      issueDateTime: '2026-10-01T09:00:00+03:00',
+      dueDate: '2026-10-31',
+    });
     expect(inv2.status).toBe(201);
     await Notification.deleteMany({ type: 'finance.invoice.overdue' });
     expect(await runInvoiceOverdueAlerts(new Date('2026-11-12T06:00:00.000Z'))).toEqual({ notified: 1 });
@@ -484,5 +485,420 @@ describe('Sales S3 — price list, discount matrix, quotes, orders, contracts, i
     expect(renewed.status).toBe(201);
     expect(renewed.body.renewalOf).toBe(id);
     expect((await SalesContract.findById(id))!.state).toBe('renewed');
+  });
+
+  it('S3 fix 3: a quote whose author is the only holder of the required level escalates to the executive at submit; the executive may decide any level and the acting level is recorded', async () => {
+    const { t, u, customerId, cardboardId } = await setup();
+    await setSetting('sales.discountLimitBp', { rep: 500, manager: 1500 }, SYSTEM_ACTOR);
+    // The Sales manager's own quote at 10% needs the manager level — but the manager is the author.
+    const own = (
+      await request(app())
+        .post('/api/v1/sales/quotes')
+        .set(auth(t.mgr))
+        .send({ customerId, lines: [{ itemId: cardboardId, quantity: 1, discountPercentBp: 1000 }] })
+    ).body;
+    expect(own.approval.requiredLevel).toBe('manager');
+    await Notification.deleteMany({});
+    const submitted = await request(app()).post(`/api/v1/sales/quotes/${own._id}/submit`).set(auth(t.mgr));
+    expect(submitted.status, JSON.stringify(submitted.body)).toBe(200);
+    expect(submitted.body.state).toBe('pending_approval');
+    expect(submitted.body.approval).toMatchObject({
+      requiredLevel: 'executive',
+      escalatedFrom: 'manager',
+      escalationReason: 'author_is_only_approver',
+    });
+    expect(
+      await Notification.exists({ userId: u.ceo._id, type: 'sales.quote.approval_requested' }),
+    ).toBeTruthy();
+    expect(
+      await Notification.exists({ userId: u.mgr._id, type: 'sales.quote.approval_requested' }),
+    ).toBeFalsy();
+    // The author cannot approve; the executive can, and the level acted at is kept.
+    expect(
+      (await request(app()).post(`/api/v1/sales/quotes/${own._id}/approve`).set(auth(t.mgr))).status,
+    ).toBe(403);
+    expect(
+      (await request(app()).get(`/api/v1/sales/quotes/${own._id}`).set(auth(t.mgr))).body.canApprove,
+    ).toBe(false);
+    expect(
+      (await request(app()).get(`/api/v1/sales/quotes/${own._id}`).set(auth(t.ceo))).body.canApprove,
+    ).toBe(true);
+    const approved = await request(app()).post(`/api/v1/sales/quotes/${own._id}/approve`).set(auth(t.ceo));
+    expect(approved.body.state).toBe('approved');
+    expect(approved.body.approval).toMatchObject({ approvedLevel: 'executive', approvedByName: 'abdullah' });
+    // A rep's manager-level quote is not escalated (the manager is a different person) …
+    const reps = (
+      await request(app())
+        .post('/api/v1/sales/quotes')
+        .set(auth(t.reem))
+        .send({ customerId, lines: [{ itemId: cardboardId, quantity: 1, discountPercentBp: 1000 }] })
+    ).body;
+    const sub2 = await request(app()).post(`/api/v1/sales/quotes/${reps._id}/submit`).set(auth(t.reem));
+    expect(sub2.body.approval.requiredLevel).toBe('manager');
+    expect(sub2.body.approval.escalatedFrom).toBeUndefined();
+    // … yet the executive may still decide it as the higher authority, and that is recorded as the executive level.
+    const byCeo = await request(app()).post(`/api/v1/sales/quotes/${reps._id}/approve`).set(auth(t.ceo));
+    expect(byCeo.body.state).toBe('approved');
+    expect(byCeo.body.approval.approvedLevel).toBe('executive');
+    const { AuditLog } = await import('../../core/audit/model');
+    expect(await AuditLog.exists({ resource: 'sales.quotes', 'meta.escalatedFrom': 'manager' })).toBeTruthy();
+  });
+
+  it('S3 fix 1: several invoices per order (sum ≤ order total, 400 above it) and the order closes when fully invoiced and collected; actual figures that differ from the prefilled ones need a reason, kept in the audit and shown to Sales', async () => {
+    const { t, customerId, cardboardId } = await setup();
+    const q = (
+      await request(app())
+        .post('/api/v1/sales/quotes')
+        .set(auth(t.reem))
+        .send({ customerId, lines: [{ itemId: cardboardId, quantity: 2 }] })
+    ).body;
+    await request(app()).post(`/api/v1/sales/quotes/${q._id}/submit`).set(auth(t.reem));
+    await request(app())
+      .post(`/api/v1/sales/quotes/${q._id}/send`)
+      .set(auth(t.reem))
+      .send({ to: ['a@b.example'] });
+    const acc = await request(app())
+      .post(`/api/v1/sales/quotes/${q._id}/respond`)
+      .set(auth(t.reem))
+      .send({ response: 'accepted' });
+    const orderId = acc.body.salesOrder._id as string;
+    const orderTotal = acc.body.totalHalalas as number; // 2 × 60,000 + 15% = 138,000 SAR
+    // Prefill comes from the order; Sales cannot ask for it.
+    expect(
+      (
+        await request(app())
+          .post('/api/v1/finance/invoices/prefill')
+          .set(auth(t.reem))
+          .send({ salesOrderId: orderId })
+      ).status,
+    ).toBe(403);
+    const pre = await request(app())
+      .post('/api/v1/finance/invoices/prefill')
+      .set(auth(t.shahad))
+      .send({ salesOrderId: orderId });
+    expect(pre.status, JSON.stringify(pre.body)).toBe(200);
+    expect(pre.body).toMatchObject({ source: 'order', remainingHalalas: orderTotal });
+    expect(pre.body.totals.totalHalalas).toBe(orderTotal);
+    // Order or contract, never both or neither.
+    expect(
+      (await request(app()).post('/api/v1/finance/invoices/prefill').set(auth(t.shahad)).send({})).status,
+    ).toBe(400);
+    // First instalment: the issued invoice carries half the order — a difference from the prefilled total → reason required.
+    const half = {
+      subtotalHalalas: 60_000_00,
+      vatTotalHalalas: 9_000_00,
+      totalHalalas: 69_000_00,
+    };
+    const base = { salesOrderId: orderId, issueDateTime: '2026-11-12T09:00:00+03:00', dueDate: '2026-12-12' };
+    const noReason = await request(app())
+      .post('/api/v1/finance/invoices')
+      .set(auth(t.shahad))
+      .send({ ...base, externalNumber: 'X-1', totals: half });
+    expect(noReason.status).toBe(400);
+    expect(noReason.body.error.details?.[0]?.path).toBe('differenceReason');
+    const first = await request(app())
+      .post('/api/v1/finance/invoices')
+      .set(auth(t.shahad))
+      .send({
+        ...base,
+        externalNumber: 'X-1',
+        lines: [
+          { descriptionAr: 'كرتون — الدفعة الأولى', unit: 'ton', quantity: 1, unitPriceHalalas: 60_000_00 },
+        ],
+        differenceReason: 'فاتورة الدفعة الأولى (نصف الكمية)',
+      });
+    expect(first.status, JSON.stringify(first.body)).toBe(201);
+    expect(first.body.totalHalalas).toBe(69_000_00);
+    expect(first.body.prefilled.totalHalalas).toBe(orderTotal);
+    expect(first.body.difference).toMatchObject({
+      halalas: 69_000_00 - orderTotal,
+      reason: 'فاتورة الدفعة الأولى (نصف الكمية)',
+    });
+    const order1 = await request(app()).get(`/api/v1/sales/quotes/orders/${orderId}`).set(auth(t.reem));
+    expect(order1.body).toMatchObject({ state: 'partially_invoiced', invoicedHalalas: 69_000_00 });
+    // Sales sees the difference and its reason read-only; the audit keeps it.
+    const asSales = await request(app()).get(`/api/v1/finance/invoices/${first.body._id}`).set(auth(t.reem));
+    expect(asSales.body.difference.reason).toBe('فاتورة الدفعة الأولى (نصف الكمية)');
+    const { AuditLog } = await import('../../core/audit/model');
+    expect(
+      await AuditLog.exists({
+        resource: 'finance.invoices',
+        action: 'create',
+        'after.difference.reason': 'فاتورة الدفعة الأولى (نصف الكمية)',
+      }),
+    ).toBeTruthy();
+    // Prefill now shows the remaining half; more than the remaining is refused.
+    const pre2 = (
+      await request(app())
+        .post('/api/v1/finance/invoices/prefill')
+        .set(auth(t.shahad))
+        .send({ salesOrderId: orderId })
+    ).body;
+    expect(pre2.remainingHalalas).toBe(orderTotal - 69_000_00);
+    expect(pre2.totals).toEqual(half);
+    expect(pre2.previousInvoices).toHaveLength(1);
+    const tooMuch = await request(app())
+      .post('/api/v1/finance/invoices')
+      .set(auth(t.shahad))
+      .send({
+        ...base,
+        externalNumber: 'X-2',
+        totals: { subtotalHalalas: 60_000_01, vatTotalHalalas: 9_000_00, totalHalalas: 69_000_01 },
+        differenceReason: 'تقريب',
+      });
+    expect(tooMuch.status).toBe(400);
+    // Second instalment = the prefilled remainder (no reason needed).
+    const second = await request(app())
+      .post('/api/v1/finance/invoices')
+      .set(auth(t.shahad))
+      .send({ ...base, externalNumber: 'X-2' });
+    expect(second.status, JSON.stringify(second.body)).toBe(201);
+    expect(second.body.totalHalalas).toBe(orderTotal - 69_000_00);
+    expect(second.body.difference).toBeUndefined();
+    expect(
+      (await request(app()).get(`/api/v1/sales/quotes/orders/${orderId}`).set(auth(t.reem))).body.state,
+    ).toBe('invoiced');
+    // Nothing more can be invoiced on it.
+    expect(
+      (
+        await request(app())
+          .post('/api/v1/finance/invoices/prefill')
+          .set(auth(t.shahad))
+          .send({ salesOrderId: orderId })
+      ).status,
+    ).toBe(409);
+    // The order closes only when every invoice is collected.
+    await request(app())
+      .post(`/api/v1/finance/invoices/${first.body._id}/payments`)
+      .set(auth(t.abdulaziz))
+      .send({ amountHalalas: 69_000_00 });
+    expect(
+      (await request(app()).get(`/api/v1/sales/quotes/orders/${orderId}`).set(auth(t.reem))).body.state,
+    ).toBe('invoiced');
+    await request(app())
+      .post(`/api/v1/finance/invoices/${second.body._id}/payments`)
+      .set(auth(t.abdulaziz))
+      .send({ amountHalalas: orderTotal - 69_000_00 });
+    expect(
+      (await request(app()).get(`/api/v1/sales/quotes/orders/${orderId}`).set(auth(t.reem))).body.state,
+    ).toBe('closed');
+    expect(
+      (await request(app()).get(`/api/v1/finance/invoices?salesOrderId=${orderId}`).set(auth(t.reem))).body
+        .total,
+    ).toBe(2);
+  });
+
+  it('S3 fix 1: a periodic contract is invoiced per period from the quantities recorded on its completed schedule entries; two monthly invoices; an entry is never invoiced twice', async () => {
+    const { t, u, customerId, visitId } = await setup();
+    const c = await request(app())
+      .post('/api/v1/sales/contracts')
+      .set(auth(t.reem))
+      .send({
+        customerId,
+        contractType: 'عقد نظافة سنوي',
+        startDate: '2026-01-01',
+        endDate: '2026-12-31',
+        items: [
+          {
+            itemId: visitId,
+            descriptionAr: 'زيارة جمع',
+            quantity: 48,
+            unit: 'visit',
+            agreedPriceHalalas: 300_00,
+          },
+          { descriptionAr: 'كرتون مجمَّع', unit: 'kg', agreedPriceHalalas: 50 },
+        ],
+        schedule: [
+          { plannedAt: '2026-10-05T06:00:00.000Z', kind: 'pickup' },
+          { plannedAt: '2026-10-19T06:00:00.000Z', kind: 'pickup' },
+          { plannedAt: '2026-11-02T06:00:00.000Z', kind: 'pickup' },
+          { plannedAt: '2026-11-16T06:00:00.000Z', kind: 'pickup' },
+        ],
+      });
+    expect(c.status, JSON.stringify(c.body)).toBe(201);
+    const id = c.body._id as string;
+    const entries = c.body.schedule as { _id: string }[];
+    const done = (i: number, body: Record<string, unknown>) =>
+      request(app())
+        .post(`/api/v1/sales/contracts/${id}/schedule/${entries[i]._id}/status`)
+        .set(auth(t.reem))
+        .send({ status: 'done', ...body });
+    // October: two visits, 120 kg and 80 kg of cardboard recorded on them.
+    expect(
+      (
+        await done(0, {
+          doneAt: '2026-10-05T07:00:00.000Z',
+          quantities: [
+            { itemId: visitId, quantity: 1 },
+            { descriptionAr: 'كرتون مجمَّع', quantity: 120 },
+          ],
+        })
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await done(1, {
+          doneAt: '2026-10-19T07:00:00.000Z',
+          quantities: [
+            { itemId: visitId, quantity: 1 },
+            { descriptionAr: 'كرتون مجمَّع', quantity: 80 },
+          ],
+        })
+      ).status,
+    ).toBe(200);
+    // November: one visit done without recorded quantities (counts one visit, no cardboard); the other still planned.
+    expect((await done(2, { doneAt: '2026-11-02T07:00:00.000Z' })).status).toBe(200);
+    // Nothing done in September.
+    expect(
+      (
+        await request(app())
+          .post('/api/v1/finance/invoices/prefill')
+          .set(auth(t.shahad))
+          .send({ contractId: id, periodFrom: '2026-09-01', periodTo: '2026-09-30' })
+      ).status,
+    ).toBe(400);
+    // Contract needs a period or entries.
+    expect(
+      (
+        await request(app())
+          .post('/api/v1/finance/invoices/prefill')
+          .set(auth(t.shahad))
+          .send({ contractId: id })
+      ).status,
+    ).toBe(400);
+    const octPre = await request(app())
+      .post('/api/v1/finance/invoices/prefill')
+      .set(auth(t.shahad))
+      .send({ contractId: id, periodFrom: '2026-10-01', periodTo: '2026-10-31' });
+    expect(octPre.status, JSON.stringify(octPre.body)).toBe(200);
+    expect(octPre.body.source).toBe('contract');
+    expect(octPre.body.scheduleEntryIds).toEqual([entries[0]._id, entries[1]._id]);
+    expect(octPre.body.lines).toEqual([
+      expect.objectContaining({
+        descriptionAr: 'زيارة جمع',
+        quantity: 2,
+        unitPriceHalalas: 300_00,
+        lineTotalHalalas: 600_00,
+        vatHalalas: 90_00,
+      }),
+      expect.objectContaining({
+        descriptionAr: 'كرتون مجمَّع',
+        quantity: 200,
+        unitPriceHalalas: 50,
+        lineTotalHalalas: 100_00,
+        vatHalalas: 15_00,
+      }),
+    ]);
+    expect(octPre.body.totals).toEqual({
+      subtotalHalalas: 700_00,
+      vatTotalHalalas: 105_00,
+      totalHalalas: 805_00,
+    });
+    const oct = await request(app())
+      .post('/api/v1/finance/invoices')
+      .set(auth(t.shahad))
+      .send({
+        contractId: id,
+        periodFrom: '2026-10-01',
+        periodTo: '2026-10-31',
+        externalNumber: 'C-OCT',
+        issueDateTime: '2026-11-01T09:00:00+03:00',
+        dueDate: '2026-12-01',
+      });
+    expect(oct.status, JSON.stringify(oct.body)).toBe(201);
+    expect(oct.body).toMatchObject({
+      source: 'contract',
+      contractId: id,
+      totalHalalas: 805_00,
+      scheduleEntryIds: [entries[0]._id, entries[1]._id],
+    });
+    expect(oct.body.customer.vatNumber).toBe('300123456700003');
+    expect(await Notification.exists({ userId: u.reem._id, type: 'finance.invoice.issued' })).toBeTruthy();
+    // The October entries are now marked invoiced and locked; invoicing them again is refused (period or explicit ids).
+    const after = await request(app()).get(`/api/v1/sales/contracts/${id}`).set(auth(t.reem));
+    expect(after.body.schedule[0].invoiceId).toBe(oct.body._id);
+    expect(after.body.events.map((e: { type: string }) => e.type)).toContain('invoiced');
+    expect((await done(0, { note: 'تعديل بعد الفوترة' })).status).toBe(409);
+    expect(
+      (
+        await request(app())
+          .post('/api/v1/finance/invoices/prefill')
+          .set(auth(t.shahad))
+          .send({ contractId: id, periodFrom: '2026-10-01', periodTo: '2026-10-31' })
+      ).status,
+    ).toBe(400); // nothing un-invoiced left in October
+    expect(
+      (
+        await request(app())
+          .post('/api/v1/finance/invoices/prefill')
+          .set(auth(t.shahad))
+          .send({ contractId: id, scheduleEntryIds: [entries[0]._id] })
+      ).status,
+    ).toBe(409);
+    // A planned (not done) entry cannot be invoiced by id.
+    expect(
+      (
+        await request(app())
+          .post('/api/v1/finance/invoices/prefill')
+          .set(auth(t.shahad))
+          .send({ contractId: id, scheduleEntryIds: [entries[3]._id] })
+      ).status,
+    ).toBe(400);
+    // November: the one completed visit, by explicit entry.
+    const nov = await request(app())
+      .post('/api/v1/finance/invoices')
+      .set(auth(t.shahad))
+      .send({
+        contractId: id,
+        scheduleEntryIds: [entries[2]._id],
+        externalNumber: 'C-NOV',
+        issueDateTime: '2026-12-01T09:00:00+03:00',
+        dueDate: '2026-12-31',
+      });
+    expect(nov.status, JSON.stringify(nov.body)).toBe(201);
+    expect(nov.body.lines).toHaveLength(1);
+    expect(nov.body.totals ?? nov.body.totalHalalas).toBe(345_00);
+    expect(
+      (await request(app()).get(`/api/v1/finance/invoices?contractId=${id}`).set(auth(t.reem))).body.total,
+    ).toBe(2);
+    expect(
+      (await request(app()).get(`/api/v1/finance/invoices?contractId=${id}`).set(auth(t.majed))).body.total,
+    ).toBe(0);
+  });
+
+  it('S3 fix 2: two Finance users registering the full order at the same moment → one 201 and one 409, one invoice on the order', async () => {
+    const { t, customerId, cardboardId } = await setup();
+    const q = (
+      await request(app())
+        .post('/api/v1/sales/quotes')
+        .set(auth(t.reem))
+        .send({ customerId, lines: [{ itemId: cardboardId, quantity: 1 }] })
+    ).body;
+    await request(app()).post(`/api/v1/sales/quotes/${q._id}/submit`).set(auth(t.reem));
+    await request(app())
+      .post(`/api/v1/sales/quotes/${q._id}/send`)
+      .set(auth(t.reem))
+      .send({ to: ['a@b.example'] });
+    const acc = await request(app())
+      .post(`/api/v1/sales/quotes/${q._id}/respond`)
+      .set(auth(t.reem))
+      .send({ response: 'accepted' });
+    const orderId = acc.body.salesOrder._id as string;
+    const base = { salesOrderId: orderId, issueDateTime: '2026-11-12T09:00:00+03:00', dueDate: '2026-12-12' };
+    const results = await Promise.all([
+      request(app())
+        .post('/api/v1/finance/invoices')
+        .set(auth(t.shahad))
+        .send({ ...base, externalNumber: 'R-1' }),
+      request(app())
+        .post('/api/v1/finance/invoices')
+        .set(auth(t.abdulaziz))
+        .send({ ...base, externalNumber: 'R-2' }),
+    ]);
+    expect(results.map((r) => r.status).sort()).toEqual([201, 409]);
+    expect(await Invoice.countDocuments({ salesOrderId: orderId })).toBe(1);
+    const order = await request(app()).get(`/api/v1/sales/quotes/orders/${orderId}`).set(auth(t.reem));
+    expect(order.body.invoiceIds).toHaveLength(1);
+    expect(order.body).toMatchObject({ state: 'invoiced', invoicedHalalas: order.body.totalHalalas });
   });
 });

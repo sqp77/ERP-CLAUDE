@@ -39,6 +39,18 @@ const salesContractSchema = new Schema(
           doneAt: Date,
           note: String,
           byUserId: Schema.Types.ObjectId,
+          /** Quantities recorded on a done entry per contract item; they feed the period invoice [SAL §7.3]. */
+          quantities: {
+            type: [
+              new Schema(
+                { itemId: Schema.Types.ObjectId, descriptionAr: String, quantity: Number },
+                { _id: false },
+              ),
+            ],
+            default: undefined,
+          },
+          /** Set by Finance when the entry is covered by an invoice — an entry is never invoiced twice. */
+          invoiceId: { type: Schema.Types.ObjectId, ref: 'Invoice' },
         }),
       ],
       default: [],

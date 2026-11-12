@@ -47,6 +47,11 @@ const quoteSchema = new Schema(
     approval: {
       requiredLevel: { type: String, enum: QUOTE_APPROVAL_LEVELS, default: 'none' },
       limitsUnset: { type: Boolean, default: false },
+      /** Set when the matrix asked for a level whose only holder is the quote's author → escalated to the executive at submit (S3 fix 3). */
+      escalatedFrom: { type: String, enum: QUOTE_APPROVAL_LEVELS },
+      escalationReason: { type: String },
+      /** The level the approver actually acted at (the executive may approve any level). */
+      approvedLevel: { type: String, enum: QUOTE_APPROVAL_LEVELS },
       requestedAt: { type: Date },
       approvedByUserId: { type: Schema.Types.ObjectId },
       approvedByName: { type: String },
@@ -132,6 +137,8 @@ const salesOrderSchema = new Schema(
     signedFileAttachmentId: { type: Schema.Types.ObjectId },
     state: { type: String, enum: SALES_ORDER_STATES, default: 'open', index: true },
     invoiceIds: { type: [Schema.Types.ObjectId], default: [] },
+    /** Sum of the invoices registered against the order (never above totalHalalas; conditional write, S3 fix 2). */
+    invoicedHalalas: { type: Number, default: 0 },
     createdByUserId: { type: Schema.Types.ObjectId },
     deletedAt: { type: Date },
   },

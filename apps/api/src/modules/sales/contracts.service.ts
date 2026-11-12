@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { Types, type FilterQuery, type HydratedDocument } from 'mongoose';
+import { Types, type ClientSession, type FilterQuery, type HydratedDocument } from 'mongoose';
 import { SALES_CONTRACT_STATE_AR, SCHEDULE_KIND_AR } from '@eayni/shared';
 import { badRequest, conflict, forbidden, notFound } from '../../core/http/errors';
 import { actorFrom, type AuthedRequest } from '../../core/http/context';
@@ -384,15 +384,21 @@ export async function setScheduleStatus(
   req: AuthedRequest,
   id: string,
   entryId: string,
-  input: { status: string; note?: string; doneAt?: string },
+  input: {
+    status: string;
+    note?: string;
+    doneAt?: string;
+    quantities?: { itemId?: string; descriptionAr?: string; quantity: number }[];
+  },
 ) {
   const { c } = await loadFor(req, id, 'edit');
-  const entry = (c.schedule as unknown as { _id: Types.ObjectId; status: string }[]).find(
-    (s) => String(s._id) === entryId,
-  );
+  const entry = (
+    c.schedule as unknown as { _id: Types.ObjectId; status: string; invoiceId?: Types.ObjectId }[]
+  ).find((s) => String(s._id) === entryId);
   if (!entry) throw notFound();
-  await SalesContract.updateOne(
-    { _id: c._id, 'schedule._id': entryId },
+  if (entry.invoiceId) throw conflict('هذا الموعد مفوتر ولا يمكن تغييره');
+  const r = await SalesContract.updateOne(
+    { _id: c._id, schedule: { $elemMatch: { _id: entryId, invoiceId: null } } },
     {
       $set: {
         'schedule.$.status': input.status,
@@ -400,14 +406,16 @@ export async function setScheduleStatus(
         'schedule.$.doneAt':
           input.status === 'done' ? (input.doneAt ? new Date(input.doneAt) : new Date()) : undefined,
         'schedule.$.byUserId': req.auth.user._id,
+        'schedule.$.quantities': input.status === 'done' ? input.quantities : undefined,
       },
     },
   );
+  if (!r.matchedCount) throw conflict('هذا الموعد مفوتر ولا يمكن تغييره');
   await ContractEvent.create({
     contractId: c._id,
     type: 'schedule_status',
     note: `${entry.status} → ${input.status}${input.note ? ` — ${input.note}` : ''}`,
-    data: { entryId, status: input.status },
+    data: { entryId, status: input.status, quantities: input.quantities },
     byUserId: String(req.auth.user._id),
     byEmail: req.auth.user.email,
   });
@@ -593,4 +601,73 @@ export async function runContractAlerts(now = new Date()): Promise<{ expiring: n
     { $set: { state: 'expired' } },
   );
   return { expiring, expired: ended.modifiedCount };
+}
+
+// ------------------------------------------------------------------------------------------------
+// For Finance (invoices per period / per completed schedule entry — S3 fix 1). Only this module writes the contract.
+// ------------------------------------------------------------------------------------------------
+export interface InvoiceableScheduleEntry {
+  _id: Types.ObjectId;
+  plannedAt: Date;
+  kind: string;
+  status: string;
+  doneAt?: Date;
+  note?: string;
+  quantities?: { itemId?: Types.ObjectId; descriptionAr?: string; quantity: number }[];
+  invoiceId?: Types.ObjectId;
+}
+export async function contractForInvoicing(id: string) {
+  const c = await SalesContract.findOne({ _id: id, deletedAt: null }).lean();
+  return c ? (c as typeof c & { schedule: InvoiceableScheduleEntry[] }) : null;
+}
+/**
+ * Mark the schedule entries covered by an invoice. Conditional: every entry must still be done and un-invoiced inside
+ * the transaction, so a second Finance user invoicing the same period gets false (→ 409) and no entry is invoiced twice.
+ */
+export async function claimScheduleEntries(
+  contractId: string,
+  entryIds: string[],
+  invoiceId: string,
+  session?: ClientSession,
+): Promise<boolean> {
+  const ids = entryIds.map((e) => new Types.ObjectId(e));
+  const r = await SalesContract.updateOne(
+    {
+      _id: contractId,
+      deletedAt: null,
+      $nor: [
+        {
+          schedule: {
+            $elemMatch: {
+              _id: { $in: ids },
+              $or: [{ invoiceId: { $ne: null } }, { status: { $ne: 'done' } }],
+            },
+          },
+        },
+      ],
+      // every requested entry must exist on the contract
+      $expr: {
+        $eq: [
+          { $size: { $filter: { input: '$schedule', as: 's', cond: { $in: ['$$s._id', ids] } } } },
+          ids.length,
+        ],
+      },
+    },
+    { $set: { 'schedule.$[e].invoiceId': new Types.ObjectId(invoiceId) } },
+    { session, arrayFilters: [{ 'e._id': { $in: ids } }] },
+  );
+  if (r.matchedCount) {
+    await ContractEvent.create(
+      [
+        {
+          contractId,
+          type: 'invoiced',
+          note: `فاتورة على ${ids.length} موعدًا منفَّذًا`,
+          data: { invoiceId, entryIds },
+        },
+      ],
+      { session, ordered: true },
+    );
+  }
+  return r.matchedCount > 0;
 }

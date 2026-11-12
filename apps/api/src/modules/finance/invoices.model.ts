@@ -3,16 +3,27 @@ import { COLLECTION_STATES, INVOICE_KINDS, PAYMENT_METHODS, ZATCA_STATES } from 
 
 /**
  * Invoice register — owned by Finance from day one (DECISIONS §20 Q14) [SAL §7.3, FIN §7, §10].
- * Q4 option A: Finance records the invoice issued in the current accounting system against the sales order; lines,
- * customer and totals come from the order (no re-entry, FIN §7). Every ZATCA field is stored (golden rule 8); no
- * signing or XML until the route is decided. Payments are append-only; the collection state is derived.
+ * Q4 option A: Finance records the invoice issued in the current accounting system against an approved sales order
+ * (several invoices per order, their sum ≤ the order total) or a periodic contract (per period / per completed schedule
+ * entries); lines, customer and totals are prefilled from the source (no re-entry, FIN §7) and Finance records the
+ * issued invoice's actual figures — a difference from the prefilled ones carries a reason that Sales sees (S3 fix 1).
+ * Every ZATCA field is stored (golden rule 8); no signing or XML until the route is decided. Payments are append-only;
+ * the collection state is derived.
  */
 const invoiceSchema = new Schema(
   {
     number: { type: String, required: true, unique: true },
     kind: { type: String, enum: INVOICE_KINDS, default: 'tax' },
     externalNumber: { type: String, required: true },
-    salesOrderId: { type: Schema.Types.ObjectId, ref: 'SalesOrder', required: true, index: true },
+    source: { type: String, enum: ['order', 'contract'], required: true },
+    /** Number of the order / contract the invoice was registered against (display only; the id is the link). */
+    sourceNumber: { type: String },
+    salesOrderId: { type: Schema.Types.ObjectId, ref: 'SalesOrder', index: true },
+    contractId: { type: Schema.Types.ObjectId, ref: 'SalesContract', index: true },
+    /** Contract invoices: the invoiced period and the schedule entries it covers (each entry is invoiced once). */
+    periodFrom: { type: Date },
+    periodTo: { type: Date },
+    scheduleEntryIds: { type: [Schema.Types.ObjectId], default: [] },
     customerId: { type: Schema.Types.ObjectId, ref: 'Customer', required: true, index: true },
     partyId: { type: Schema.Types.ObjectId, ref: 'Party' },
     salesOwnerUserId: { type: Schema.Types.ObjectId, ref: 'User', index: true },
@@ -48,6 +59,18 @@ const invoiceSchema = new Schema(
     subtotalHalalas: { type: Number, required: true },
     vatTotalHalalas: { type: Number, required: true },
     totalHalalas: { type: Number, required: true },
+    /** What the order / contract said before Finance entered the issued invoice's actual figures. */
+    prefilled: {
+      subtotalHalalas: Number,
+      vatTotalHalalas: Number,
+      totalHalalas: Number,
+    },
+    /** Set when the actual total differs from the prefilled one; the reason is audited and shown to Sales. */
+    difference: {
+      halalas: Number,
+      reason: String,
+      byUserId: Schema.Types.ObjectId,
+    },
     collectedHalalas: { type: Number, default: 0 },
     remainingHalalas: { type: Number, required: true },
     collectionState: { type: String, enum: COLLECTION_STATES, default: 'due', index: true },

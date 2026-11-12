@@ -1,6 +1,11 @@
 import { Router } from 'express';
 import type { z } from 'zod';
-import { listInvoicesQuerySchema, recordPaymentSchema, registerInvoiceSchema } from '@eayni/shared';
+import {
+  invoicePrefillSchema,
+  listInvoicesQuerySchema,
+  recordPaymentSchema,
+  registerInvoiceSchema,
+} from '@eayni/shared';
 import { asyncHandler } from '../../core/http/async';
 import { validate } from '../../core/http/validate';
 import type { AuthedRequest } from '../../core/http/context';
@@ -19,6 +24,16 @@ invoicesRouter.post(
   validate(registerInvoiceSchema),
   asyncHandler(async (req: AuthedRequest, res) => {
     res.status(201).json(await svc.registerInvoice(req, req.body as z.infer<typeof registerInvoiceSchema>));
+  }),
+);
+/** Prefilled lines and totals from an order or a contract period, before Finance registers the issued invoice. */
+invoicesRouter.post(
+  '/prefill',
+  requireAuth(),
+  authorize('finance.invoices', 'create'),
+  validate(invoicePrefillSchema),
+  asyncHandler(async (req: AuthedRequest, res) => {
+    res.json(await svc.prefillForFinance(req, req.body as z.infer<typeof invoicePrefillSchema>));
   }),
 );
 invoicesRouter.get(

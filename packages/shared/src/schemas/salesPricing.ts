@@ -136,9 +136,11 @@ export const DEFAULT_QUOTE_REJECTION_REASONS = [
   'أخرى (مع توضيح)',
 ];
 
-export const SALES_ORDER_STATES = ['open', 'invoiced', 'closed', 'cancelled'] as const;
+/** An order may carry several invoices (S3 fix 1); it is «مفوتر» once their sum reaches its total and «مغلق» once all of them are collected. */
+export const SALES_ORDER_STATES = ['open', 'partially_invoiced', 'invoiced', 'closed', 'cancelled'] as const;
 export const SALES_ORDER_STATE_AR: Record<(typeof SALES_ORDER_STATES)[number], string> = {
   open: 'مفتوح',
+  partially_invoiced: 'مفوتر جزئياً',
   invoiced: 'مفوتر',
   closed: 'مغلق',
   cancelled: 'ملغي',
@@ -195,10 +197,17 @@ export const createContractSchema = z.object({
 export const updateContractSchema = createContractSchema
   .omit({ customerId: true, renewalOf: true })
   .partial();
+/** Quantities delivered / collected on a done schedule entry, per contract item (matched by itemId, else by description); they feed the period invoice [SAL §7.3, §7.4]. */
+export const scheduleQuantitySchema = z.object({
+  itemId: objectIdSchema.optional(),
+  descriptionAr: z.string().trim().max(300).optional(),
+  quantity: z.number().int().min(0),
+});
 export const scheduleStatusSchema = z.object({
   status: z.enum(SCHEDULE_STATUSES),
   note: z.string().trim().max(300).optional(),
   doneAt: z.string().datetime({ offset: true }).optional(),
+  quantities: z.array(scheduleQuantitySchema).max(100).optional(),
 });
 export const certificateSendSchema = z.object({
   to: z.array(emailSchema).min(1).max(10),
@@ -227,16 +236,61 @@ export const ZATCA_STATE_AR: Record<(typeof ZATCA_STATES)[number], string> = {
   accepted: 'مقبول',
   rejected: 'مرفوض',
 };
-export const registerInvoiceSchema = z.object({
-  salesOrderId: objectIdSchema,
-  kind: z.enum(INVOICE_KINDS).default('tax'),
-  /** Number of the invoice issued in the current accounting system (option A). */
-  externalNumber: z.string().trim().min(1).max(60),
-  issueDateTime: z.string().datetime({ offset: true }),
-  dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  pdfAttachmentId: objectIdSchema.optional(),
-  notes: z.string().trim().max(1000).optional(),
+const dateOnly = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+/** The invoice's source: an approved sales order (several invoices allowed, sum ≤ order total) or a periodic contract (per period or per completed schedule entries) [SAL §7.3 «بناءً على أمر البيع أو العقد المعتمد»]. */
+export const invoiceSourceSchema = z
+  .object({
+    salesOrderId: objectIdSchema.optional(),
+    contractId: objectIdSchema.optional(),
+    /** Contract only: the invoiced period (schedule entries done in it) … */
+    periodFrom: dateOnly.optional(),
+    periodTo: dateOnly.optional(),
+    /** … or an explicit list of completed schedule entries. */
+    scheduleEntryIds: z.array(objectIdSchema).max(500).optional(),
+  })
+  .superRefine((v, ctx) => {
+    if (!v.salesOrderId === !v.contractId)
+      ctx.addIssue({ code: 'custom', path: ['salesOrderId'], message: 'حدّد أمر البيع أو العقد (أحدهما)' });
+    if (v.contractId && !v.scheduleEntryIds?.length && !(v.periodFrom && v.periodTo))
+      ctx.addIssue({
+        code: 'custom',
+        path: ['periodFrom'],
+        message: 'حدّد الفترة أو المواعيد المنفَّذة المراد فوترتها',
+      });
+    if (v.periodFrom && v.periodTo && v.periodFrom > v.periodTo)
+      ctx.addIssue({ code: 'custom', path: ['periodTo'], message: 'نهاية الفترة قبل بدايتها' });
+  });
+export const invoicePrefillSchema = invoiceSourceSchema;
+/** Finance may correct the prefilled lines to what the issued invoice actually carries (option A). */
+export const invoiceLineInputSchema = z.object({
+  itemId: objectIdSchema.optional(),
+  descriptionAr: z.string().trim().min(1).max(300),
+  unit: z.string().trim().max(20).optional(),
+  quantity: z.number().int().min(0),
+  unitPriceHalalas: z.number().int().min(0),
+  vatRateBp: z.number().int().min(0).max(10_000).optional(),
 });
+export const invoiceTotalsSchema = z.object({
+  subtotalHalalas: z.number().int().min(0),
+  vatTotalHalalas: z.number().int().min(0),
+  totalHalalas: z.number().int().min(0),
+});
+export const registerInvoiceSchema = invoiceSourceSchema.and(
+  z.object({
+    kind: z.enum(INVOICE_KINDS).default('tax'),
+    /** Number of the invoice issued in the current accounting system (option A). */
+    externalNumber: z.string().trim().min(1).max(60),
+    issueDateTime: z.string().datetime({ offset: true }),
+    dueDate: dateOnly,
+    /** Actual lines / totals of the issued invoice; omitted → the prefilled ones. A difference needs a reason. */
+    lines: z.array(invoiceLineInputSchema).min(1).max(200).optional(),
+    totals: invoiceTotalsSchema.optional(),
+    differenceReason: z.string().trim().max(500).optional(),
+    pdfAttachmentId: objectIdSchema.optional(),
+    notes: z.string().trim().max(1000).optional(),
+  }),
+);
+export type RegisterInvoiceInput = z.infer<typeof registerInvoiceSchema>;
 export const PAYMENT_METHODS = ['bank_transfer', 'card', 'cash', 'other'] as const;
 export const PAYMENT_METHOD_AR: Record<(typeof PAYMENT_METHODS)[number], string> = {
   bank_transfer: 'تحويل بنكي',
@@ -254,6 +308,7 @@ export const recordPaymentSchema = z.object({
 export const listInvoicesQuerySchema = paginationSchema.extend({
   customerId: objectIdSchema.optional(),
   salesOrderId: objectIdSchema.optional(),
+  contractId: objectIdSchema.optional(),
   collectionState: z.enum(COLLECTION_STATES).optional(),
   overdue: z.coerce.boolean().optional(),
   q: z.string().trim().max(120).optional(),
