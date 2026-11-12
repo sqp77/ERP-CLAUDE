@@ -15,6 +15,10 @@ import { registerNewsModule } from './modules/news';
 import { backfillIdentityHashes } from './modules/hr/service';
 import { registerSubscribers } from './subscribers';
 import { SALES_ROLES } from './modules/sales/roles';
+import { registerCrmModule } from './modules/crm';
+import { registerSalesModule } from './modules/sales';
+import { ensureDefaultTags } from './core/tags/service';
+import { DEFAULT_SALES_TAGS } from '@eayni/shared';
 import { CORE_ROLES } from './core/rbac/defaults';
 
 let jobsRegistered = false;
@@ -35,6 +39,8 @@ export function registerModules(): void {
   registerHrModule();
   registerTicketsModule();
   registerNewsModule();
+  registerCrmModule();
+  registerSalesModule();
 
   registerExportResource({
     resource: 'users',
@@ -63,6 +69,7 @@ export const registerCoreJobs = registerModules;
 export async function ensureBaseline(): Promise<void> {
   await ensureCoreRoles([...CORE_ROLES, ...SALES_ROLES]);
   for (const def of DEFAULT_WORKFLOWS) await ensureWorkflow(def);
+  await ensureDefaultTags('sales', DEFAULT_SALES_TAGS); // [SAL §10.4]
   await backfillIdentityHashes();
 }
 

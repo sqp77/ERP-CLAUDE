@@ -19,3 +19,5 @@ export * from './schemas/tickets';
 export * from './arabic';
 export * from './schemas/news';
 export * from './schemas/hrReports';
+export * from './schemas/crm';
+export * from './schemas/sales';

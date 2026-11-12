@@ -15,6 +15,7 @@ import { seedTasks } from '../seedTasks';
 import { seedTickets } from '../seedTickets';
 import { seedNews } from '../seedNews';
 import { seedEmployeeReports } from '../seedEmployeeReports';
+import { seedSales } from '../seedSales';
 import { Branch, Site } from '../core/org/model';
 import { Holiday } from '../core/dates/model';
 import { DemoRecord } from './demo.model';
@@ -79,6 +80,7 @@ const KEEP = new Set([
   'loginlogs',
   'counters',
   'demo_records',
+  'tags', // baseline config [SAL §10.4]
 ]);
 
 async function snapshotIds(): Promise<Map<string, Set<string>>> {
@@ -162,6 +164,7 @@ export async function seedStagingDemo(): Promise<{
   await seedTickets();
   await seedNews();
   await seedEmployeeReports();
+  await seedSales();
   const after = await snapshotIds();
   const batch = new Date().toISOString();
   const tagged: Record<string, number> = {};

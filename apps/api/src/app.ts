@@ -25,6 +25,10 @@ import { draftsRouter } from './core/drafts/routes';
 import { commentsRouter } from './core/comments/routes';
 import { exportRouter } from './core/export/routes';
 import { registerModules } from './bootstrap';
+import { tagsRouter } from './core/tags/routes';
+import { partiesRouter } from './core/parties/routes';
+import { crmRouter } from './modules/crm/routes';
+import { salesRouter } from './modules/sales/routes';
 import { hrRouter } from './modules/hr/routes';
 import { portalRouter, profileChangesRouter } from './modules/hr/portalRoutes';
 import { requestsRouter } from './modules/hr/requests.routes';
@@ -82,6 +86,10 @@ export function createApp(): Express {
   v1.use('/tickets', ticketsRouter);
   v1.use('/news', newsRouter);
   v1.use('/hr', hrRouter);
+  v1.use('/tags', tagsRouter);
+  v1.use('/parties', partiesRouter);
+  v1.use('/crm', crmRouter);
+  v1.use('/sales', salesRouter);
   app.use('/api/v1', v1);
 
   app.use(notFoundHandler);

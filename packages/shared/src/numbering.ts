@@ -14,6 +14,21 @@ export const NUMBER_PREFIXES = {
   contract: 'CNT',
   profileChange: 'PCR',
   certificate: 'CRT',
+  // CRM / Sales [SAL §19 «رقم مرجعي تلقائي»]
+  customer: 'CUS',
+  lead: 'LED',
+  opportunity: 'OPP',
+  containerSale: 'CSR',
+  sortingContract: 'SRT',
+  cleaningContract: 'CLN',
+  destruction: 'DST',
+  containerRental: 'RNT',
+  scrap: 'SCR',
+  assetReturn: 'ARO',
+  quote: 'QUO',
+  salesOrder: 'SO',
+  invoice: 'INV',
+  discussion: 'DSC',
 } as const;
 export type NumberPrefixKey = keyof typeof NUMBER_PREFIXES;
 export const NUMBER_PATTERN = /^[A-Z]{2,5}-\d{4}-\d{5,}$/;

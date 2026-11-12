@@ -38,6 +38,13 @@ export const NOTIFICATION_TYPES = [
   'ticket.auto_closed',
   'ticket.reopened',
   'ticket.closed',
+  // Sales / CRM [SAL §14] — numbers are the spec's list
+  'crm.lead.referred', // 1 وصول عميل جديد من خدمة العملاء
+  'crm.customer.assigned', // 2 إسناد عميل إلى موظف
+  'crm.followup.due', // 3 قرب موعد متابعة العميل
+  'crm.owner_changed', // 16 تغيير الموظف المسؤول عن العميل أو الطلب
+  'crm.lead.overdue', // the 24-hour rule [SAL §3, DECISIONS §20 Q13]
+  'sales.opportunity.assigned',
   'generic',
 ] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
@@ -78,5 +85,11 @@ export const NOTIFICATION_TITLES_AR: Record<NotificationType, string> = {
   'ticket.auto_closed': 'أُغلقت تذكرتك تلقائيًا',
   'ticket.reopened': 'أُعيد فتح تذكرة',
   'ticket.closed': 'أُغلقت التذكرة',
+  'crm.lead.referred': 'وصول عميل جديد من خدمة العملاء',
+  'crm.customer.assigned': 'إسناد عميل إلى موظف',
+  'crm.followup.due': 'قرب موعد متابعة العميل',
+  'crm.owner_changed': 'تغيير الموظف المسؤول عن العميل أو الطلب',
+  'crm.lead.overdue': 'عميل محتمل لم يُسجَّل خلال المهلة',
+  'sales.opportunity.assigned': 'إسناد فرصة بيعية إليك',
   generic: 'إشعار',
 };

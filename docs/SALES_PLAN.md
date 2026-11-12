@@ -97,6 +97,8 @@ Indexes: unique partial on `unifiedNumber`, `crNumber`, `vatNumber`; `normalized
 
 One workflow definition per type: `sales_request_container_sale`, `sales_request_sorting`, `sales_request_cleaning`, `sales_request_destruction`, `sales_request_rental`, `sales_request_scrap`, `sales_request_asset_return`. States share one vocabulary so the queues and the stage log read the same across types; each type's definition contains only the states it uses. Actor relations the Sales module computes for the engine: `owner` (الموظف المسؤول), `sales_manager`, `executive`, `procurement_staff`, `procurement_manager`, `finance_staff`, `finance_manager`, `operations_staff`, `operations_manager` (staff/manager of the department holding the stage — Q12 decides whether staff may act), plus role codes.
 
+> **Approved with changes (DECISIONS §20):** the Finance stage gains `finance_needs_info` «يحتاج استكمال بيانات» (change 4); the Operations stage uses the OPS §2.1 labels verbatim — جديد / قيد المراجعة / مجدول / قيد التنفيذ / مكتمل / مؤجل / ملغي / مرفوض — instead of «لدى التشغيل» / «تم التنفيذ», and scrap follows OPS §2.2 (change 5). The table below is the pre-approval draft; S2 implements the approved version.
+
 ### Shared state vocabulary (code → «label», category, owner)
 | Code | Label | Cat. | Holder |
 |---|---|---|---|

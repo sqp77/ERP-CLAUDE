@@ -32,6 +32,7 @@ export const CORE_ROLES: RoleDefinition[] = [
     system: true,
     departmentScoped: false,
     grants: [
+      { resource: 'parties', actions: ['view'], scope: 'all' },
       { resource: 'users', actions: ALL_ACTIONS, scope: 'all' },
       // Authenticator resets and other account-security actions (security review A1).
       { resource: 'users.security', actions: ['edit'], scope: 'all' },
@@ -175,6 +176,7 @@ export const CORE_ROLES: RoleDefinition[] = [
     system: true,
     departmentScoped: false,
     grants: [
+      { resource: 'parties', actions: ['view', 'edit'], scope: 'all' },
       { resource: 'tasks', actions: ['view', 'create', 'edit'], scope: 'department' },
       { resource: 'calendar', actions: ['view', 'create', 'edit'], scope: 'department' },
       { resource: 'comments', actions: ['view', 'create'], scope: 'all' },
@@ -190,6 +192,7 @@ export const CORE_ROLES: RoleDefinition[] = [
     system: true,
     departmentScoped: false,
     grants: [
+      { resource: 'parties', actions: ['view', 'edit', 'approve'], scope: 'all' },
       { resource: 'tasks', actions: ['view', 'create', 'edit'], scope: 'department' },
       { resource: 'calendar', actions: ['view', 'create', 'edit'], scope: 'department' },
       { resource: 'comments', actions: ['view', 'create'], scope: 'all' },
@@ -217,6 +220,7 @@ export const CORE_ROLES: RoleDefinition[] = [
       { resource: 'tickets', actions: ['view'], scope: 'all' },
       { resource: 'news', actions: ['view', 'create', 'edit', 'approve'], scope: 'all' },
       { resource: 'hr.reports', actions: ['view'], scope: 'all' },
+      { resource: 'parties', actions: ['view'], scope: 'all' },
       // Sales, read-only [SAL §15 الإدارة التنفيذية]; above-limit approvals come with quotes (S3).
       { resource: 'crm.customers', actions: ['view'], scope: 'all' },
       { resource: 'crm.leads', actions: ['view'], scope: 'all' },

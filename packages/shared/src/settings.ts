@@ -2,6 +2,8 @@ import { z } from 'zod';
 import { DEFAULT_HR_REQUEST_ROUTES, hrRequestRoutesSchema } from './schemas/hrRequests';
 import { DEFAULT_TICKET_DEPARTMENT_FIELDS, ticketDepartmentFieldsSchema } from './schemas/tickets';
 import { DEFAULT_REPORT_TYPES, reportTypesSchema } from './schemas/hrReports';
+import { DEFAULT_ORGANIZATION_TYPES } from './schemas/crm';
+import { DEFAULT_FACILITY_SIZES, DEFAULT_LOSS_REASONS } from './schemas/sales';
 
 /**
  * Settings registry: everything the specs want configurable lives here with a default and a schema
@@ -11,7 +13,7 @@ export interface SettingDefinition<T = unknown> {
   key: string;
   labelAr: string;
   descriptionAr?: string;
-  group: 'auth' | 'tickets' | 'hr' | 'notifications' | 'general' | 'system';
+  group: 'auth' | 'tickets' | 'hr' | 'notifications' | 'general' | 'system' | 'crm' | 'sales';
   schema: z.ZodType<T>;
   default: T;
 }
@@ -21,6 +23,54 @@ function def<T>(d: SettingDefinition<T>): SettingDefinition<T> {
 }
 
 export const SETTING_DEFINITIONS = {
+  // ---- CRM / Sales [SAL §3, §4.1, DECISIONS §20]
+  'crm.leadRegistrationHours': def({
+    key: 'crm.leadRegistrationHours',
+    labelAr: 'مهلة تسجيل العميل المحتمل المحال من خدمة العملاء (ساعات)',
+    descriptionAr:
+      'ساعات زمنية من وقت الإحالة؛ عند تجاوزها يُنبَّه الموظف المسؤول ومدير المبيعات مرة واحدة [SAL §3]',
+    group: 'crm',
+    schema: z
+      .number()
+      .int()
+      .min(1)
+      .max(24 * 14),
+    default: 24, // DECISIONS §20 Q13
+  }),
+  'crm.organizationTypes': def({
+    key: 'crm.organizationTypes',
+    labelAr: 'أنواع الجهات',
+    descriptionAr: 'القائمة الأولية من SAL §4.1؛ تُضاف قيم خدمة العملاء لاحقًا (DECISIONS §20 Q8)',
+    group: 'crm',
+    schema: z.array(z.string().trim().min(1).max(80)).max(50),
+    default: DEFAULT_ORGANIZATION_TYPES,
+  }),
+  'sales.facilitySizes': def({
+    key: 'sales.facilitySizes',
+    labelAr: 'أحجام المنشآت (مؤقتة حتى اعتماد المالك)',
+    group: 'sales',
+    schema: z.array(z.string().trim().min(1).max(80)).max(50),
+    default: DEFAULT_FACILITY_SIZES, // provisional (DECISIONS §20 Q7)
+  }),
+  'sales.lossReasons': def({
+    key: 'sales.lossReasons',
+    labelAr: 'أسباب خسارة الفرصة (مؤقتة حتى اعتماد المالك)',
+    group: 'sales',
+    schema: z.array(z.string().trim().min(1).max(120)).min(1).max(50),
+    default: DEFAULT_LOSS_REASONS, // provisional (DECISIONS §20 Q7)
+  }),
+  'sales.followUpReminderHours': def({
+    key: 'sales.followUpReminderHours',
+    labelAr: 'التنبيه قبل موعد متابعة العميل (ساعات)',
+    descriptionAr: 'إشعار «قرب موعد متابعة العميل» للموظف المسؤول [SAL §10.2, §14]',
+    group: 'sales',
+    schema: z
+      .number()
+      .int()
+      .min(0)
+      .max(24 * 7),
+    default: 24,
+  }),
   'auth.sessionIdleMinutes': def({
     key: 'auth.sessionIdleMinutes',
     labelAr: 'مهلة الخمول للجلسة (دقائق)',

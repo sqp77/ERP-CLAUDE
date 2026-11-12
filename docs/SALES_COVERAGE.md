@@ -1,0 +1,112 @@
+# SAL coverage — every bullet of `docs/SPECS.md` `# SAL — المبيعات` → where it lives → the test that proves it
+
+Rule (prompt §0): nothing is dropped silently. A row that is not built yet names its slice or the decision it waits for. Spec text is verbatim. Slices: S1 customer database, S2 services and requests, S3 pricing/contracts/invoicing, S4 management, S5 reports/integration (SAL §17). Tests are in `apps/api/src/**/*.test.ts` unless noted.
+
+Status legend: ✅ built · 🔜 planned slice · ⏸ waits for an owner answer (DECISIONS §20) or another module.
+
+## §3 آلية العمل الرئيسية
+
+| § | Bullet | Implementation | Test | Status |
+|---|---|---|---|---|
+| §3 م1 | استقبال طلب العميل أو الفرصة البيعية | «عميل جديد / فرصة بيعية جديدة» → `POST /crm/customers` (+ `opportunity`), `POST /sales/opportunities` | `sales-s1.test.ts` «creates the customer and its first opportunity together» | ✅ S1 |
+| §3 م1 | استقبال العملاء المحتملين (Leads) من قسم خدمة العملاء | `leads` collection, CS form `/cs/refer-lead`, `POST /crm/leads`, notification 1 to Sales managers | `crm.test.ts` «leads: Customer Service refers…» | ✅ S1 |
+| §3 م1 | تسجيل العميل أو الفرصة في نظام CRM خلال 24 ساعة | setting `crm.leadRegistrationHours` (24 clock hours, DECISIONS §20 Q13); job `crm.leads.overdue` flags once, notifies rep + managers; `?overdue=true` filter and badge | same test, «the 24-hour rule fires once» | ✅ S1 |
+| §3 م1 | تحديد الموظف المسؤول عن متابعة العميل | `ownerUserId` on customer and opportunity; manager assigns leads (`POST /crm/leads/:id/assign`) and names an owner on creation | `crm.test.ts` leads test; `sales-s1.test.ts` reassign | ✅ S1 |
+| §3 م1 | تسجيل احتياج العميل والخدمة المطلوبة | log field `customerNeed`; opportunity `serviceType` (the seven services) | `crm.test.ts` log test | ✅ S1 |
+| §3 م1 | توثيق جميع المحادثات والاتصالات والاجتماعات | `communicationLogs` append-only (`POST/GET /crm/customers/:id/logs`) | `crm.test.ts` «communication log is append-only…» | ✅ S1 |
+| §3 م2–م3 | التسعير وإعداد العرض، إرسال العرض والمتابعة | quotes, price list, discount matrix, send via email adapter, customer replies, «مقبول/مرفوض/قيد التفاوض», rejection reasons | — | 🔜 S3 (Q1, Q5, Q7 pending) |
+| §3 م4 | التعاقد وإجراءات الشراء (المشتريات → المالية → مستندات الشراء) | thin Procurement and Finance stages on the Sales request | — | 🔜 S2 (Q3 default accepted) |
+| §3 م5 | التنفيذ والتسليم (التشغيل، الأوزان، محاضر الاستلام) | thin Operations stage with OPS §2.1 labels (DECISIONS §20 change 5) | — | 🔜 S2 |
+| §3 م6 | الفوترة والتحصيل | Finance invoice register (DECISIONS §20 Q14), collection status read-only for Sales | — | 🔜 S3 (Q4 pending) |
+| §3 ملاحظة | انتقال الطلب تلقائياً إلى القسم التالي مع إشعار للموظف المسؤول ومدير القسم | workflow definitions per service + hand-off events + notifications 7–10 | — | 🔜 S2 |
+
+## §4 إدارة العملاء والفرص البيعية (CRM)
+
+| § | Bullet | Implementation | Test | Status |
+|---|---|---|---|---|
+| §4.1 | زر رئيسي باسم (عميل جديد / فرصة بيعية جديدة) | `SalesHomePage`, `CustomersPage` → `NewCustomerDialog` (customer + ≤3 contacts + first opportunity) | `sales-s1.test.ts` «creates the customer and its first opportunity together» | ✅ S1 |
+| §4.1 أولاً | اسم الجهة، الدولة، المنطقة، المدينة، النشاط، نوع الجهة (حكومي، خاص، عام)، حجم المنشأة، مصدر العميل | `customers` fields; `crm.organizationTypes` (SAL list, Q8), `sales.facilitySizes` (provisional, Q7) settings; `GET /crm/meta` | `crm.test.ts` first test (create with all fields) | ✅ S1 |
+| §4.1 مصادر العملاء | وسائل التواصل الاجتماعي، الزيارات الميدانية، الترشيحات، خدمة العملاء، الاتصالات المباشرة، المعارض والمؤتمرات، مصادر أخرى | `CUSTOMER_SOURCES` + `sales.sources.*` labels verbatim; a converted lead is forced to «خدمة العملاء» | `crm.test.ts` leads test (`source: 'customer_service'`) | ✅ S1 |
+| §4.1 ثانياً | الأشخاص المسؤولون بحد أقصى 3 لكل جهة: الاسم، المسمى الوظيفي، رقم التواصل، البريد الإلكتروني، ملاحظات إضافية | `contacts` collection; server limit 3 (409 `max_contacts`, zod max 3 on create) | `crm.test.ts` «at most three contact persons…» | ✅ S1 |
+| §4.1 ثالثاً | إضافة محادثة أو ملاحظة؛ اسم الموظف؛ التاريخ والوقت تلقائياً؛ وسيلة التواصل (اتصال، بريد إلكتروني، زيارة، اجتماع)؛ تفاصيل المحادثة والنتائج؛ احتياج العميل؛ الخطوة القادمة؛ موعد المتابعة القادمة؛ إرفاق صور أو مستندات؛ عرض بترتيب زمني | `communicationLogs`; author and `at` set by the server; `LogComposer` (phone-first); chronological `GET` | `crm.test.ts` log test (`authorName`, `at`, order) | ✅ S1 |
+| §4.1 ثالثاً | عدم حذف سجل المحادثات السابقة مع الاحتفاظ بالتاريخ واسم الموظف | no PATCH/DELETE route exists (404); survives owner change | same test (`.patch` → 404, `.delete` → 404, log visible to the new owner) | ✅ S1 |
+| §4.1 رابعاً | الفصل بين حالة العميل وحالة الفرصة البيعية | `customers.status` vs `opportunities.stage` | `sales-s1.test.ts` | ✅ S1 |
+| §4.1 حالة العميل | عميل نشط، عميل محتمل، عميل غير مهتم، عميل متعاون، عميل متوقف عن التعامل | `CUSTOMER_STATUSES`, labels verbatim, status change event in history | `crm.test.ts` «classification is the manager's call…» (`status_changed`) | ✅ S1 |
+| §4.1 حالة الفرصة | جديدة، قيد المعالجة، تم التواصل، جدولة اجتماع، عرض سعر مرسل، قيد التفاوض، ناجحة (تم إغلاق الصفقة)، خاسرة (لم تتم الصفقة) | `OPPORTUNITY_STAGES`, `POST /sales/opportunities/:id/stage`, append-only `opportunityEvents` | `sales-s1.test.ts` «stages move with history…» | ✅ S1 (quote_sent set automatically in S3) |
+| §4.1 | تسجيل سبب خسارة الفرصة عند إغلاقها دون إتمام التعاقد | `lostReason` mandatory (zod + list `sales.lossReasons`, provisional Q7), «أخرى» needs a note | same test (400 without reason / outside list) | ✅ S1 |
+| §4.2 | عرض الفرص الجديدة / قيد المتابعة / العروض المرسلة / قيد التفاوض / الناجحة / الخاسرة | `PipelinePage` Kanban columns + `?stage=` filter | `sales-s1.test.ts` pipeline summary | ✅ S1 |
+| §4.2 | القيمة المالية المتوقعة، الموظف المسؤول، تاريخ آخر تواصل، موعد المتابعة القادمة، إرفاق المستندات | `expectedValueHalalas`, `ownerUserId`, `lastContactAt`, `nextFollowUpAt`, `attachmentIds` (claimed on the opportunity) | `sales-s1.test.ts` | ✅ S1 (attachments UI on the opportunity dialog: S2 with the request forms) |
+| §4.2 | عرض جدولي أو لوحة مراحل (Kanban Board) | `PipelinePage` `?view=kanban|table` | web hygiene tests; manual RTL check | ✅ S1 |
+
+## §5 الخدمات والطلبات — 🔜 S2 (all of §5.1–§5.7; prefixes CSR/SRT/CLN/DST/RNT/SCR/ARO reserved in `NUMBER_PREFIXES`; `SALES_SERVICE_TYPES` labels verbatim already drive the «الخدمات» dropdown and opportunity service type)
+
+## §6 دورة الطلبات والاعتمادات — 🔜 S2 (routes per type; closing outcomes; Finance `finance_needs_info` and OPS §2.1 labels per DECISIONS §20 changes 4–5); §6.3 contract alerts — 🔜 S3
+
+## §7 الأسعار والخصومات والفواتير — 🔜 S3 (§7.1 price list; §7.2 matrix — Q1 pending, unset limits → executive approval per change 7; §7.3 invoices — Q4; §7.4 periodic contracts)
+
+## §8 صلاحيات مدير قسم المبيعات
+
+| § | Bullet | Implementation | Test | Status |
+|---|---|---|---|---|
+| §8.1 | نقل العميل من موظف إلى موظف آخر | `POST /crm/customers/transfer` (one or many), reason mandatory, `customerEvents.owner_changed`, both reps notified, open opportunities follow | `crm.test.ts` log/transfer test | ✅ S1 |
+| §8.1 | إعادة توزيع العملاء والفرص البيعية | bulk selection on `CustomersPage`; `POST /sales/opportunities/reassign` | `sales-s1.test.ts` reassign test | ✅ S1 |
+| §8.1 | استقبال العملاء المحتملين (Leads) من خدمة العملاء؛ توجيه العملاء وتوزيعهم على موظفي القسم | `LeadsPage` department view; `POST /crm/leads/:id/assign` (manager only, 403 for a rep) | `crm.test.ts` leads test | ✅ S1 |
+| §8.1 | تعديل حالة الطلب وفق الصلاحيات المعتمدة | request states | — | 🔜 S2 |
+| §8.1 | الاطلاع على جميع العملاء والفرص البيعية داخل القسم؛ الاطلاع على سجل متابعة الموظفين | department scope for `sales_manager` (implied for the Sales department manager, DECISIONS §20 change 3); logs readable per customer | `crm.test.ts` first test; `rbac-sales.test.ts` change 3 | ✅ S1 |
+| §8.2 | رفع ملفات وآليات العمل PDF، التعليمات، تقارير الموظفين، تقارير الانتداب والزيارات، مستندات العملاء | Sales documents library + EP §14 reports filtered to Sales | — | 🔜 S4 |
+| §8.3 | KPIs، المستهدفات، الإيرادات، المصروف، المتبقي (للعرض فقط من المالية) | KPI framework, targets, read-only Finance cards | — | 🔜 S4 (budget data waits for the Finance module) |
+
+## §9 التقويم — 🔜 S4 (core calendar already has the five statuses) · §10.1 البريد — 🔜 S3/S4 (Q5) · §10.3 الدردشة الداخلية — 🔜 S4
+
+## §10.2 سجل المحادثات
+
+| § | Bullet | Implementation | Test | Status |
+|---|---|---|---|---|
+| §10.2 | إضافة تعليق أو ملاحظة؛ اسم الموظف؛ التاريخ والوقت تلقائياً؛ إرفاق الملفات والصور؛ ترتيب زمني؛ نتيجة التواصل؛ موعد المتابعة القادمة | same log as §4.1 ثالثاً (`outcome`, `nextFollowUpAt`, attachments) | `crm.test.ts` log test | ✅ S1 |
+| §10.2 | إشعار الموظف عند حلول موعد المتابعة | job `crm.followups` + `sales.followups` (opportunities), setting `sales.followUpReminderHours`, once per date | `crm.test.ts` «the follow-up reminder reaches the responsible employee once…» | ✅ S1 |
+
+## §10.4 نظام التصنيفات (Hashtags)
+
+| § | Bullet | Implementation | Test | Status |
+|---|---|---|---|---|
+| §10.4 | تصنيف العملاء والطلبات والفرص البيعية مع البحث والتصفية | `core/tags` (scope `sales`), `tags[]` on customers and opportunities, `?tag=` filters | `crm.test.ts` tags test | ✅ S1 (requests in S2) |
+| §10.4 | الأمثلة #عميل_جديد #عميل_استراتيجي #عقد_سنوي #تأجير_حاويات #سكراب #مناقصة #متابعة_مالية #يحتاج_زيارة | `DEFAULT_SALES_TAGS` seeded by the baseline | same test (eight names) | ✅ S1 |
+| §10.4 | قابلة للإضافة والتعديل وفق صلاحيات مدير القسم | `POST/PATCH/DELETE /tags` need `tags:create/edit/delete` (sales_manager, department); reps pick existing tags only; rename rewrites records | same test (403 for rep, rename reflected) | ✅ S1 |
+
+## §11 KPIs — 🔜 S4 (change 6: tons from invoices) · §12 التقارير — 🔜 S5 · §13 لوحة التحكم — 🔜 S4 (the S1 landing already drills down: عملائي، متابعات مستحقة، فرص مفتوحة، فرص متأخرة، عملاء محتملون)
+
+## §14 الإشعارات
+
+| # | Notification (verbatim) | Type | Where | Test | Status |
+|---|---|---|---|---|---|
+| 1 | وصول عميل جديد من خدمة العملاء | `crm.lead.referred` | `createLead` → Sales managers | `crm.test.ts` leads | ✅ S1 |
+| 2 | إسناد عميل إلى موظف | `crm.customer.assigned` | lead assignment, customer created for another owner, transfer recipient | `crm.test.ts` leads + transfer | ✅ S1 |
+| 3 | قرب موعد متابعة العميل | `crm.followup.due` | jobs `crm.followups`, `sales.followups` | `crm.test.ts` follow-up | ✅ S1 |
+| 4 | اقتراب موعد اجتماع أو زيارة | `meeting.reminder` (core) | calendar | core tests | ✅ core (Sales fields S4) |
+| 5–15 | عرض السعر، المشتريات، المالية، التشغيل، الفواتير، العقود، التعاون، مشكلة من قسم آخر | — | S2–S4 | — | 🔜 |
+| 16 | تغيير الموظف المسؤول عن العميل أو الطلب | `crm.owner_changed` | transfer and reassignment → previous owner | `crm.test.ts` transfer; `sales-s1.test.ts` reassign | ✅ S1 (requests in S2) |
+
+## §15 الصلاحيات
+
+| § | Bullet | Implementation | Test | Status |
+|---|---|---|---|---|
+| موظف المبيعات | إضافة العملاء والفرص؛ متابعة العملاء المسندين إليه؛ تسجيل المحادثات والاجتماعات؛ الاطلاع على بياناته | role `sales_rep` (own scope on `crm.customers`, `crm.leads`, `sales.opportunities`) | `crm.test.ts` first test (rep B sees nothing of rep A) | ✅ S1 (quotes, requests, targets: S2–S4) |
+| مدير المبيعات | جميع عملاء القسم؛ التوزيع؛ النقل؛ متابعة الأداء | role `sales_manager` (department), implied for the Sales department manager | `crm.test.ts`, `rbac-sales.test.ts` | ✅ S1 (quotes approval, targets: S3–S4) |
+| الإدارة التنفيذية | الاطلاع على المؤشرات والإيرادات والتقارير؛ اعتماد ما يتجاوز صلاحيات المدير | `executive` gets view-all on `crm.*`, `sales.opportunities`, `tags`; create → 403 | `crm.test.ts` first test | ✅ S1 (above-limit approvals S3) |
+| الأقسام المرتبطة | المشتريات، المالية، التشغيل، خدمة العملاء، التسويق | CS referral built; the three thin stages S2; Marketing notice S4 | `crm.test.ts` leads | ✅/🔜 |
+| | قابلة للتخصيص حسب طبيعة الوظيفة والمسؤولية | admin edits grants of `sales_rep`/`sales_manager` or clones them; admin edits survive restarts (change 1); nobody edits a role they hold (change 2) | `rbac-sales.test.ts` changes 1–2 | ✅ S1 |
+
+## §16 المتطلبات التقنية
+
+| Bullet | Implementation | Status |
+|---|---|---|
+| ربط قسم المبيعات بنظام CRM؛ ربط بيانات العملاء بقسم خدمة العملاء | shared `crm` module, CS referral form | ✅ S1 |
+| APIs للتكامل | OpenAPI document | 🔜 S5 |
+| سجل تدقيق لجميع الإجراءات | `recordAudit` on every write (customers, contacts, logs, leads, opportunities, tags, transfers) | ✅ S1 |
+| البحث والتصفية المتقدمة | Arabic-normalised search on name/city/activity, phone digits, number; filters by status/source/classification/tag/owner/follow-up | ✅ S1 |
+| حماية بيانات العملاء والعقود والأسعار | scope rules, duplicate check without leakage; price/discount field rules in S3 | ✅/🔜 |
+| النسخ الاحتياطية | Atlas backup note in DEPLOY.md | 🔜 S5 |
+
+## §18 المخرجات (20) — S1 delivers 1 (landing), 2 (CRM), 3 (customer file + log), 4 (leads), 18 (permissions) and the CS/Marketing part of 19; see `docs/SALES_PLAN.md` §6 for the rest.
+
+## §19 التوصيات — S1: ملف موحد (duplicate prevention across reps) ✅ · رقم مرجعي تلقائي (CUS/OPP/LED) ✅ · الاحتفاظ بالمحادثات عند تغيير الموظف ✅ · عدم تجاوز الصلاحيات (server scope, 404 for hidden files) ✅ · البقية S2–S5.

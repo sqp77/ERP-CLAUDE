@@ -14,6 +14,7 @@ import { seedTasks } from './seedTasks';
 import { seedTickets } from './seedTickets';
 import { seedNews } from './seedNews';
 import { seedEmployeeReports } from './seedEmployeeReports';
+import { seedSales } from './seedSales';
 
 /**
  * The seed carries a default admin password and sample data. It may only ever run against the local
@@ -110,9 +111,10 @@ export async function seed(): Promise<{
   const tickets = await seedTickets();
   const news = await seedNews();
   const reports = await seedEmployeeReports();
+  const salesData = await seedSales();
   logger.info(
-    { requests, tasks, tickets, news, reports },
-    'sample HR requests, tasks, tickets, news and reports',
+    { requests, tasks, tickets, news, reports, salesData },
+    'sample HR requests, tasks, tickets, news, reports and sales data',
   );
   return { adminEmail, adminPassword, sampleEmployees: hr.created, sampleLogins: hr.logins, samplePassword };
 }

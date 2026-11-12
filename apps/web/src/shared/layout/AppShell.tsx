@@ -26,6 +26,8 @@ import {
   Newspaper,
   Ticket,
   X,
+  KanbanSquare,
+  HandCoins,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { usePrefs } from '@/lib/preferences';
@@ -56,6 +58,34 @@ export function AppShell() {
     queryFn: () => get<{ items: unknown[] }>('/hr/team'),
     staleTime: 5 * 60_000,
   });
+  // Customer Service users may refer leads to Sales without any Sales grant [SAL §3]; the API decides.
+  const crmMeta = useQuery({
+    queryKey: ['crm', 'meta'],
+    queryFn: () => get<{ canReferLeads: boolean }>('/crm/meta'),
+    staleTime: 5 * 60_000,
+  });
+  const salesItems = [
+    { to: '/sales', label: t('nav.salesHome'), icon: HandCoins, show: can('crm.customers', 'view') },
+    {
+      to: '/sales/customers',
+      label: t('nav.customers'),
+      icon: Building2,
+      show: can('crm.customers', 'view'),
+    },
+    {
+      to: '/sales/pipeline',
+      label: t('nav.pipeline'),
+      icon: KanbanSquare,
+      show: can('sales.opportunities', 'view'),
+    },
+    { to: '/sales/leads', label: t('nav.leads'), icon: Inbox, show: can('crm.leads', 'view') },
+    {
+      to: '/cs/refer-lead',
+      label: t('nav.referLead'),
+      icon: Send,
+      show: !!crmMeta.data?.canReferLeads && !can('crm.leads', 'view'),
+    },
+  ];
 
   const items = [
     { to: '/', label: t('nav.dashboard'), icon: Home, show: true },
@@ -178,6 +208,14 @@ export function AppShell() {
         </button>
       </div>
       {items.filter((i) => i.show).map((i) => link(i.to, i.label, i.icon))}
+      {salesItems.some((a) => a.show) && (
+        <>
+          <div className="mt-4 mb-1 px-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
+            {t('nav.sales')}
+          </div>
+          {salesItems.filter((i) => i.show).map((i) => link(i.to, i.label, i.icon))}
+        </>
+      )}
       {hrItems.some((a) => a.show) && (
         <>
           <div className="mt-4 mb-1 px-3 text-xs font-semibold uppercase tracking-wide text-slate-400">

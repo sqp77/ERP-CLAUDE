@@ -42,6 +42,12 @@ import { HrDashboardPage } from './pages/dashboards/HrDashboardPage';
 import { ExportPage } from './pages/hr/ExportPage';
 import { ExpiringPage } from './pages/hr/ExpiringPage';
 import { RouteError } from './shared/layout/RouteError';
+import { SalesHomePage } from './pages/sales/SalesHomePage';
+import { CustomersPage } from './pages/sales/CustomersPage';
+import { CustomerPage } from './pages/sales/CustomerPage';
+import { PipelinePage } from './pages/sales/PipelinePage';
+import { LeadsPage } from './pages/sales/LeadsPage';
+import { ReferLeadPage } from './pages/cs/ReferLeadPage';
 
 export const router = createBrowserRouter([
   {
@@ -134,6 +140,17 @@ export const router = createBrowserRouter([
                   { path: '/hr/secondments', element: <SecondmentsPage /> },
                 ],
               },
+              {
+                element: <RequirePermission resource="crm.customers" action="view" />,
+                children: [
+                  { path: '/sales', element: <SalesHomePage /> },
+                  { path: '/sales/customers', element: <CustomersPage /> },
+                  { path: '/sales/customers/:id', element: <CustomerPage /> },
+                  { path: '/sales/pipeline', element: <PipelinePage /> },
+                  { path: '/sales/leads', element: <LeadsPage /> },
+                ],
+              },
+              { path: '/cs/refer-lead', element: <ReferLeadPage /> },
               {
                 element: <RequirePermission resource="holidays" action="edit" />,
                 children: [{ path: '/admin/holidays', element: <HolidaysPage /> }],
