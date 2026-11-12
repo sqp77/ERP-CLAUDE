@@ -44,3 +44,25 @@ const stageLogSchema = new Schema(
 );
 stageLogSchema.index({ recordType: 1, recordId: 1, at: 1 });
 export const StageLog = model('StageLog', stageLogSchema);
+
+/**
+ * Delay reasons for an overdue stage [SAL §19 «سبب تأخر الطلب والجهة المسؤولة»]: append-only rows pointing at the
+ * stage-log entry; the entry itself is never rewritten (golden rule 3). The latest row is the current reason.
+ */
+const stageDelayReasonSchema = new Schema(
+  {
+    recordType: { type: String, required: true, index: true },
+    recordId: { type: String, required: true, index: true },
+    stageLogId: { type: Schema.Types.ObjectId, ref: 'StageLog', required: true, index: true },
+    reason: { type: String, required: true },
+    /** Department responsible for the delay (id when it exists, plus the module's own code). */
+    responsibleDepartmentId: { type: String },
+    responsibleCode: { type: String },
+    byUserId: { type: String },
+    byEmail: { type: String },
+    at: { type: Date, default: () => new Date() },
+  },
+  { versionKey: false },
+);
+stageDelayReasonSchema.index({ recordType: 1, recordId: 1, at: 1 });
+export const StageDelayReason = model('StageDelayReason', stageDelayReasonSchema);

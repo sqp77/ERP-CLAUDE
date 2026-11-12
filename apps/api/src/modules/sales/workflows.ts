@@ -1,5 +1,10 @@
 import type { StateDef, TransitionDef, WorkflowDefinitionInput } from '@eayni/shared';
-import { SALES_REQUEST_STATE_AR, SALES_SERVICE_TYPES, type SalesServiceType } from '@eayni/shared';
+import {
+  SALES_REQUEST_STATE_AR,
+  SALES_SERVICE_TYPES,
+  STATE_HOLDER,
+  type SalesServiceType,
+} from '@eayni/shared';
 
 /**
  * One workflow definition per Sales service [SAL §5 «آلية العمل», §6.1, §6.2; DECISIONS §20 changes 4–5]. They are
@@ -182,6 +187,17 @@ function build(
 ): WorkflowDefinitionInput {
   const all = { ...st, ...closingStates() };
   const open = nonFinal(all).filter((s) => s !== 'suspended');
+  // S2 approval fix 1: once the record left Sales, a change goes back through this transition (reason required);
+  // the service clears the Finance decision so the request must be approved again.
+  const outsideSales = open.filter((s) => STATE_HOLDER[s] && STATE_HOLDER[s] !== 'sales');
+  const backTo = all.customer_approved ? 'customer_approved' : 'new';
+  if (outsideSales.length)
+    tr = [
+      ...tr,
+      T('return_to_sales', 'إعادة إلى المبيعات للتعديل', outsideSales, backTo, SALES, {
+        requireReason: true,
+      }),
+    ];
   return {
     type: workflowTypeFor(type),
     nameAr,

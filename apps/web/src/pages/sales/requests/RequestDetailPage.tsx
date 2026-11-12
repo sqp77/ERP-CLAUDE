@@ -423,12 +423,27 @@ export function RequestDetailPage() {
                   <span className="ms-2 text-xs text-red-700">
                     {t('sales.requests.stageOverdue')}
                     {s.delayReason
-                      ? `: ${s.delayReason}${s.meta?.responsibleDepartment ? ` — ${t(`sales.requests.holders.${s.meta.responsibleDepartment}`)}` : ''}`
+                      ? `: ${s.delayReason}${s.responsibleDepartment ? ` — ${t(`sales.requests.holders.${s.responsibleDepartment}`)}` : ''}`
                       : ''}
-                    {!s.delayReason && (
-                      <button type="button" className="ms-2 underline" onClick={() => setDelayRow(s._id)}>
-                        {t('sales.requests.addDelayReason')}
-                      </button>
+                    <button type="button" className="ms-2 underline" onClick={() => setDelayRow(s._id)}>
+                      {s.delayReason
+                        ? t('sales.requests.updateDelayReason')
+                        : t('sales.requests.addDelayReason')}
+                    </button>
+                    {(s.delayReasons?.length ?? 0) > 1 && (
+                      <details className="mt-1 text-slate-600">
+                        <summary className="cursor-pointer">
+                          {t('sales.requests.delayReasonHistory', { count: s.delayReasons!.length })}
+                        </summary>
+                        <ul className="list-disc ps-4">
+                          {s.delayReasons!.map((d) => (
+                            <li key={d._id}>
+                              {d.reason} — {t(`sales.requests.holders.${d.responsibleDepartment ?? 'sales'}`)}{' '}
+                              · {d.byEmail} · {formatDateTime(d.at)}
+                            </li>
+                          ))}
+                        </ul>
+                      </details>
                     )}
                   </span>
                 )}

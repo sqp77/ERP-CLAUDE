@@ -33,8 +33,15 @@ export interface StageRow {
   durationMs?: number;
   overdue: boolean;
   delayReason?: string;
+  responsibleDepartment?: RequestHolder;
+  delayReasons?: {
+    _id: string;
+    reason: string;
+    responsibleDepartment?: RequestHolder;
+    byEmail?: string;
+    at: string;
+  }[];
   reason?: string;
-  meta?: { responsibleDepartment?: RequestHolder };
 }
 export interface ActionDef {
   code: string;

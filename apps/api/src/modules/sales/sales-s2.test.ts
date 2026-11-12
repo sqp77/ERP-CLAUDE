@@ -272,7 +272,9 @@ describe('Sales S2 — service requests and the route between departments [SAL �
       .set(auth(t.mgr))
       .send({ delayReason: 'انتظار مركبة', responsibleDepartment: 'ops' });
     expect(reasoned.status).toBe(200);
-    expect(await StageLog.exists({ _id: late._id, delayReason: 'انتظار مركبة' })).toBeTruthy();
+    expect(reasoned.body.stageLog.find((s: { _id: string }) => s._id === late._id).delayReason).toBe(
+      'انتظار مركبة',
+    );
     expect((await move(t.omar, id, 'ops_start')).status).toBe(200);
     const report = await upload(t.omar, 'delivery.pdf');
     const done = await move(t.omar, id, 'ops_complete', {
@@ -595,5 +597,211 @@ describe('Sales S2 — service requests and the route between departments [SAL �
       'تم إيقاف المشروع',
     );
     expect((await move(t.mgr, id, 'resume')).body.state).toBe('new');
+  });
+});
+
+describe('S2 approval fixes [DECISIONS §20]', () => {
+  it('1: details and route flags are locked once the request left Sales or Finance approved; «إعادة إلى المبيعات للتعديل» clears the decision so Finance approves again', async () => {
+    const { t, customerId } = await setup();
+    const r = await request(app())
+      .post('/api/v1/sales/requests')
+      .set(auth(t.reem))
+      .send({ type: 'containerSale', customerId, details: { count: 10, agreedPriceHalalas: 1_000_00 } });
+    const id = r.body._id as string;
+    // Editable while Sales holds it.
+    expect(
+      (
+        await request(app())
+          .patch(`/api/v1/sales/requests/${id}`)
+          .set(auth(t.reem))
+          .send({ details: { count: 12 } })
+      ).status,
+    ).toBe(200);
+    for (const step of ['start_quote', 'send_quote', 'customer_approve', 'send_to_procurement'])
+      await move(t.reem, id, step);
+    // At Procurement / Finance: refused (the title alone is still editable, it is not route data).
+    const atProc = await request(app())
+      .patch(`/api/v1/sales/requests/${id}`)
+      .set(auth(t.reem))
+      .send({ details: { agreedPriceHalalas: 5_00 } });
+    expect(atProc.status).toBe(409);
+    expect(atProc.body.error.details.code).toBe('edit_locked');
+    expect(
+      (
+        await request(app())
+          .patch(`/api/v1/sales/requests/${id}`)
+          .set(auth(t.reem))
+          .send({ needsOperations: false })
+      ).status,
+    ).toBe(409);
+    expect(
+      (
+        await request(app())
+          .patch(`/api/v1/sales/requests/${id}`)
+          .set(auth(t.reem))
+          .send({ title: 'عنوان جديد' })
+      ).status,
+    ).toBe(200);
+    await move(t.talal, id, 'procurement_to_finance');
+    expect(
+      (
+        await request(app())
+          .patch(`/api/v1/sales/requests/${id}`)
+          .set(auth(t.reem))
+          .send({ details: { count: 99 } })
+      ).status,
+    ).toBe(409);
+    const approved = await move(t.abdulaziz, id, 'finance_approve');
+    expect(approved.body.finance.decision).toBe('approved');
+    // After approval, even with Procurement executing: still refused.
+    expect(
+      (
+        await request(app())
+          .patch(`/api/v1/sales/requests/${id}`)
+          .set(auth(t.reem))
+          .send({ details: { agreedPriceHalalas: 5_00 } })
+      ).status,
+    ).toBe(409);
+    // Back to Sales (reason required): the decision is cleared, the edit works, and Finance must approve again.
+    expect((await move(t.reem, id, 'return_to_sales')).status).toBe(400);
+    const back = await move(t.reem, id, 'return_to_sales', { reason: 'تغيّر العدد المطلوب' });
+    expect(back.status, JSON.stringify(back.body)).toBe(200);
+    expect(back.body.state).toBe('customer_approved');
+    expect(back.body.holder).toBe('sales');
+    expect(back.body.finance.decision).toBeUndefined();
+    const edited = await request(app())
+      .patch(`/api/v1/sales/requests/${id}`)
+      .set(auth(t.reem))
+      .send({ details: { count: 60, agreedPriceHalalas: 15_000_00 } });
+    expect(edited.status).toBe(200);
+    expect(edited.body.details.count).toBe(60);
+    await move(t.reem, id, 'send_to_procurement');
+    await move(t.talal, id, 'procurement_to_finance');
+    const again = await request(app()).get(`/api/v1/sales/requests/${id}`).set(auth(t.abdulaziz));
+    expect(again.body.state).toBe('at_finance');
+    expect(again.body.actions.map((a: { code: string }) => a.code)).toContain('finance_approve');
+    expect((await move(t.abdulaziz, id, 'finance_approve')).body.finance.decision).toBe('approved');
+    // The stage log shows the detour.
+    const states = (
+      await request(app()).get(`/api/v1/sales/requests/${id}`).set(auth(t.reem))
+    ).body.stageLog.map((s: { toState: string }) => s.toState);
+    expect(states.filter((x: string) => x === 'at_finance')).toHaveLength(2);
+    expect(states).toContain('customer_approved');
+  });
+
+  it('2: delay reasons are append-only rows; the stage-log entry is never rewritten; the latest reason and the history are returned', async () => {
+    const { t, customerId } = await setup();
+    const r = await request(app())
+      .post('/api/v1/sales/requests')
+      .set(auth(t.reem))
+      .send({
+        type: 'containerRental',
+        customerId,
+        details: { containerCount: 1, deliveryZone: 'inside_eastern' },
+      });
+    const id = r.body._id as string;
+    await move(t.reem, id, 'send_to_operations');
+    await SalesRequest.updateOne(
+      { _id: id },
+      {
+        $set: {
+          stateEnteredAt: new Date('2026-11-01T07:00:00.000Z'),
+          dueAt: new Date('2026-11-04T07:00:00.000Z'),
+        },
+      },
+    );
+    await move(t.omar, id, 'ops_schedule', { payload: { scheduledVisitAt: '2026-11-20T06:00:00.000Z' } });
+    const detail = await request(app()).get(`/api/v1/sales/requests/${id}`).set(auth(t.khalid));
+    const late = detail.body.stageLog.find((s: { overdue: boolean }) => s.overdue);
+    const before = await StageLog.findById(late._id).lean();
+    await request(app())
+      .post(`/api/v1/sales/requests/${id}/stage-log/${late._id}/delay-reason`)
+      .set(auth(t.khalid))
+      .send({ delayReason: 'انتظار مركبة', responsibleDepartment: 'ops' });
+    const second = await request(app())
+      .post(`/api/v1/sales/requests/${id}/stage-log/${late._id}/delay-reason`)
+      .set(auth(t.mgr))
+      .send({ delayReason: 'العميل أجّل الموعد', responsibleDepartment: 'sales' });
+    expect(second.status).toBe(200);
+    const row = second.body.stageLog.find((s: { _id: string }) => s._id === late._id);
+    expect(row.delayReason).toBe('العميل أجّل الموعد');
+    expect(row.responsibleDepartment).toBe('sales');
+    expect(row.delayReasons.map((d: { reason: string }) => d.reason)).toEqual([
+      'انتظار مركبة',
+      'العميل أجّل الموعد',
+    ]);
+    const after = await StageLog.findById(late._id).lean();
+    expect(after).toEqual(before); // untouched
+    const { StageDelayReason } = await import('../../core/workflow/model');
+    expect(await StageDelayReason.countDocuments({ stageLogId: late._id })).toBe(2);
+  });
+
+  it('3: the overdue notification names the department in Arabic', async () => {
+    const { t, u, customerId } = await setup();
+    const r = await request(app())
+      .post('/api/v1/sales/requests')
+      .set(auth(t.reem))
+      .send({ type: 'containerSale', customerId, details: { count: 1 } });
+    const id = r.body._id as string;
+    for (const step of ['start_quote', 'send_quote', 'customer_approve', 'send_to_procurement'])
+      await move(t.reem, id, step);
+    await SalesRequest.updateOne(
+      { _id: id },
+      {
+        $set: {
+          stateEnteredAt: new Date('2026-11-01T07:00:00.000Z'),
+          dueAt: new Date('2026-11-04T07:00:00.000Z'),
+        },
+      },
+    );
+    await Notification.deleteMany({});
+    expect(await runRequestOverdueAlerts(new Date('2026-11-05T07:00:00.000Z'))).toEqual({ notified: 1 });
+    const n = await Notification.findOne({ userId: u.nasser._id, type: 'sales.request.overdue' }).lean();
+    expect(n!.bodyAr).toContain('(المشتريات)');
+    expect(n!.bodyAr).not.toContain('procurement');
+  });
+
+  it('4: linking an opportunity requires access to it and the same customer', async () => {
+    const { t, customerId } = await setup();
+    const other = await request(app())
+      .post('/api/v1/crm/customers')
+      .set(auth(t.majed))
+      .send({ nameAr: 'جهة ماجد', source: 'referrals', phone: '0509998887' });
+    const oppOther = await request(app())
+      .post('/api/v1/sales/opportunities')
+      .set(auth(t.majed))
+      .send({ customerId: other.body._id, title: 'فرصة ماجد' });
+    const oppMine = await request(app())
+      .post('/api/v1/sales/opportunities')
+      .set(auth(t.reem))
+      .send({ customerId, title: 'فرصة ريم' });
+    const r = await request(app())
+      .post('/api/v1/sales/requests')
+      .set(auth(t.reem))
+      .send({ type: 'scrap', customerId, details: {} });
+    const id = r.body._id as string;
+    expect(
+      (
+        await request(app())
+          .patch(`/api/v1/sales/requests/${id}`)
+          .set(auth(t.reem))
+          .send({ opportunityId: oppOther.body._id })
+      ).status,
+    ).toBe(400);
+    // The manager sees majed's opportunity but it belongs to another customer.
+    expect(
+      (
+        await request(app())
+          .patch(`/api/v1/sales/requests/${id}`)
+          .set(auth(t.mgr))
+          .send({ opportunityId: oppOther.body._id })
+      ).status,
+    ).toBe(400);
+    const ok = await request(app())
+      .patch(`/api/v1/sales/requests/${id}`)
+      .set(auth(t.reem))
+      .send({ opportunityId: oppMine.body._id });
+    expect(ok.status).toBe(200);
+    expect(ok.body.opportunityId).toBe(oppMine.body._id);
   });
 });

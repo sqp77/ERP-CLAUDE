@@ -1712,7 +1712,9 @@
         "markDone": "تمت",
         "markNotDone": "لم تتم",
         "markTransferred": "تسجيل التحويل"
-      }
+      },
+      "updateDelayReason": "تحديث سبب التأخر",
+      "delayReasonHistory": "سجل الأسباب ({{count}})"
     }
   },
   "cs": {

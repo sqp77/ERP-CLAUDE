@@ -3,7 +3,7 @@ import {
   CLOSING_TRANSITIONS,
   DETAILS_SCHEMAS,
   FINAL_STATES,
-  REQUEST_HOLDERS,
+  REQUEST_HOLDER_AR,
   SALES_REQUEST_STATE_AR,
   SALES_SERVICE_TYPE_AR,
   STATE_HOLDER,
@@ -38,7 +38,7 @@ import {
   initWorkflow,
   stageHistory,
 } from '../../core/workflow/engine';
-import { StageLog } from '../../core/workflow/model';
+import { StageDelayReason, StageLog } from '../../core/workflow/model';
 import { CalendarEvent } from '../../core/calendar/model';
 import { createTask } from '../../core/tasks/service';
 import { Task } from '../../core/tasks/model';
@@ -66,6 +66,8 @@ import {
   type SalesRequestDoc,
 } from './requests.model';
 import { workflowTypeFor } from './workflows';
+import { Opportunity } from './model';
+import { canAccessOpportunity } from './service';
 
 const isManagerScope = (scope: string) => scope === 'department' || scope === 'all';
 const HOLDER_CODE: Record<RequestHolder, string> = {
@@ -262,12 +264,25 @@ export async function createRequest(req: AuthedRequest, input: CreateSalesReques
   return doc;
 }
 
+export const EDIT_LOCKED =
+  'لا يمكن تعديل الطلب إلا وهو لدى المبيعات وقبل اعتماده ماليًا — استخدم «إعادة إلى المبيعات للتعديل»';
+
+/**
+ * Edits to the service data and the route flags (S2 approval fix 1): only while Sales holds the record and before
+ * Finance approved it; afterwards the owner fires «إعادة إلى المبيعات للتعديل», which clears the decision. The write is
+ * conditional on the loaded state (409 on a race with a transition).
+ */
 export async function updateRequest(req: AuthedRequest, id: string, input: Record<string, unknown>) {
   const r = await loadFor(req, id);
   const rel = await relationsFor(req, r);
   if (!rel.includes('owner') && !rel.includes('sales_manager'))
     throw forbidden('تعديل بيانات الطلب من صلاحيات المبيعات');
   if ((FINAL_STATES as readonly string[]).includes(r.state)) throw conflict('الطلب مغلق');
+  const structural = ['details', 'needsProcurement', 'needsFinanceApproval', 'needsOperations'].some(
+    (k) => input[k] !== undefined,
+  );
+  if (structural && (r.holder !== 'sales' || r.finance?.decision === 'approved'))
+    throw conflict(EDIT_LOCKED, { code: 'edit_locked' });
   const set: Record<string, unknown> = { lastActivityAt: new Date() };
   if (input.details !== undefined)
     set.details = parseDetails(r.type as SalesServiceType, {
@@ -284,7 +299,20 @@ export async function updateRequest(req: AuthedRequest, id: string, input: Recor
     'photoIds',
   ])
     if (input[k] !== undefined) set[k] = input[k];
-  if (input.opportunityId !== undefined) set.opportunityId = input.opportunityId;
+  if (input.opportunityId !== undefined) {
+    // S2 approval fix 4: only an opportunity the caller may see, and of the same customer.
+    if (input.opportunityId !== null) {
+      const oid = String(input.opportunityId);
+      if (!(await canAccessOpportunity(req, oid)))
+        throw badRequest('الفرصة البيعية غير موجودة', [{ path: 'opportunityId', message: 'غير موجودة' }]);
+      const opp = await Opportunity.findById(oid).select('customerId').lean();
+      if (!opp || String(opp.customerId) !== String(r.customerId))
+        throw badRequest('الفرصة البيعية لعميل آخر', [
+          { path: 'opportunityId', message: 'يجب أن تكون للعميل نفسه' },
+        ]);
+    }
+    set.opportunityId = input.opportunityId;
+  }
   if (r.type === 'assetReturn' && (set.details as Record<string, unknown> | undefined)?.nextConversationAt)
     set['assetReturn.nextConversationAt'] = new Date(
       (set.details as Record<string, string>).nextConversationAt,
@@ -293,7 +321,12 @@ export async function updateRequest(req: AuthedRequest, id: string, input: Recor
   await withTransaction(async (session) => {
     const files = [...((input.attachmentIds as string[]) ?? []), ...((input.photoIds as string[]) ?? [])];
     if (files.length) await claimAttachments(files, 'sales_request', id, req.auth.user._id, session);
-    await SalesRequest.updateOne({ _id: id }, { $set: set }, { session });
+    const written = await SalesRequest.updateOne(
+      { _id: id, state: r.state, deletedAt: null },
+      { $set: set },
+      { session },
+    );
+    if (!written.matchedCount) throw conflict('تغيّرت حالة الطلب أثناء التعديل، حدّث الصفحة وأعد المحاولة');
     await SalesRequestAction.create(
       [
         {
@@ -393,15 +426,19 @@ export async function getRequest(req: AuthedRequest, id: string) {
   const r = await loadFor(req, id);
   const def = await getWorkflow(r.workflowType);
   const rel = await relationsFor(req, r);
-  const [actions, stages, inspections, assessments, scrapTasks, customer, names] = await Promise.all([
-    SalesRequestAction.find({ requestId: r._id }).sort({ at: 1 }).lean(),
-    stageHistory('sales_request', String(r._id)),
-    r.type === 'containerRental' ? RentalInspection.find({ requestId: r._id }).sort({ at: 1 }).lean() : [],
-    r.type === 'scrap' ? ScrapAssessment.find({ requestId: r._id }).sort({ at: 1 }).lean() : [],
-    r.type === 'scrap' ? ScrapTask.find({ requestId: r._id }).sort({ createdAt: 1 }).lean() : [],
-    customerLabels([r.customerId]),
-    userNames([r.ownerUserId, r.createdByUserId]),
-  ]);
+  const [actions, stages, delayRows, inspections, assessments, scrapTasks, customer, names] =
+    await Promise.all([
+      SalesRequestAction.find({ requestId: r._id }).sort({ at: 1 }).lean(),
+      stageHistory('sales_request', String(r._id)),
+      StageDelayReason.find({ recordType: 'sales_request', recordId: String(r._id) })
+        .sort({ at: 1 })
+        .lean(),
+      r.type === 'containerRental' ? RentalInspection.find({ requestId: r._id }).sort({ at: 1 }).lean() : [],
+      r.type === 'scrap' ? ScrapAssessment.find({ requestId: r._id }).sort({ at: 1 }).lean() : [],
+      r.type === 'scrap' ? ScrapTask.find({ requestId: r._id }).sort({ createdAt: 1 }).lean() : [],
+      customerLabels([r.customerId]),
+      userNames([r.ownerUserId, r.createdByUserId]),
+    ]);
   const taskDocs = scrapTasks.length
     ? await Task.find({ _id: { $in: scrapTasks.map((t) => t.taskId) } })
         .select('number status title')
@@ -448,7 +485,22 @@ export async function getRequest(req: AuthedRequest, id: string) {
       ...a,
       actorName: a.actorUserId ? assigneeNames.get(String(a.actorUserId)) : undefined,
     })),
-    stageLog: stages,
+    stageLog: stages.map((st) => {
+      const mine = delayRows.filter((d) => String(d.stageLogId) === String(st._id));
+      const latest = mine.at(-1);
+      return {
+        ...st,
+        delayReason: latest?.reason,
+        responsibleDepartment: latest?.responsibleCode,
+        delayReasons: mine.map((d) => ({
+          _id: d._id,
+          reason: d.reason,
+          responsibleDepartment: d.responsibleCode,
+          byEmail: d.byEmail,
+          at: d.at,
+        })),
+      };
+    }),
     inspections,
     assessments,
     scrapTasks: scrapTasks.map((t) => ({
@@ -625,6 +677,7 @@ export async function transitionRequest(req: AuthedRequest, id: string, input: S
     set['details.lastContactAt'] = now.toISOString();
     if (code === 'decline') set['assetReturn.nonCooperationReason'] = input.reason;
   }
+  const unsetFinance = code === 'return_to_sales';
   if (code in CLOSING_TRANSITIONS) {
     set.closingOutcome = CLOSING_TRANSITIONS[code];
     set.closingNote = input.reason ?? input.note;
@@ -675,6 +728,9 @@ export async function transitionRequest(req: AuthedRequest, id: string, input: S
         const $set = { ...fields, ...set, holder: holderTo, overdueNotifiedFor: null };
         const update: Record<string, unknown> = { $set, $addToSet: { holdersInvolved: holderTo } };
         if (Object.keys(push).length) update.$push = push;
+        // Back to Sales for a change: the Finance decision no longer stands (S2 approval fix 1).
+        if (unsetFinance)
+          update.$unset = { 'finance.decision': 1, 'finance.decidedAt': 1, 'finance.decidedByUserId': 1 };
         doc = await SalesRequest.findOneAndUpdate({ _id: r._id, state: fromState, deletedAt: null }, update, {
           new: true,
           session,
@@ -890,32 +946,34 @@ export async function setDelayReason(
   const rel = await relationsFor(req, r);
   if (!rel.includes('owner') && !rel.includes('sales_manager') && !rel.some((x) => x.endsWith('_manager')))
     throw forbidden();
-  const row = await StageLog.findOne({ _id: entryId, recordType: 'sales_request', recordId: String(r._id) });
+  const row = await StageLog.findOne({
+    _id: entryId,
+    recordType: 'sales_request',
+    recordId: String(r._id),
+  }).lean();
   if (!row) throw notFound();
   if (!row.overdue) throw badRequest('هذه المرحلة لم تتجاوز مهلتها');
+  // Append-only (S2 approval fix 2): a new row per reason; the stage-log entry is never rewritten.
   const deptId = await departmentIdByCode(HOLDER_CODE[input.responsibleDepartment]);
-  await StageLog.updateOne(
-    { _id: row._id },
-    {
-      $set: {
-        delayReason: input.delayReason,
-        departmentId: deptId ?? undefined,
-        meta: {
-          ...(row.meta ?? {}),
-          responsibleDepartment: input.responsibleDepartment,
-          byUserId: String(req.auth.user._id),
-        },
-      },
-    },
-  );
+  const doc = await StageDelayReason.create({
+    recordType: 'sales_request',
+    recordId: String(r._id),
+    stageLogId: row._id,
+    reason: input.delayReason,
+    responsibleDepartmentId: deptId ?? undefined,
+    responsibleCode: input.responsibleDepartment,
+    byUserId: String(req.auth.user._id),
+    byEmail: req.auth.user.email,
+  });
   await recordAudit(actorFrom(req), {
-    action: 'update',
-    resource: 'sales.requests',
-    resourceId: id,
-    meta: {
-      delayReason: input.delayReason,
-      responsibleDepartment: input.responsibleDepartment,
+    action: 'create',
+    resource: 'sales.requests.delay_reasons',
+    resourceId: String(doc._id),
+    after: {
+      requestId: id,
       stageLogId: entryId,
+      reason: input.delayReason,
+      responsibleDepartment: input.responsibleDepartment,
     },
   });
   return getRequest(req, id);
@@ -1197,7 +1255,7 @@ export async function runRequestOverdueAlerts(now = new Date()): Promise<{ notif
     await notify({
       userIds: [...new Set([...(await salesSide(r)), ...holderIds])],
       type: 'sales.request.overdue',
-      bodyAr: `${r.number} — ${r.title}: ${SALES_REQUEST_STATE_AR[r.state]} (${REQUEST_HOLDERS.includes(holder) ? holder : ''})`,
+      bodyAr: `${r.number} — ${r.title}: ${SALES_REQUEST_STATE_AR[r.state]} (${REQUEST_HOLDER_AR[holder]})`,
       link: `/sales/requests/${r._id}`,
       data: { requestId: String(r._id), state: r.state },
     });
