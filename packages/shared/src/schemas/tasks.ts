@@ -3,7 +3,13 @@ import { PRIORITIES, TASK_STATUSES } from '../enums';
 import { objectIdSchema } from './common';
 
 /** Record types a task may link to [EP §10 "رابط إلى مصدرها"]; customers etc. come with their modules. */
-export const TASK_SOURCE_TYPES = ['hr_request', 'ticket'] as const;
+export const TASK_SOURCE_TYPES = [
+  'hr_request',
+  'ticket',
+  'customer',
+  'opportunity',
+  'sales_request',
+] as const;
 export type TaskSourceType = (typeof TASK_SOURCE_TYPES)[number];
 
 /**

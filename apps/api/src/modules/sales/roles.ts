@@ -18,6 +18,7 @@ export const SALES_ROLES: RoleDefinition[] = [
       { resource: 'crm.customers', actions: ['view', 'create', 'edit'], scope: 'own' },
       { resource: 'crm.leads', actions: ['view', 'edit'], scope: 'own' },
       { resource: 'sales.opportunities', actions: ['view', 'create', 'edit'], scope: 'own' },
+      { resource: 'sales.requests', actions: ['view', 'create', 'edit'], scope: 'own' },
       { resource: 'tags', actions: ['view'], scope: 'all' },
       { resource: 'calendar', actions: ['view', 'create', 'edit'], scope: 'own' },
       { resource: 'comments', actions: ['view', 'create'], scope: 'own' },
@@ -39,6 +40,11 @@ export const SALES_ROLES: RoleDefinition[] = [
       { resource: 'crm.leads', actions: ['view', 'create', 'edit', 'approve'], scope: 'department' },
       {
         resource: 'sales.opportunities',
+        actions: ['view', 'create', 'edit', 'approve', 'export'],
+        scope: 'department',
+      },
+      {
+        resource: 'sales.requests',
         actions: ['view', 'create', 'edit', 'approve', 'export'],
         scope: 'department',
       },

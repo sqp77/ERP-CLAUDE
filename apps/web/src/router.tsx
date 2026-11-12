@@ -48,6 +48,9 @@ import { CustomerPage } from './pages/sales/CustomerPage';
 import { PipelinePage } from './pages/sales/PipelinePage';
 import { LeadsPage } from './pages/sales/LeadsPage';
 import { ReferLeadPage } from './pages/cs/ReferLeadPage';
+import { RequestsPage } from './pages/sales/requests/RequestsPage';
+import { NewRequestPage } from './pages/sales/requests/NewRequestPage';
+import { RequestDetailPage as SalesRequestDetailPage } from './pages/sales/requests/RequestDetailPage';
 
 export const router = createBrowserRouter([
   {
@@ -148,8 +151,13 @@ export const router = createBrowserRouter([
                   { path: '/sales/customers/:id', element: <CustomerPage /> },
                   { path: '/sales/pipeline', element: <PipelinePage /> },
                   { path: '/sales/leads', element: <LeadsPage /> },
+                  { path: '/sales/requests/new/:type', element: <NewRequestPage /> },
                 ],
               },
+              // Requests are visible to Sales and to the receiving departments; the API decides per record.
+              { path: '/sales/requests', element: <RequestsPage /> },
+              { path: '/sales/requests/:id', element: <SalesRequestDetailPage /> },
+              { path: '/incoming', element: <RequestsPage incoming /> },
               { path: '/cs/refer-lead', element: <ReferLeadPage /> },
               {
                 element: <RequirePermission resource="holidays" action="edit" />,

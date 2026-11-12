@@ -21,3 +21,4 @@ export * from './schemas/news';
 export * from './schemas/hrReports';
 export * from './schemas/crm';
 export * from './schemas/sales';
+export * from './schemas/salesRequests';

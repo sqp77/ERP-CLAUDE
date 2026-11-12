@@ -4,6 +4,7 @@ import { DEFAULT_TICKET_DEPARTMENT_FIELDS, ticketDepartmentFieldsSchema } from '
 import { DEFAULT_REPORT_TYPES, reportTypesSchema } from './schemas/hrReports';
 import { DEFAULT_ORGANIZATION_TYPES } from './schemas/crm';
 import { DEFAULT_FACILITY_SIZES, DEFAULT_LOSS_REASONS } from './schemas/sales';
+import { SALES_LIST_KEYS } from './schemas/salesRequests';
 
 /**
  * Settings registry: everything the specs want configurable lives here with a default and a schema
@@ -58,6 +59,28 @@ export const SETTING_DEFINITIONS = {
     group: 'sales',
     schema: z.array(z.string().trim().min(1).max(120)).min(1).max(50),
     default: DEFAULT_LOSS_REASONS, // provisional (DECISIONS §20 Q7)
+  }),
+  'sales.lists': def({
+    key: 'sales.lists',
+    labelAr:
+      'قوائم طلبات المبيعات (أنواع الحاويات وأحجامها وألوانها، أنواع العقود، أنواع النفايات والخدمة، مواد الإتلاف، تصنيفات السكراب وأنواع مهامه، مصادر المناقصات)',
+    descriptionAr:
+      'تبدأ فارغة قابلة للتعديل حتى يرسلها المالك (DECISIONS §20 Q7)؛ النماذج تقبل نصًا حرًا عندما تكون القائمة فارغة',
+    group: 'sales',
+    schema: z.record(z.enum(SALES_LIST_KEYS), z.array(z.string().trim().min(1).max(120)).max(100)),
+    default: Object.fromEntries(SALES_LIST_KEYS.map((k) => [k, [] as string[]])) as Record<
+      (typeof SALES_LIST_KEYS)[number],
+      string[]
+    >,
+  }),
+  'sales.scrapTransferRoles': def({
+    key: 'sales.scrapTransferRoles',
+    labelAr: 'الأدوار المخوّلة بتسجيل «حالة تحويل المبلغ» في السكراب',
+    descriptionAr:
+      'إلى أن يجيب المالك عن Q16 (DECISIONS §20): التحويل حالة مع إثبات إلزامي ويُشعَر القسم المالي [OPS §2.2]',
+    group: 'sales',
+    schema: z.array(z.string()).min(1),
+    default: ['sales_manager', 'finance_manager', 'finance_staff'],
   }),
   'sales.followUpReminderHours': def({
     key: 'sales.followUpReminderHours',

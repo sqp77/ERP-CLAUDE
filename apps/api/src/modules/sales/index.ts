@@ -9,6 +9,8 @@ import {
   registerOwnerChangeHook,
 } from '../crm/service';
 import { Opportunity } from './model';
+import { SalesRequest } from './requests.model';
+import { canAccessRequest, runAssetReturnReminders, runRequestOverdueAlerts } from './requests.service';
 import {
   canAccessOpportunity,
   createOpportunityIn,
@@ -77,4 +79,32 @@ export function registerSalesModule(): void {
     else await Opportunity.updateMany({ tags: from }, { $pull: { tags: from } });
   });
   registerJob('sales.followups', (now) => runOpportunityFollowUps(now), 'frequent');
+  // Service requests [SAL §5, §6]: files and comments hang on the request; tasks and calendar events link to it.
+  registerRecordAccess('sales_request', (req, id) => canAccessRequest(req, id));
+  const resolveRequest = async (idOrNumber: string) => {
+    const r = await SalesRequest.findOne({
+      deletedAt: null,
+      $or: [
+        ...(/^[0-9a-f]{24}$/i.test(idOrNumber) ? [{ _id: idOrNumber }] : []),
+        { number: idOrNumber.toUpperCase() },
+      ],
+    })
+      .select('number title')
+      .lean();
+    return r ? { id: String(r._id), label: `${r.number} — ${r.title}` } : null;
+  };
+  registerRecordResolver('sales_request', resolveRequest);
+  registerTaskSourceResolver('sales_request', resolveRequest);
+  registerTagRenamer(async (scope, from, to) => {
+    if (scope !== 'sales') return;
+    if (to)
+      await SalesRequest.updateMany(
+        { tags: from },
+        { $set: { 'tags.$[t]': to } },
+        { arrayFilters: [{ t: from }] },
+      );
+    else await SalesRequest.updateMany({ tags: from }, { $pull: { tags: from } });
+  });
+  registerJob('sales.requests.overdue', (now) => runRequestOverdueAlerts(now), 'frequent');
+  registerJob('sales.assetreturn.reminders', (now) => runAssetReturnReminders(now), 'frequent');
 }

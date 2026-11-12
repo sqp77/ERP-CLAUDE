@@ -64,6 +64,12 @@ export function AppShell() {
     queryFn: () => get<{ canReferLeads: boolean }>('/crm/meta'),
     staleTime: 5 * 60_000,
   });
+  // «الطلبات الواردة من المبيعات»: members of Procurement, Finance and Operations [SAL §3 ملاحظة, §19].
+  const reqMeta = useQuery({
+    queryKey: ['sales', 'requests', 'meta'],
+    queryFn: () => get<{ incomingHolders: string[] }>('/sales/requests/meta'),
+    staleTime: 5 * 60_000,
+  });
   const salesItems = [
     { to: '/sales', label: t('nav.salesHome'), icon: HandCoins, show: can('crm.customers', 'view') },
     {
@@ -79,6 +85,18 @@ export function AppShell() {
       show: can('sales.opportunities', 'view'),
     },
     { to: '/sales/leads', label: t('nav.leads'), icon: Inbox, show: can('crm.leads', 'view') },
+    {
+      to: '/sales/requests',
+      label: t('nav.salesRequests'),
+      icon: ClipboardList,
+      show: can('sales.requests', 'view'),
+    },
+    {
+      to: '/incoming',
+      label: t('nav.incomingFromSales'),
+      icon: Inbox,
+      show: !!reqMeta.data?.incomingHolders.length,
+    },
     {
       to: '/cs/refer-lead',
       label: t('nav.referLead'),

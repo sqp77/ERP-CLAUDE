@@ -225,6 +225,7 @@ export const CORE_ROLES: RoleDefinition[] = [
       { resource: 'crm.customers', actions: ['view'], scope: 'all' },
       { resource: 'crm.leads', actions: ['view'], scope: 'all' },
       { resource: 'sales.opportunities', actions: ['view'], scope: 'all' },
+      { resource: 'sales.requests', actions: ['view'], scope: 'all' },
       { resource: 'tags', actions: ['view'], scope: 'all' },
     ],
     fieldRules: [HIDE_SENSITIVE],

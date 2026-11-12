@@ -13,6 +13,7 @@ const ROUTES: Record<string, (id: string) => string> = {
   customer: (id) => `/sales/customers/${id}`,
   opportunity: (id) => `/sales/pipeline?opportunity=${id}`,
   lead: (id) => `/sales/leads?lead=${id}`,
+  sales_request: (id) => `/sales/requests/${id}`,
 };
 
 export function recordLink(type: string | undefined, id: string | undefined): string | undefined {

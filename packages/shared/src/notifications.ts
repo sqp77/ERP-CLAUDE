@@ -45,6 +45,18 @@ export const NOTIFICATION_TYPES = [
   'crm.owner_changed', // 16 تغيير الموظف المسؤول عن العميل أو الطلب
   'crm.lead.overdue', // the 24-hour rule [SAL §3, DECISIONS §20 Q13]
   'sales.opportunity.assigned',
+  // Sales requests [SAL §14 7–10, §19, OPS §2.2]
+  'sales.request.to_procurement', // 7 وصول طلب جديد إلى المشتريات
+  'sales.request.finance_decided', // 8 اعتماد أو رفض الطلب من المالية
+  'sales.request.procurement_updated', // 9 تحديث حالة الطلب من المشتريات
+  'sales.request.operations_completed', // 10 اكتمال التنفيذ من التشغيل
+  'sales.request.to_finance',
+  'sales.request.to_operations',
+  'sales.request.updated',
+  'sales.request.closed',
+  'sales.request.overdue',
+  'sales.scrap.transfer',
+  'sales.assetreturn.reminder',
   'generic',
 ] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
@@ -91,5 +103,16 @@ export const NOTIFICATION_TITLES_AR: Record<NotificationType, string> = {
   'crm.owner_changed': 'تغيير الموظف المسؤول عن العميل أو الطلب',
   'crm.lead.overdue': 'عميل محتمل لم يُسجَّل خلال المهلة',
   'sales.opportunity.assigned': 'إسناد فرصة بيعية إليك',
+  'sales.request.to_procurement': 'وصول طلب جديد إلى المشتريات',
+  'sales.request.finance_decided': 'اعتماد أو رفض الطلب من المالية',
+  'sales.request.procurement_updated': 'تحديث حالة الطلب من المشتريات',
+  'sales.request.operations_completed': 'اكتمال التنفيذ من التشغيل',
+  'sales.request.to_finance': 'وصول طلب من المبيعات إلى المالية',
+  'sales.request.to_operations': 'وصول طلب من المبيعات إلى التشغيل',
+  'sales.request.updated': 'تحديث على طلب مبيعات',
+  'sales.request.closed': 'إغلاق طلب مبيعات',
+  'sales.request.overdue': 'طلب مبيعات تجاوز مهلة المرحلة',
+  'sales.scrap.transfer': 'تحويل مبلغ سكراب',
+  'sales.assetreturn.reminder': 'موعد المحادثة القادمة لفرصة رجيع أصول',
   generic: 'إشعار',
 };

@@ -66,7 +66,9 @@
     "customers": "العملاء",
     "pipeline": "الفرص البيعية",
     "leads": "العملاء المحتملون",
-    "referLead": "إحالة عميل محتمل إلى المبيعات"
+    "referLead": "إحالة عميل محتمل إلى المبيعات",
+    "salesRequests": "الطلبات البيعية",
+    "incomingFromSales": "الطلبات الواردة من المبيعات"
   },
   "auth": {
     "email": "البريد الإلكتروني الوظيفي",
@@ -398,7 +400,18 @@
       "crm.followup.due": "قرب موعد متابعة العميل",
       "crm.owner_changed": "تغيير الموظف المسؤول عن العميل أو الطلب",
       "crm.lead.overdue": "عميل محتمل متأخر عن التسجيل",
-      "sales.opportunity.assigned": "إسناد فرصة بيعية"
+      "sales.opportunity.assigned": "إسناد فرصة بيعية",
+      "sales.request.to_procurement": "وصول طلب جديد إلى المشتريات",
+      "sales.request.finance_decided": "اعتماد أو رفض الطلب من المالية",
+      "sales.request.procurement_updated": "تحديث حالة الطلب من المشتريات",
+      "sales.request.operations_completed": "اكتمال التنفيذ من التشغيل",
+      "sales.request.to_finance": "وصول طلب من المبيعات إلى المالية",
+      "sales.request.to_operations": "وصول طلب من المبيعات إلى التشغيل",
+      "sales.request.updated": "تحديث على طلب مبيعات",
+      "sales.request.closed": "إغلاق طلب مبيعات",
+      "sales.request.overdue": "طلب مبيعات تجاوز مهلة المرحلة",
+      "sales.scrap.transfer": "تحويل مبلغ سكراب",
+      "sales.assetreturn.reminder": "موعد المحادثة القادمة (رجيع أصول)"
     },
     "today": "اليوم",
     "yesterday": "أمس",
@@ -1232,7 +1245,6 @@
     "services": {
       "title": "الخدمات",
       "all": "كل الخدمات",
-      "comingS2": "المرحلة الثانية",
       "containerSale": "بيع الحاويات",
       "sortingContract": "الفرز (عقود الخدمات)",
       "cleaningContract": "عقد النظافة (النفايات العامة)",
@@ -1350,7 +1362,8 @@
         "contacts": "الأشخاص المسؤولون",
         "opportunities": "الفرص البيعية",
         "data": "بيانات الجهة",
-        "history": "السجل"
+        "history": "السجل",
+        "requests": "الطلبات"
       },
       "events": {
         "created": "إنشاء",
@@ -1483,6 +1496,223 @@
       "hint": "يُضيف مدير القسم التصنيفات ويعدّلها؛ يختار الموظفون من القائمة",
       "pickHint": "اختر من التصنيفات المعرّفة؛ يضيف مدير القسم تصنيفات جديدة",
       "deleteConfirm": "سيُزال التصنيف من كل السجلات. هل تريد الحذف؟"
+    },
+    "serviceHints": {
+      "containerSale": "استقبال طلبات بيع الحاويات ومتابعة التسعير والتصنيع أو التوريد والتسليم",
+      "sortingContract": "استلام المنتجات والمواد المفروزة وفق العقود المبرمة مع العملاء",
+      "cleaningContract": "عقود النظافة وجمع النفايات العامة بتوفير حاوية أو جمع ونقل",
+      "destruction": "طلبات إتلاف المواد: تقييم وتسعير وتنفيذ بالتنسيق مع التشغيل والمالية",
+      "containerRental": "طلبات تأجير الحاويات تُحال مباشرة إلى التشغيل مع نماذج التوثيق الثلاثة",
+      "scrap": "فرص شراء أو بيع المواد الخردة بالاشتراك مع التشغيل والمشاريع",
+      "assetReturn": "فرص رجيع الأصول والمناقصات وحالة التعاون"
+    },
+    "cleaningModes": {
+      "provide_container": "توفير حاوية",
+      "direct_collection": "جمع مباشر"
+    },
+    "deliveryZones": {
+      "inside_eastern": "داخل المنطقة الشرقية",
+      "outside_eastern": "خارجها"
+    },
+    "scrapTransfer": {
+      "transferred": "تم التحويل",
+      "not_transferred": "لم يتم التحويل"
+    },
+    "scrapTaskStatus": {
+      "done": "تمت",
+      "not_done": "لم تتم"
+    },
+    "requestFields": {
+      "region": "المنطقة",
+      "containerType": "نوع الحاوية",
+      "size": "الحجم",
+      "count": "العدد",
+      "color": "اللون",
+      "dimensions": "المقاسات",
+      "requestDate": "تاريخ الطلب",
+      "agreedPriceHalalas": "السعر المتفق عليه (ر.س)",
+      "notes": "ملاحظات إضافية",
+      "contractType": "نوع العقد",
+      "materialTypes": "نوع المواد",
+      "expectedQuantityKg": "الكميات المتوقعة (كجم)",
+      "customerLocation": "موقع العميل",
+      "contractDurationMonths": "مدة العقد (أشهر)",
+      "pickupSchedule": "مواعيد الاستلام",
+      "serviceLocation": "موقع الخدمة",
+      "wasteType": "نوع النفايات",
+      "serviceType": "نوع الخدمة",
+      "mode": "توفير حاوية أو جمع مباشر",
+      "containerCount": "عدد الحاويات",
+      "visitCount": "عدد الزيارات",
+      "contractStart": "تاريخ بداية العقد",
+      "contractEnd": "تاريخ نهاية العقد",
+      "contactPersonName": "اسم الشخص المسؤول",
+      "contactPhone": "رقم التواصل",
+      "materialType": "نوع المواد",
+      "estimatedQuantityKg": "الكمية التقديرية (كجم)",
+      "address": "العنوان",
+      "containerSize": "حجم الحاوية",
+      "deliveryZone": "موقع التسليم",
+      "requestedDeliveryDate": "تاريخ التسليم المطلوب",
+      "rentalDurationDays": "مدة التأجير (أيام)",
+      "containerNumbers": "أرقام الحاويات",
+      "containerNumber": "رقم الحاوية",
+      "mobile": "رقم الجوال للتواصل",
+      "materialDescription": "وصف المواد",
+      "proposedPriceHalalas": "السعر المقترح (ر.س)",
+      "facilitySize": "حجم المنشأة",
+      "tenderSource": "مصدر الحصول على المناقصة",
+      "tenderInfo": "معلومات إضافية عن المناقصة",
+      "assetType": "نوع الأصول أو المواد",
+      "opportunityDate": "تاريخ الحصول على الفرصة",
+      "lastContactAt": "تاريخ آخر تواصل",
+      "nextConversationAt": "موعد المحادثة القادمة",
+      "supplierName": "المورد",
+      "deliveryDate": "تاريخ التسليم",
+      "scheduledVisitAt": "موعد الزيارة",
+      "visitDurationMinutes": "مدة الزيارة (دقائق)",
+      "postponedTo": "مؤجل إلى",
+      "estimatedWeightKg": "الوزن التقديري (كجم)",
+      "estimatedQuantity": "الكمية التقديرية",
+      "quantitiesKg": "الكميات (كجم)",
+      "weightsKg": "الأوزان (كجم)",
+      "actualWeightKg": "الوزن الفعلي (كجم)",
+      "transferredHalalas": "المبلغ المحوَّل (ر.س)",
+      "supplierQuoteAttachmentIds": "عرض المورد والمستندات",
+      "receiptFormAttachmentId": "نموذج الاستلام",
+      "purchaseDocumentAttachmentIds": "مستندات الشراء الصادرة من المالية",
+      "receiptReportAttachmentIds": "محاضر الاستلام",
+      "deliveryReportAttachmentIds": "محاضر التسليم",
+      "transferProofAttachmentId": "إثبات التحويل"
+    },
+    "requests": {
+      "title": "الطلبات البيعية",
+      "incomingTitle": "الطلبات الواردة من المبيعات",
+      "incomingSubtitle": "ما يحتاج إجراء قسمك الآن؛ فعّل «السجل» لعرض ما مرّ بقسمك سابقًا",
+      "newByService": "طلب جديد حسب الخدمة…",
+      "created": "تم إنشاء الطلب",
+      "submit": "إنشاء الطلب",
+      "serviceData": "بيانات الخدمة",
+      "attachments": "المرفقات",
+      "attach": "إرفاق مستند",
+      "photos": "الصور",
+      "customerHint": "كل طلب مرتبط بملف العميل؛ ابحث بالاسم أو الرقم",
+      "listEmptyHint": "القائمة فارغة حتى يعتمدها المالك — أدخل القيمة نصًا",
+      "commaSeparated": "افصل بين القيم بفاصلة",
+      "kg": "كجم",
+      "holder": "القسم المسؤول حاليًا",
+      "allHolders": "كل الأقسام",
+      "holders": {
+        "sales": "المبيعات",
+        "procurement": "المشتريات",
+        "finance": "المالية",
+        "ops": "التشغيل والمشاريع"
+      },
+      "view": "العرض",
+      "views": {
+        "all": "كل الطلبات",
+        "mine": "طلباتي"
+      },
+      "openOnly": "المفتوحة فقط",
+      "overdueOnly": "المتأخرة عن المهلة",
+      "includeHistory": "السجل: ما مرّ بقسمي",
+      "empty": "لا توجد طلبات",
+      "overdue": "متأخر عن المهلة",
+      "dueAt": "مهلة المرحلة",
+      "lastActivity": "آخر تحديث",
+      "actions": "الإجراءات المتاحة لك",
+      "actionDone": "تم تنفيذ الإجراء",
+      "willMoveTo": "سينتقل الطلب إلى:",
+      "reason": "السبب",
+      "note": "ملاحظة",
+      "notes": "ملاحظات",
+      "stageLog": "سجل انتقال الطلب بين الأقسام",
+      "stageOverdue": "تجاوزت المرحلة مهلتها",
+      "addDelayReason": "تسجيل سبب التأخر",
+      "delayReason": "سبب التأخر",
+      "responsibleDepartment": "الجهة المسؤولة عن التأخر",
+      "hours": "ساعة",
+      "panels": {
+        "procurement": "المشتريات",
+        "finance": "المالية",
+        "ops": "التشغيل والمشاريع",
+        "scrap": "السكراب"
+      },
+      "procurement": {
+        "supplier": "المورد",
+        "deliveryDate": "تاريخ التسليم",
+        "supplierQuotes": "عرض المورد والمستندات",
+        "receiptForm": "نموذج الاستلام"
+      },
+      "finance": {
+        "decision": "القرار",
+        "decisions": {
+          "approved": "معتمد",
+          "rejected": "مرفوض",
+          "needs_info": "يحتاج استكمال بيانات"
+        },
+        "rejectionReason": "سبب الرفض",
+        "infoRequest": "البيانات المطلوب استكمالها",
+        "purchaseDocuments": "مستندات الشراء"
+      },
+      "ops": {
+        "scheduledVisitAt": "موعد الزيارة",
+        "estimatedWeightKg": "الوزن التقديري",
+        "estimatedQuantity": "الكمية التقديرية",
+        "quantitiesKg": "الكميات",
+        "weightsKg": "الأوزان",
+        "receiptReports": "محاضر الاستلام",
+        "deliveryReports": "محاضر التسليم"
+      },
+      "scrap": {
+        "proposedPrice": "السعر المقترح",
+        "agreedPrice": "السعر المتفق عليه",
+        "actualWeightKg": "الوزن الفعلي",
+        "receiptReports": "محاضر الاستلام",
+        "transferStatus": "حالة تحويل المبلغ",
+        "transferProof": "إثبات التحويل"
+      },
+      "inspections": {
+        "title": "نماذج التوثيق",
+        "add": "نموذج توثيق جديد",
+        "empty": "لا توجد نماذج بعد",
+        "phase": "المرحلة",
+        "phases": {
+          "before_delivery": "نموذج قبل التسليم",
+          "after_delivery": "نموذج بعد التسليم",
+          "after_pickup": "نموذج بعد السحب"
+        },
+        "photos": "صور الحاوية",
+        "condition": "حالة الحاوية",
+        "signature": "توقيع أو إثبات الاستلام",
+        "signatureUpload": "رفع التوقيع أو الإثبات",
+        "containerHint": "نص حر حتى يُبنى سجل الحاويات في وحدة التشغيل"
+      },
+      "assessments": {
+        "title": "الزيارات والتقييم",
+        "add": "تسجيل تقييم",
+        "empty": "لا توجد تقييمات بعد",
+        "visitAt": "موعد الزيارة",
+        "result": "نتيجة التقييم",
+        "categories": "التصنيفات",
+        "nextAction": "الإجراء القادم"
+      },
+      "tasks": {
+        "title": "المهام",
+        "add": "رفع مهمة",
+        "empty": "لا توجد مهام",
+        "assignee": "الموظف المكلّف",
+        "assigneeHint": "موظف على رأس العمل في قسمك أو فريقك",
+        "taskType": "نوع المهمة",
+        "customersToContact": "عدد العملاء المطلوب التواصل معهم أو شراء السكراب منهم",
+        "assignedAt": "تاريخ التكليف",
+        "visitAt": "موعد الزيارة",
+        "submit": "رفع المهمة",
+        "taskStatus": "حالة المهمة",
+        "markDone": "تمت",
+        "markNotDone": "لم تتم",
+        "markTransferred": "تسجيل التحويل"
+      }
     }
   },
   "cs": {

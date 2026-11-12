@@ -38,10 +38,35 @@ Status legend: ✅ built · 🔜 planned slice · ⏸ waits for an owner answer 
 | §4.2 | القيمة المالية المتوقعة، الموظف المسؤول، تاريخ آخر تواصل، موعد المتابعة القادمة، إرفاق المستندات | `expectedValueHalalas`, `ownerUserId`, `lastContactAt`, `nextFollowUpAt`, `attachmentIds` (claimed on the opportunity) | `sales-s1.test.ts` | ✅ S1 (attachments UI on the opportunity dialog: S2 with the request forms) |
 | §4.2 | عرض جدولي أو لوحة مراحل (Kanban Board) | `PipelinePage` `?view=kanban|table` | web hygiene tests; manual RTL check | ✅ S1 |
 
-## §5 الخدمات والطلبات — 🔜 S2 (all of §5.1–§5.7; prefixes CSR/SRT/CLN/DST/RNT/SCR/ARO reserved in `NUMBER_PREFIXES`; `SALES_SERVICE_TYPES` labels verbatim already drive the «الخدمات» dropdown and opportunity service type)
+## §5 إدارة الخدمات والطلبات البيعية
 
-## §6 دورة الطلبات والاعتمادات — 🔜 S2 (routes per type; closing outcomes; Finance `finance_needs_info` and OPS §2.1 labels per DECISIONS §20 changes 4–5); §6.3 contract alerts — 🔜 S3
+| § | Bullet | Implementation | Test (`apps/api/src/modules/sales/sales-s2.test.ts`) | Status |
+|---|---|---|---|---|
+| §5 | زر رئيسي (الخدمات) بقائمة منسدلة بجميع الخدمات؛ لكل خدمة واجهة مستقلة | `SalesHomePage` «الخدمات» → `/sales/requests/new/:type`; `NewRequestPage` renders each service's own field set (`SERVICE_FIELDS`) | «seven workflow definitions, one prefix per service…» | ✅ S2 |
+| §5.1 | بيع الحاويات — البيانات: اسم العميل، الجهة، المنطقة، نوع الحاوية، الحجم، العدد، اللون، المقاسات، تاريخ الطلب، الموظف المسؤول، السعر المتفق عليه، المرفقات، ملاحظات | `containerSaleDetailsSchema`, prefix CSR; container type / size / colour from `sales.lists` (empty until Q7) | same | ✅ S2 |
+| §5.1 | آلية العمل: تسجيل → عرض سعر → موافقة → رفع إلى المشتريات → اعتماد مالي → متابعة التصنيع أو التوريد → نموذج الاستلام وتاريخ التسليم → التنسيق مع التشغيل عند الحاجة → الإغلاق | workflow `sales_request_containerSale`: quote → customer_approved → at_procurement → at_finance → execution_* (receipt form, delivery date) → ops_* → closed | «container sale: Sales → Procurement → Finance … → closed» (15 stage-log hops) | ✅ S2 |
+| §5.2 | الفرز — البيانات والآلية (تعاقد، اعتمادات عند الحاجة، إحالة للتشغيل، متابعة الكميات والاستلام، مدة العقد والتجديد) | `sortingContractDetailsSchema`, SRT; workflow with `contracting`, optional Procurement / Finance, Operations receipts and quantities; contract duration/renewal alerts → S3 | first test (creation) | ✅ S2 (renewal alerts S3) |
+| §5.3 | عقد النظافة — البيانات (توفير حاوية أو جمع مباشر…) والآلية | `cleaningContractDetailsSchema` (`mode` «توفير حاوية / جمع مباشر»), CLN; same route as sorting | first test | ✅ S2 |
+| §5.4 | الإتلاف — البيانات (صور المواد…) والآلية: صور إلى التشغيل لتقدير الوزن → زيارة اختيارية → تسعيرة → عرض → موافقة → المالية → بعد اعتماد المالية إحالة إلى التشغيل → جدولة خلال 3 أيام عمل → توثيق بمحضر | `destructionDetailsSchema`, DST, `photoIds`; workflow: send_for_estimate → ops_new/ops_review (estimate_done requires the weight) → quoting → … → at_finance → ops_new (SLA 3 business days) → ops_complete requires محضر | «destruction: photos to Operations for an estimate…» | ✅ S2 (invoice step per Q4 in S3) |
+| §5.5 | تأجير الحاويات — البيانات، الإحالة المباشرة إلى التشغيل، النماذج الثلاثة (قبل التسليم / بعد التسليم / بعد السحب) برفع الصور والتاريخ والوقت واسم الموظف والتوقيع والملاحظات وحالة الحاوية | `containerRentalDetailsSchema` (`deliveryZone` «داخل المنطقة الشرقية أو خارجها», Q10 information only), RNT; `rentalInspections` append-only (`POST /sales/requests/:id/inspections`), container number free text until the OPS registry | «rental: straight to Operations, three separate inspection forms…» | ✅ S2 |
+| §5.6 أولاً | السكراب — بيانات العميل والمواد | `scrapDetailsSchema`, SCR | «scrap: visible to Sales and Operations…» | ✅ S2 |
+| §5.6 ثانياً | زر (رفع مهمة): الموظفون المكلفون، العميل، عدد العملاء، نوع المهمة، تاريخ التكليف، موعد الزيارة، حالة المهمة (تمت / لم تتم)، حالة تحويل المبلغ (تم التحويل / لم يتم التحويل)، السعر المتفق عليه، المرفقات، الملاحظات | `scrapTasks` (payload) + a core task (`createTask`, department rules); «تمت / لم تتم» from the task status; transfer status with proof by `sales.scrapTransferRoles` | same («رفع مهمة» section) | ✅ S2 |
+| §5.6 ثالثاً | جدولة الزيارات والتقييم: موعد زيارة، نتيجة التقييم، صور، كميات وتصنيفات، السعر المقترح والمتفق عليه، الإجراء القادم | `scrapAssessments` append-only (`POST …/assessments`), `ops_schedule` creates a calendar visit | same | ✅ S2 |
+| §5.6 متطلبات إضافية | ظهور الطلبات لدى المبيعات والمشاريع؛ موظف مسؤول لكل مهمة؛ إشعار القسم الآخر عند كل تحديث؛ سجل الزيارات والتقييمات؛ متابعة الشراء والتحويل حتى الإغلاق | `visibilityFilter` shows every scrap request to Operations from creation; `sales.request.updated` to the other department on each state change; OPS §2.2 steps assessed → price_agreed → pickup_scheduled → collected (actual weight + receipt, notify Sales and Finance) → transferred (proof) → closed | same | ✅ S2 |
+| §5.7 | رجيع الأصول — البيانات، حالة التعاون (تم التعاون / لم يتم التعاون / قيد الدراسة / قيد التفاوض)، تذكير بموعد المحادثة القادمة، سبب عدم التعاون | `assetReturnDetailsSchema`, ARO; the cooperation status is the workflow state; `decline` needs a reason; job `sales.assetreturn.reminders` | «asset return: the cooperation status is the state…» | ✅ S2 |
 
+## §6 دورة الطلبات والاعتمادات بين الأقسام
+
+| § | Bullet | Implementation | Test | Status |
+|---|---|---|---|---|
+| §6 | مسار إلكتروني موحد قابل للتخصيص حسب نوع الخدمة | seven workflow definitions (`SALES_WORKFLOWS`) seeded by the baseline and editable in /admin/workflows | first S2 test | ✅ S2 |
+| §6.1 م1 المبيعات | تسجيل العميل والطلب، تحديد الخدمة، إعداد العرض، إرساله، موافقة العميل، رفع العقد أو أمر البيع والمرفقات | states new → quoting → quote_sent → customer_approved (+ contracting for SRT/CLN); attachments on the request | container-sale test | ✅ S2 (the quote document itself: S3) |
+| §6.1 م2 المشتريات | استلام الطلب، مراجعة المتطلبات، عروض الموردين، تحديد المورد، إرفاق عرض المورد والمستندات، تحويل إلى المالية | `at_procurement` → `procurement_to_finance` with `supplierName` / `supplierPartyId`, `supplierQuoteAttachmentIds`; queue «الطلبات الواردة من المبيعات» (`?view=incoming`) | container-sale test | ✅ S2 |
+| §6.1 م3 المالية | استلام، مراجعة السعر والتكلفة والمستندات، الموافقة أو الرفض، الملاحظات وأسباب الرفض، إشعار المبيعات والمشتريات | `at_finance`; `finance_approve` / `finance_reject` (reason) by `finance_manager` only; `finance_request_info` «يحتاج استكمال بيانات» by Finance staff (change 4); approver ≠ creator/owner; notification 8 to Sales and Procurement | container-sale test (`finance_approve` 403 for staff, needs-info loop, notification counts) | ✅ S2 |
+| §6.1 م4 المشتريات بعد الاعتماد | الحالات: بدأ التنفيذ، قيد المعالجة، تم الرفض، تم الإلغاء، تم الإنجاز؛ بيانات المورد، نموذج الاستلام، تاريخ التسليم، الملاحظات، المستندات والصور، تحديث الحالة | states `execution_*` with verbatim labels; payload supplier / receipt form / delivery date / notes; notification 9 | container-sale test | ✅ S2 |
+| §6.1 م5 التشغيل | إشعار التشغيل، جدولة الزيارات خلال 3 أيام عمل، تسجيل المواعيد، متابعة التنفيذ، توثيق الاستلام والتسليم | OPS §2.1 states (change 5), `ops_new` SLA 3 business days (`addBusinessDays`, Fri–Sat + holidays), `ops_schedule` → calendar visit, `ops_complete` with quantities / weights / reports; notification 10 | container-sale test (due date over a weekend and a holiday, overdue reminder once) | ✅ S2 |
+| §6.2 | حالات الإغلاق: تم الإغلاق بنجاح / دون استكمال / إيقاف المشروع / إلغاء المشروع؛ الإغلاق بنجاح يُشعر التشغيل | `close_success` (notifies Operations, event `sales.request.closed_success`), `close_incomplete` (reason), `suspend` / `cancel` (manager, reason), `resume` | container-sale test; «a rep cannot act on another rep's request…» | ✅ S2 |
+| §6.3 | تنبيهات العقود الدورية | contracts | — | 🔜 S3 |
 ## §7 الأسعار والخصومات والفواتير — 🔜 S3 (§7.1 price list; §7.2 matrix — Q1 pending, unset limits → executive approval per change 7; §7.3 invoices — Q4; §7.4 periodic contracts)
 
 ## §8 صلاحيات مدير قسم المبيعات
@@ -83,8 +108,14 @@ Status legend: ✅ built · 🔜 planned slice · ⏸ waits for an owner answer 
 | 2 | إسناد عميل إلى موظف | `crm.customer.assigned` | lead assignment, customer created for another owner, transfer recipient | `crm.test.ts` leads + transfer | ✅ S1 |
 | 3 | قرب موعد متابعة العميل | `crm.followup.due` | jobs `crm.followups`, `sales.followups` | `crm.test.ts` follow-up | ✅ S1 |
 | 4 | اقتراب موعد اجتماع أو زيارة | `meeting.reminder` (core) | calendar | core tests | ✅ core (Sales fields S4) |
-| 5–15 | عرض السعر، المشتريات، المالية، التشغيل، الفواتير، العقود، التعاون، مشكلة من قسم آخر | — | S2–S4 | — | 🔜 |
-| 16 | تغيير الموظف المسؤول عن العميل أو الطلب | `crm.owner_changed` | transfer and reassignment → previous owner | `crm.test.ts` transfer; `sales-s1.test.ts` reassign | ✅ S1 (requests in S2) |
+| 5–6 | تحديث حالة عرض السعر؛ اعتماد أو رفض عرض السعر | — | S3 | — | 🔜 |
+| 7 | وصول طلب جديد إلى المشتريات | `sales.request.to_procurement` | `send_to_procurement` → Procurement managers and members | S2 container-sale test | ✅ S2 |
+| 8 | اعتماد أو رفض الطلب من المالية | `sales.request.finance_decided` | Finance decisions (incl. «يحتاج استكمال بيانات») → Sales owner + managers + Procurement | same | ✅ S2 |
+| 9 | تحديث حالة الطلب من المشتريات | `sales.request.procurement_updated` | `execution_*` → Sales | same | ✅ S2 |
+| 10 | اكتمال التنفيذ من التشغيل | `sales.request.operations_completed` | `ops_complete`, `estimate_done`, `record_collection` (+ Finance for scrap, OPS §2.2) → Sales | same; scrap test | ✅ S2 |
+| 11–14 | الفواتير، العقود، التعاون | — | S3 | — | 🔜 |
+| 15 | وجود مشكلة أو استفسار من قسم آخر | — | S4 (discussions) | — | 🔜 |
+| 16 | تغيير الموظف المسؤول عن العميل أو الطلب | `crm.owner_changed`, `crm.customer.assigned` | transfer and reassignment → previous owner; a request created for another owner → that owner | `crm.test.ts` transfer; `sales-s1.test.ts` reassign | ✅ S1/S2 |
 
 ## §15 الصلاحيات
 
@@ -107,6 +138,6 @@ Status legend: ✅ built · 🔜 planned slice · ⏸ waits for an owner answer 
 | حماية بيانات العملاء والعقود والأسعار | scope rules, duplicate check without leakage; price/discount field rules in S3 | ✅/🔜 |
 | النسخ الاحتياطية | Atlas backup note in DEPLOY.md | 🔜 S5 |
 
-## §18 المخرجات (20) — S1 delivers 1 (landing), 2 (CRM), 3 (customer file + log), 4 (leads), 18 (permissions) and the CS/Marketing part of 19; see `docs/SALES_PLAN.md` §6 for the rest.
+## §18 المخرجات (20) — S1 delivers 1 (landing), 2 (CRM), 3 (customer file + log), 4 (leads), 18 (permissions); S2 delivers 5 (service and request screens) and the Procurement / Finance / Operations part of 19 (queues «الطلبات الواردة من المبيعات» + hand-off events); see `docs/SALES_PLAN.md` §6 for the rest.
 
-## §19 التوصيات — S1: ملف موحد (duplicate prevention across reps) ✅ · رقم مرجعي تلقائي (CUS/OPP/LED) ✅ · الاحتفاظ بالمحادثات عند تغيير الموظف ✅ · عدم تجاوز الصلاحيات (server scope, 404 for hidden files) ✅ · البقية S2–S5.
+## §19 التوصيات — S1: ملف موحد ✅ · رقم مرجعي تلقائي ✅ · الاحتفاظ بالمحادثات عند تغيير الموظف ✅ · عدم تجاوز الصلاحيات ✅ · S2: كل الخدمات مرتبطة بملف العميل نفسه ✅ (`customerId` required) · مسارات اعتماد مرنة ✅ (workflow definitions) · الطلبات المحولة تظهر في حساب القسم المستلم مع إشعار فوري ✅ (`?view=incoming`, notifications 7/to_finance/to_operations) · سجل انتقال الطلب بين الأقسام واسم الموظف في كل مرحلة ✅ (stage log) · سبب تأخر الطلب والجهة المسؤولة ✅ (`delay-reason`) · البقية (ربط الإيرادات بالمالية، البريد، التقارير) S3–S5.

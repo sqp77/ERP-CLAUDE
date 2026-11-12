@@ -29,6 +29,7 @@ import { tagsRouter } from './core/tags/routes';
 import { partiesRouter } from './core/parties/routes';
 import { crmRouter } from './modules/crm/routes';
 import { salesRouter } from './modules/sales/routes';
+import { salesRequestsRouter } from './modules/sales/requests.routes';
 import { hrRouter } from './modules/hr/routes';
 import { portalRouter, profileChangesRouter } from './modules/hr/portalRoutes';
 import { requestsRouter } from './modules/hr/requests.routes';
@@ -89,6 +90,7 @@ export function createApp(): Express {
   v1.use('/tags', tagsRouter);
   v1.use('/parties', partiesRouter);
   v1.use('/crm', crmRouter);
+  v1.use('/sales/requests', salesRequestsRouter);
   v1.use('/sales', salesRouter);
   app.use('/api/v1', v1);
 

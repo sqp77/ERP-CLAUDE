@@ -13,6 +13,7 @@ import {
   updateCustomer,
 } from './modules/crm/service';
 import { changeStage, createOpportunity } from './modules/sales/service';
+import { createRequest, transitionRequest } from './modules/sales/requests.service';
 
 const hoursAgo = (h: number) => new Date(Date.now() - h * 3_600_000);
 const inDays = (d: number) => new Date(Date.now() + d * 86_400_000).toISOString();
@@ -283,5 +284,92 @@ export async function seedSales(): Promise<{ customers: number; leads: number }>
   });
   await Lead.updateOne({ _id: lead2._id }, { $set: { referredAt: hoursAgo(30) } });
 
+  // Service requests across the route [SAL §5, §6]: a container sale at Finance, a rental at Operations, a scrap
+  // request assessed, a destruction awaiting the Operations estimate, and an asset-return opportunity.
+  const [nasser, abdulaziz, khalid] = await Promise.all(
+    ['nasser', 'abdulaziz', 'khalid'].map((n) => byEmail(`${n}@eayni.local`)),
+  );
+  const salesReq = await reqOf(reem, 'sales.requests', 'create');
+  const mv = async (
+    u: InstanceType<typeof User>,
+    id: unknown,
+    transition: string,
+    extra: Record<string, unknown> = {},
+  ) =>
+    transitionRequest(await reqOf(u, 'sales.requests', 'edit'), String(id), {
+      transition,
+      attachmentIds: [],
+      payload: {},
+      ...extra,
+    } as never);
+  const csr = await createRequest(salesReq, {
+    type: 'containerSale',
+    customerId: String(gulf._id),
+    details: { count: 50, containerType: 'حاوية 1100 لتر', color: 'أخضر', agreedPriceHalalas: 12_500_000 },
+    attachmentIds: [],
+    photoIds: [],
+    tags: ['#عقد_سنوي'],
+  } as never);
+  for (const step of ['start_quote', 'send_quote', 'customer_approve', 'send_to_procurement'])
+    await mv(reem, csr._id, step);
+  await mv(nasser, csr._id, 'procurement_to_finance', { payload: { supplierName: 'مصنع الحاويات الوطني' } });
+  const rnt = await createRequest(salesReq, {
+    type: 'containerRental',
+    customerId: String(school._id),
+    details: {
+      containerCount: 3,
+      deliveryZone: 'inside_eastern',
+      rentalDurationDays: 30,
+      requestedDeliveryDate: inDays(7),
+    },
+    attachmentIds: [],
+    photoIds: [],
+    tags: ['#تأجير_حاويات'],
+  } as never);
+  await mv(reem, rnt._id, 'send_to_operations');
+  await mv(khalid, rnt._id, 'ops_schedule', { payload: { scheduledVisitAt: inDays(5) } });
+  const majedReq = await reqOf(majed, 'sales.requests', 'create');
+  const scr = await createRequest(majedReq, {
+    type: 'scrap',
+    customerId: String(steel._id),
+    details: {
+      materialType: 'حديد',
+      estimatedQuantityKg: 3000,
+      mobile: '0544445555',
+      materialDescription: 'خردة حديد من خط إنتاج قديم',
+    },
+    attachmentIds: [],
+    photoIds: [],
+    tags: ['#سكراب'],
+  } as never);
+  await mv(majed, scr._id, 'request_visit');
+  await mv(khalid, scr._id, 'ops_schedule', { payload: { scheduledVisitAt: inDays(2) } });
+  await createRequest(salesReq, {
+    type: 'destruction',
+    customerId: String(gulf._id),
+    details: {
+      materialType: 'أرشيف ورقي',
+      estimatedQuantityKg: 600,
+      contactPersonName: 'أحمد العلي',
+      contactPhone: '0551112222',
+    },
+    attachmentIds: [],
+    photoIds: [],
+    tags: [],
+  } as never).then((r) => mv(reem, r._id, 'send_for_estimate'));
+  await createRequest(salesReq, {
+    type: 'assetReturn',
+    customerId: String(municipality._id),
+    details: {
+      tenderSource: 'منصة اعتماد',
+      assetType: 'أثاث مكتبي',
+      facilitySize: 'كبيرة',
+      nextConversationAt: inDays(3),
+    },
+    attachmentIds: [],
+    photoIds: [],
+    tags: ['#مناقصة'],
+  } as never);
+  void abdulaziz;
   return { customers: await Customer.countDocuments(), leads: await Lead.countDocuments() };
 }
