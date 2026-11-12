@@ -81,6 +81,14 @@ export const DEPARTMENT_MANAGER_IMPLIED_ROLES: Record<string, string> = {
   sales: 'sales_manager',
 };
 
+/**
+ * Roles every active member of a department carries implicitly (DECISIONS §20, S1 approval fix 2): placing someone
+ * in the Sales department (HR, org chart) is what makes them a Sales rep; no separate grant is needed.
+ */
+export const DEPARTMENT_MEMBER_IMPLIED_ROLES: Record<string, string> = {
+  sales: 'sales_rep',
+};
+
 export const ALL_ACTIONS: Action[] = [...ACTIONS];
 
 export function maxScope(a: Scope | undefined, b: Scope): Scope {
@@ -110,8 +118,6 @@ export const GRANTABLE_ROLES: Record<string, readonly string[] | '*'> = {
   system_admin: '*',
   hr_officer: ['employee', 'department_manager'],
   hr_manager: ['employee', 'department_manager'],
-  // The Sales manager staffs the department (SAL §8.1); users must already belong to the Sales department.
-  sales_manager: ['sales_rep'],
 };
 
 export function grantableRolesFor(actorRoles: readonly string[]): Set<string> | '*' {

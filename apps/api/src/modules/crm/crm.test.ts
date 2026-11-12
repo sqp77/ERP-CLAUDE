@@ -199,16 +199,13 @@ describe('CRM core — customer file, contacts, log, duplicates [SAL §4.1, §15
       .set(auth(t.repA))
       .send(customerBody({ opportunity: { title: 'توريد حاويات', expectedValueHalalas: 1_500_000 } }));
     const id = c.body._id as string;
-    const log = await request(app())
-      .post(`/api/v1/crm/customers/${id}/logs`)
-      .set(auth(t.repA))
-      .send({
-        method: 'call',
-        details: 'اتصال أولي، العميل مهتم',
-        customerNeed: '20 حاوية',
-        nextStep: 'زيارة',
-        nextFollowUpAt: '2030-01-10T09:00:00+03:00',
-      });
+    const log = await request(app()).post(`/api/v1/crm/customers/${id}/logs`).set(auth(t.repA)).send({
+      method: 'call',
+      details: 'اتصال أولي، العميل مهتم',
+      customerNeed: '20 حاوية',
+      nextStep: 'زيارة',
+      nextFollowUpAt: '2030-01-10T09:00:00+03:00',
+    });
     expect(log.status).toBe(201);
     expect(log.body.authorName).toBe('reem');
     expect(new Date(log.body.at).getTime()).toBeGreaterThan(Date.now() - 60_000);
@@ -272,16 +269,13 @@ describe('CRM core — customer file, contacts, log, duplicates [SAL §4.1, §15
           .send({ customerName: 'مطعم النخيل', interest: 'عقد نظافة' })
       ).status,
     ).toBe(403);
-    const lead = await request(app())
-      .post('/api/v1/crm/leads')
-      .set(auth(t.agent))
-      .send({
-        customerName: 'مطعم النخيل',
-        contactName: 'فهد',
-        phone: '0561234567',
-        interest: 'عقد نظافة أسبوعي',
-        channel: 'واتساب',
-      });
+    const lead = await request(app()).post('/api/v1/crm/leads').set(auth(t.agent)).send({
+      customerName: 'مطعم النخيل',
+      contactName: 'فهد',
+      phone: '0561234567',
+      interest: 'عقد نظافة أسبوعي',
+      channel: 'واتساب',
+    });
     expect(lead.status, JSON.stringify(lead.body)).toBe(201);
     expect(lead.body.number).toMatch(/^LED-/);
     expect(lead.body.state).toBe('new');
@@ -441,5 +435,114 @@ describe('CRM core — customer file, contacts, log, duplicates [SAL §4.1, §15
       'status_changed',
       'classification_changed',
     ]);
+  });
+});
+
+describe('S1 approval fixes [DECISIONS §20]', () => {
+  it('1: customers, leads and opportunities can only be handed to on-duty Sales staff — four paths, 400 «الموظف المستلم ليس من موظفي المبيعات»', async () => {
+    const { t, hr, sales, repA } = await setup();
+    const hrUser = await makeUser('salma@eayni.local', [{ role: 'employee' }], { departmentId: hr._id });
+    const disabled = await makeUser('old@eayni.local', [{ role: 'employee' }], {
+      departmentId: sales._id,
+      status: 'disabled',
+    });
+    const c = await request(app()).post('/api/v1/crm/customers').set(auth(t.repA)).send(customerBody());
+    const o = await request(app())
+      .post('/api/v1/sales/opportunities')
+      .set(auth(t.repA))
+      .send({ customerId: c.body._id, title: 'فرصة' });
+    const lead = await request(app())
+      .post('/api/v1/crm/leads')
+      .set(auth(t.agent))
+      .send({ customerName: 'جهة', interest: 'اهتمام' });
+    for (const target of [String(hrUser._id), String(disabled._id)]) {
+      const transfer = await request(app())
+        .post('/api/v1/crm/customers/transfer')
+        .set(auth(t.mgr))
+        .send({ customerIds: [c.body._id], toUserId: target, reason: 'تجربة' });
+      expect(transfer.status).toBe(400);
+      expect(transfer.body.error.message).toBe('الموظف المستلم ليس من موظفي المبيعات');
+      expect(
+        (
+          await request(app())
+            .post(`/api/v1/crm/leads/${lead.body._id}/assign`)
+            .set(auth(t.mgr))
+            .send({ assigneeUserId: target })
+        ).status,
+      ).toBe(400);
+      expect(
+        (
+          await request(app())
+            .post('/api/v1/sales/opportunities/reassign')
+            .set(auth(t.mgr))
+            .send({ opportunityIds: [o.body._id], toUserId: target, reason: 'تجربة' })
+        ).status,
+      ).toBe(400);
+      expect(
+        (
+          await request(app())
+            .post('/api/v1/crm/customers')
+            .set(auth(t.mgr))
+            .send(customerBody({ nameAr: 'جهة جديدة', phone: '0500000009', ownerUserId: target }))
+        ).status,
+      ).toBe(400);
+      expect(
+        (
+          await request(app())
+            .post('/api/v1/sales/opportunities')
+            .set(auth(t.mgr))
+            .send({ customerId: c.body._id, title: 'فرصة للمدير', ownerUserId: target })
+        ).status,
+      ).toBe(400);
+    }
+    // Nothing moved and the outsider was never notified.
+    expect((await Customer.findById(c.body._id))!.ownerUserId.toString()).toBe(String(repA._id));
+    expect(await Notification.countDocuments({ userId: hrUser._id })).toBe(0);
+    // A Sales member is a valid target.
+    expect(
+      (
+        await request(app())
+          .post(`/api/v1/crm/leads/${lead.body._id}/assign`)
+          .set(auth(t.mgr))
+          .send({ assigneeUserId: String(repA._id) })
+      ).status,
+    ).toBe(200);
+  });
+
+  it('2: every active member of the Sales department is a sales_rep implicitly; HR placing someone in Sales is enough', async () => {
+    const { t, sales, hr } = await setup();
+    await makeUser('newrep@eayni.local', [{ role: 'employee' }], { departmentId: sales._id });
+    const tok = await loginAs('newrep@eayni.local');
+    const me = await request(app()).get('/api/v1/auth/me').set(auth(tok));
+    expect(me.body.user.roles).toContainEqual({ role: 'sales_rep', implied: true });
+    const created = await request(app())
+      .post('/api/v1/crm/customers')
+      .set(auth(tok))
+      .send(customerBody({ nameAr: 'جهة الموظف الجديد', phone: '0500000010' }));
+    expect(created.status).toBe(201);
+    // The manager may hand them a customer; an HR member stays out.
+    expect(
+      (
+        await request(app())
+          .post('/api/v1/crm/customers/transfer')
+          .set(auth(t.mgr))
+          .send({
+            customerIds: [created.body._id],
+            toUserId: String(
+              (await makeUser('x@eayni.local', [{ role: 'employee' }], { departmentId: hr._id }))._id,
+            ),
+            reason: 'تجربة',
+          })
+      ).status,
+    ).toBe(400);
+    // Someone outside Sales gets no Sales rights from the mechanism.
+    await makeUser('hrperson@eayni.local', [{ role: 'employee' }], { departmentId: hr._id });
+    expect(
+      (
+        await request(app())
+          .get('/api/v1/crm/customers')
+          .set(auth(await loginAs('hrperson@eayni.local')))
+      ).status,
+    ).toBe(403);
   });
 });

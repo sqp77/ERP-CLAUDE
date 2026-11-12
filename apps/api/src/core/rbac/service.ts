@@ -1,5 +1,6 @@
 import {
   DEPARTMENT_MANAGER_IMPLIED_ROLES,
+  DEPARTMENT_MEMBER_IMPLIED_ROLES,
   maxScope,
   SENSITIVE_FIELDS_BY_RESOURCE,
   TEAM_LEAD_GRANTS,
@@ -46,6 +47,12 @@ export async function expandAssignments(
     const implied = code ? DEPARTMENT_MANAGER_IMPLIED_ROLES[code] : undefined;
     if (implied && !out.some((x) => x.role === implied && String(x.departmentId ?? '') === deptId))
       out.push({ role: implied, departmentId: deptId, implied: true });
+  }
+  // Membership-implied roles (S1 approval fix 2): the user's own department decides, e.g. Sales members are reps.
+  if (userDepartmentId) {
+    const code = await departmentCode(userDepartmentId);
+    const implied = code ? DEPARTMENT_MEMBER_IMPLIED_ROLES[code] : undefined;
+    if (implied && !out.some((x) => x.role === implied)) out.push({ role: implied, implied: true });
   }
   return out;
 }

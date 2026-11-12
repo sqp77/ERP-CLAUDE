@@ -2,6 +2,7 @@ import { afterAll, beforeAll, beforeEach } from 'vitest';
 import mongoose from 'mongoose';
 import { connectDb, disconnectDb } from '../db';
 import { ensureBaseline } from '../bootstrap';
+import { clearCrmCache } from '../modules/crm/service';
 import { clearSettingsCache } from '../core/settings/service';
 import { clearRoleCache } from '../core/rbac/service';
 import { clearWorkflowCache } from '../core/workflow/engine';
@@ -28,6 +29,7 @@ beforeEach(async () => {
   }
   clearSettingsCache();
   clearRoleCache();
+  clearCrmCache();
   clearWorkflowCache();
   clearSubscribers();
 });

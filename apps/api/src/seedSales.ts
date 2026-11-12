@@ -60,12 +60,6 @@ export async function seedSales(): Promise<{ customers: number; leads: number }>
   const [sultan, reem, majed, arwa] = await Promise.all(
     ['sultan', 'reem', 'majed', 'arwa'].map((n) => byEmail(`${n}@eayni.local`)),
   );
-  // The sample Sales people hold the module roles (the seed predates them).
-  for (const u of [reem, majed])
-    if (!u.roles.some((r) => r.role === 'sales_rep')) {
-      u.roles.push({ role: 'sales_rep' } as never);
-      await u.save();
-    }
 
   const c = async (u: InstanceType<typeof User>, body: Record<string, unknown>) =>
     createCustomer(await reqOf(u, 'crm.customers', 'create'), {

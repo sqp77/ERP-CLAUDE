@@ -15,9 +15,10 @@ import { publish } from '../../core/outbox/service';
 import { getSetting } from '../../core/settings/service';
 import { claimAttachments } from '../../core/files/service';
 import { canonicalTags } from '../../core/tags/service';
-import { User, type UserDoc } from '../../core/auth/model';
+import type { UserDoc } from '../../core/auth/model';
 import { withTransaction } from '../../db';
 import {
+  assertSalesTarget,
   canAccessCustomer,
   countCustomers,
   countLeads,
@@ -132,9 +133,7 @@ export async function createOpportunity(req: AuthedRequest, input: CreateOpportu
   let owner: UserDoc = req.auth.user;
   if (input.ownerUserId && input.ownerUserId !== String(req.auth.user._id)) {
     if (!isManagerScope(authz.scope)) throw forbidden('تعيين الموظف المسؤول من صلاحيات مدير القسم');
-    const u = await User.findOne({ _id: input.ownerUserId, status: 'active', deletedAt: null });
-    if (!u) throw badRequest('الموظف المسؤول غير موجود أو غير نشط');
-    owner = u;
+    owner = await assertSalesTarget(authz, input.ownerUserId);
   }
   const doc = await withTransaction((session) => createOpportunityIn(session, req, input, owner));
   if (String(owner._id) !== String(req.auth.user._id))
@@ -344,8 +343,7 @@ export async function reassignOpportunities(
   input: { opportunityIds: string[]; toUserId: string; reason: string },
 ) {
   if (!isManagerScope(req.authz!.scope)) throw forbidden('إعادة توزيع الفرص من صلاحيات مدير القسم');
-  const to = await User.findOne({ _id: input.toUserId, status: 'active', deletedAt: null });
-  if (!to) throw badRequest('الموظف المستلم غير موجود أو غير نشط');
+  const to = await assertSalesTarget(req.authz!, input.toUserId);
   const rows = await Opportunity.find({
     _id: { $in: input.opportunityIds },
     deletedAt: null,

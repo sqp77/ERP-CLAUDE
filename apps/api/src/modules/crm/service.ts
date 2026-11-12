@@ -28,6 +28,8 @@ import { Party } from '../../core/parties/model';
 import { Department } from '../../core/org/model';
 import { User, type UserDoc } from '../../core/auth/model';
 import { departmentManagerUserIds } from '../../core/tasks/jobs';
+import { lookupAssignee } from '../../core/tasks/service';
+import { roleCodesOf } from '../../core/rbac/service';
 import { withTransaction } from '../../db';
 import {
   CommunicationLog,
@@ -47,6 +49,10 @@ export const TAG_SCOPE = 'sales';
 // Departments, people, names
 // ------------------------------------------------------------------------------------------------
 const deptCache = new Map<string, { id: string | null; at: number }>();
+/** Test hook: the suite wipes the database between tests, so cached department ids must go too. */
+export function clearCrmCache(): void {
+  deptCache.clear();
+}
 export async function departmentIdByCode(code: string): Promise<string | null> {
   const hit = deptCache.get(code);
   if (hit && Date.now() - hit.at < 10_000) return hit.id;
@@ -87,7 +93,29 @@ export async function userNames(ids: readonly unknown[]): Promise<Map<string, st
 }
 
 /** Digits only, Saudi numbers normalised to the local form (+966 5x → 05x) so one phone matches whatever way it was typed. */
-export const digits = (s?: string | null) => {
+export const NOT_SALES_STAFF = 'الموظف المستلم ليس من موظفي المبيعات';
+
+/**
+ * Who may receive a customer, lead or opportunity (S1 approval fix 1): an active, on-duty member of a department in
+ * the actor's scope (the Sales department for 'all' scope) who holds Sales rights (sales_rep / sales_manager, implied
+ * included). Anything else is 400 — a file never lands outside Sales, and no outsider learns a customer's name.
+ */
+export async function assertSalesTarget(authz: Authz, userId: string): Promise<UserDoc> {
+  const u = await User.findOne({ _id: userId, status: 'active', deletedAt: null });
+  if (!u || !u.departmentId) throw badRequest(NOT_SALES_STAFF, { code: 'not_sales_staff' });
+  const deptId = String(u.departmentId);
+  const allowed = authz.scope === 'all' ? [await salesDepartmentId()] : authz.departmentIds;
+  if (!allowed.includes(deptId)) throw badRequest(NOT_SALES_STAFF, { code: 'not_sales_staff' });
+  const emp = await lookupAssignee(userId);
+  if (emp && (!emp.active || (emp.departmentId && emp.departmentId !== deptId)))
+    throw badRequest(NOT_SALES_STAFF, { code: 'not_sales_staff' });
+  const codes = await roleCodesOf(u.roles as RoleAssignment[], deptId);
+  if (!codes.includes('sales_rep') && !codes.includes('sales_manager'))
+    throw badRequest(NOT_SALES_STAFF, { code: 'not_sales_staff' });
+  return u;
+}
+
+const digits = (s?: string | null) => {
   if (!s) return undefined;
   let d = s.replace(/\D/g, '');
   if (d.startsWith('00966')) d = d.slice(5);
@@ -283,9 +311,7 @@ async function resolveOwner(
 ): Promise<UserDoc> {
   if (!requested || requested === String(req.auth.user._id)) return req.auth.user;
   if (!isManagerScope(scope)) throw forbidden('تعيين الموظف المسؤول من صلاحيات مدير القسم');
-  const u = await User.findOne({ _id: requested, status: 'active', deletedAt: null });
-  if (!u) throw badRequest('الموظف المسؤول غير موجود أو غير نشط');
-  return u;
+  return assertSalesTarget(req.authz!, requested);
 }
 
 async function ownerDepartmentId(owner: UserDoc): Promise<string> {
@@ -762,8 +788,7 @@ export async function listLogs(req: AuthedRequest, customerId: string) {
 export async function transferCustomers(req: AuthedRequest, input: TransferCustomersInput) {
   const authz = req.authz!;
   if (!isManagerScope(authz.scope)) throw forbidden('نقل العملاء من صلاحيات مدير القسم');
-  const to = await User.findOne({ _id: input.toUserId, status: 'active', deletedAt: null });
-  if (!to) throw badRequest('الموظف المستلم غير موجود أو غير نشط');
+  const to = await assertSalesTarget(authz, input.toUserId);
   const filter = {
     _id: { $in: input.customerIds },
     deletedAt: null,
@@ -1042,8 +1067,8 @@ export async function getLead(req: AuthedRequest, id: string) {
 export async function assignLead(req: AuthedRequest, id: string, assigneeUserId: string) {
   const { lead, manager } = await loadLeadFor(req, id, 'approve');
   if (!manager) throw forbidden('توزيع العملاء المحتملين من صلاحيات مدير القسم');
-  const to = await User.findOne({ _id: assigneeUserId, status: 'active', deletedAt: null });
-  if (!to) throw badRequest('الموظف غير موجود أو غير نشط');
+  const eff = (await permissionOn(req, 'crm.leads', 'approve'))!;
+  const to = await assertSalesTarget({ resource: 'crm.leads', action: 'approve', ...eff }, assigneeUserId);
   const actor = actorFrom(req);
   const from = lead.assigneeUserId ? String(lead.assigneeUserId) : undefined;
   await withTransaction(async (session) => {
