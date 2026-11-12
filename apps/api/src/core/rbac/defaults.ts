@@ -217,6 +217,11 @@ export const CORE_ROLES: RoleDefinition[] = [
       { resource: 'tickets', actions: ['view'], scope: 'all' },
       { resource: 'news', actions: ['view', 'create', 'edit', 'approve'], scope: 'all' },
       { resource: 'hr.reports', actions: ['view'], scope: 'all' },
+      // Sales, read-only [SAL §15 الإدارة التنفيذية]; above-limit approvals come with quotes (S3).
+      { resource: 'crm.customers', actions: ['view'], scope: 'all' },
+      { resource: 'crm.leads', actions: ['view'], scope: 'all' },
+      { resource: 'sales.opportunities', actions: ['view'], scope: 'all' },
+      { resource: 'tags', actions: ['view'], scope: 'all' },
     ],
     fieldRules: [HIDE_SENSITIVE],
   },

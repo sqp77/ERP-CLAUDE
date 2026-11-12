@@ -1,0 +1,53 @@
+import type { RoleDefinition } from '@eayni/shared';
+
+/**
+ * Sales module roles [SAL §15, DECISIONS §20]. System roles: the admin tunes their grants from /admin/roles or
+ * clones them into custom roles; segregation of duties stays in code (plan §5). The Sales department manager
+ * carries `sales_manager` implicitly (DEPARTMENT_MANAGER_IMPLIED_ROLES).
+ *
+ * Resources: `crm.customers` (customers, contacts, communication logs), `crm.leads`, `sales.opportunities`,
+ * `tags`. Scope `own` = records whose الموظف المسؤول is me; `department` = the Sales department.
+ */
+export const SALES_ROLES: RoleDefinition[] = [
+  {
+    code: 'sales_rep',
+    nameAr: 'موظف مبيعات',
+    system: true,
+    departmentScoped: false,
+    grants: [
+      { resource: 'crm.customers', actions: ['view', 'create', 'edit'], scope: 'own' },
+      { resource: 'crm.leads', actions: ['view', 'edit'], scope: 'own' },
+      { resource: 'sales.opportunities', actions: ['view', 'create', 'edit'], scope: 'own' },
+      { resource: 'tags', actions: ['view'], scope: 'all' },
+      { resource: 'calendar', actions: ['view', 'create', 'edit'], scope: 'own' },
+      { resource: 'comments', actions: ['view', 'create'], scope: 'own' },
+      { resource: 'documents', actions: ['view'], scope: 'own' },
+    ],
+    fieldRules: [],
+  },
+  {
+    code: 'sales_manager',
+    nameAr: 'مدير المبيعات',
+    system: true,
+    departmentScoped: true,
+    grants: [
+      {
+        resource: 'crm.customers',
+        actions: ['view', 'create', 'edit', 'approve', 'export'],
+        scope: 'department',
+      },
+      { resource: 'crm.leads', actions: ['view', 'create', 'edit', 'approve'], scope: 'department' },
+      {
+        resource: 'sales.opportunities',
+        actions: ['view', 'create', 'edit', 'approve', 'export'],
+        scope: 'department',
+      },
+      { resource: 'tags', actions: ['view', 'create', 'edit', 'delete'], scope: 'department' },
+      { resource: 'calendar', actions: ['view', 'create', 'edit'], scope: 'department' },
+      { resource: 'comments', actions: ['view', 'create'], scope: 'department' },
+      { resource: 'documents', actions: ['view'], scope: 'department' },
+      { resource: 'exports', actions: ['view', 'create'], scope: 'department' },
+    ],
+    fieldRules: [],
+  },
+];

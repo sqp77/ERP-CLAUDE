@@ -14,6 +14,8 @@ import { registerTicketsModule } from './modules/tickets';
 import { registerNewsModule } from './modules/news';
 import { backfillIdentityHashes } from './modules/hr/service';
 import { registerSubscribers } from './subscribers';
+import { SALES_ROLES } from './modules/sales/roles';
+import { CORE_ROLES } from './core/rbac/defaults';
 
 let jobsRegistered = false;
 /**
@@ -59,7 +61,7 @@ export const registerCoreJobs = registerModules;
 
 /** Make sure configuration data exists (roles, workflow defaults). Safe to run on every start. */
 export async function ensureBaseline(): Promise<void> {
-  await ensureCoreRoles();
+  await ensureCoreRoles([...CORE_ROLES, ...SALES_ROLES]);
   for (const def of DEFAULT_WORKFLOWS) await ensureWorkflow(def);
   await backfillIdentityHashes();
 }

@@ -39,7 +39,7 @@ export interface CurrentUser {
   id: string;
   email: string;
   displayNameAr: string;
-  roles: { role: string; departmentId?: string }[];
+  roles: { role: string; departmentId?: string; implied?: boolean }[];
   departmentId?: string;
   employeeId?: string;
   status: (typeof ACCOUNT_STATUSES)[number];

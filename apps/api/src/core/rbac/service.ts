@@ -1,4 +1,5 @@
 import {
+  DEPARTMENT_MANAGER_IMPLIED_ROLES,
   maxScope,
   SENSITIVE_FIELDS_BY_RESOURCE,
   TEAM_LEAD_GRANTS,
@@ -6,11 +7,56 @@ import {
   type FieldRule,
   type PermissionGrant,
   type RoleAssignment,
+  type RoleDefinition,
   type Scope,
 } from '@eayni/shared';
 import { Role, type RoleDoc } from './model';
 import { CORE_ROLES } from './defaults';
 import { resolveTeamUserIds } from './scope';
+import { Department } from '../org/model';
+
+const deptCodeCache = new Map<string, { code: string | undefined; at: number }>();
+async function departmentCode(id: string): Promise<string | undefined> {
+  const hit = deptCodeCache.get(id);
+  if (hit && Date.now() - hit.at < TTL_MS) return hit.code;
+  const d = await Department.findById(id).select('code').lean();
+  deptCodeCache.set(id, { code: d?.code, at: Date.now() });
+  return d?.code;
+}
+
+/**
+ * Stored assignments plus the roles they imply (DECISIONS §20 change 3): a `department_manager` of a department
+ * listed in DEPARTMENT_MANAGER_IMPLIED_ROLES carries that department's manager role, scoped to the same department.
+ * Every permission, field-rule and role-code computation goes through here, so the implied role is never missing.
+ */
+export async function expandAssignments(
+  assignments: RoleAssignment[],
+  userDepartmentId?: string,
+): Promise<RoleAssignment[]> {
+  // Explicit copy: assignments may be Mongoose subdocuments, whose spread yields internals instead of `role`.
+  const out: RoleAssignment[] = assignments.map((a) => ({
+    role: a.role,
+    ...(a.departmentId ? { departmentId: String(a.departmentId) } : {}),
+  }));
+  for (const a of assignments) {
+    if (a.role !== 'department_manager') continue;
+    const deptId = a.departmentId ? String(a.departmentId) : userDepartmentId;
+    if (!deptId) continue;
+    const code = await departmentCode(deptId);
+    const implied = code ? DEPARTMENT_MANAGER_IMPLIED_ROLES[code] : undefined;
+    if (implied && !out.some((x) => x.role === implied && String(x.departmentId ?? '') === deptId))
+      out.push({ role: implied, departmentId: deptId, implied: true });
+  }
+  return out;
+}
+
+/** Role codes including implied ones, for `req.auth.roleCodes` and segregation-of-duties checks. */
+export async function roleCodesOf(
+  assignments: RoleAssignment[],
+  userDepartmentId?: string,
+): Promise<string[]> {
+  return [...new Set((await expandAssignments(assignments, userDepartmentId)).map((a) => a.role))];
+}
 
 /** Direct managers (org chart) get TEAM_LEAD_GRANTS implicitly; no role is involved (DECISIONS §4). */
 async function teamLeadGrantsFor(userId?: string): Promise<PermissionGrant[]> {
@@ -25,6 +71,7 @@ const TTL_MS = 10_000;
 export function clearRoleCache(): void {
   cache.roles.clear();
   cache.at = 0;
+  deptCodeCache.clear();
 }
 
 export async function loadRoles(): Promise<Map<string, RoleDoc>> {
@@ -36,26 +83,39 @@ export async function loadRoles(): Promise<Map<string, RoleDoc>> {
 }
 
 /**
- * Insert missing core roles, and add grants/field rules for resources a system role doesn't know yet
- * (new modules). Existing grants edited by the admin are never changed.
+ * Insert missing system roles and add default grants for resources never seeded into a role before (new modules).
+ * A grant the admin removed from a system role stays removed (DECISIONS §20 change 1): `seededResources` remembers
+ * what was seeded, so only genuinely new resources are added. Field rules of system roles stay code-defined.
+ * Modules pass their own role definitions (bootstrap: core + sales).
  */
-export async function ensureCoreRoles(): Promise<void> {
-  for (const def of CORE_ROLES) {
-    // Race-safe for concurrent cold starts (review F4): upsert the role, add only missing grants, sync field rules.
+export async function ensureCoreRoles(defs: RoleDefinition[] = CORE_ROLES): Promise<void> {
+  for (const def of defs) {
+    // Race-safe for concurrent cold starts (review F4): upsert the role, add only never-seeded grants, sync field rules.
     await Role.updateOne(
       { code: def.code },
-      { $setOnInsert: { ...def, grants: [], fieldRules: [] } },
+      { $setOnInsert: { ...def, grants: [], fieldRules: [], seededResources: [] } },
       { upsert: true },
     );
     const existing = await Role.findOne({ code: def.code }).lean();
-    const known = new Set(((existing?.grants ?? []) as PermissionGrant[]).map((g) => g.resource));
-    const missingGrants = def.grants.filter((g) => !known.has(g.resource));
-    const update: Record<string, unknown> = {};
-    if (missingGrants.length) update.$addToSet = { grants: { $each: missingGrants } };
+    const defResources = def.grants.map((g) => g.resource);
+    // Roles written before `seededResources` existed: the old baseline had already re-added every default
+    // resource, so treat the resources currently granted as seeded and add only the ones still missing.
+    const seeded = new Set(
+      existing?.seededResources?.length
+        ? existing.seededResources
+        : ((existing?.grants ?? []) as PermissionGrant[]).map((g) => g.resource),
+    );
+    const toAdd = def.grants.filter((g) => !seeded.has(g.resource));
+    const update: Record<string, unknown> = {
+      $addToSet: {
+        seededResources: { $each: defResources },
+        ...(toAdd.length ? { grants: { $each: toAdd } } : {}),
+      },
+    };
     // Field-level rules of system roles are code-defined (default-deny for sensitive fields, review E1).
     if (JSON.stringify(existing?.fieldRules ?? null) !== JSON.stringify(def.fieldRules))
       update.$set = { fieldRules: def.fieldRules };
-    if (Object.keys(update).length) await Role.updateOne({ code: def.code }, update);
+    await Role.updateOne({ code: def.code }, update);
   }
   clearRoleCache();
 }
@@ -81,7 +141,7 @@ export async function effectivePermission(
   const departmentIds = new Set<string>();
   for (const g of await teamLeadGrantsFor(userId))
     if (g.resource === resource && g.actions.includes(action)) scope = maxScope(scope, g.scope);
-  for (const a of assignments) {
+  for (const a of await expandAssignments(assignments, userDepartmentId)) {
     const role = roles.get(a.role);
     if (!role) continue;
     for (const g of role.grants as PermissionGrant[]) {
@@ -102,11 +162,12 @@ export async function effectivePermission(
 export async function flattenPermissions(
   assignments: RoleAssignment[],
   userId?: string,
+  userDepartmentId?: string,
 ): Promise<PermissionGrant[]> {
   const roles = await loadRoles();
   const merged = new Map<string, PermissionGrant>();
   const sources: PermissionGrant[][] = [await teamLeadGrantsFor(userId)];
-  for (const a of assignments) {
+  for (const a of await expandAssignments(assignments, userDepartmentId)) {
     const role = roles.get(a.role);
     if (role) sources.push(role.grants as PermissionGrant[]);
   }
@@ -132,13 +193,14 @@ export async function flattenPermissions(
 export async function fieldRestrictions(
   assignments: RoleAssignment[],
   resource: string,
+  userDepartmentId?: string,
 ): Promise<{ hidden: Set<string>; readOnly: Set<string> }> {
   const roles = await loadRoles();
   const hidden = new Set<string>();
   const readOnly = new Set<string>();
   const seen = new Map<string, { view: boolean; edit: boolean }>();
   for (const f of SENSITIVE_FIELDS_BY_RESOURCE[resource] ?? []) seen.set(f, { view: false, edit: false });
-  for (const a of assignments) {
+  for (const a of await expandAssignments(assignments, userDepartmentId)) {
     const role = roles.get(a.role);
     if (!role) continue;
     for (const r of role.fieldRules as FieldRule[]) {

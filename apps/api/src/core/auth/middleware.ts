@@ -4,6 +4,7 @@ import { forbidden, unauthorized } from '../http/errors';
 import type { AuthedRequest } from '../http/context';
 import { getSetting } from '../settings/service';
 import { User } from './model';
+import { roleCodesOf } from '../rbac/service';
 import { loadSession, SESSION_COOKIE } from './session';
 
 export interface RequireAuthOptions {
@@ -52,7 +53,11 @@ export function requireAuth(opts: RequireAuthOptions = {}): RequestHandler {
       const user = await User.findById(loaded.session.userId);
       if (!user || user.status !== 'active' || user.deletedAt)
         throw unauthorized('الحساب غير نشط', 'account_disabled');
-      const roleCodes = [...new Set(user.roles.map((x) => x.role))];
+      // Implied roles included (DECISIONS §20 change 3), so segregation checks on role codes see them too.
+      const roleCodes = await roleCodesOf(
+        user.roles as { role: string; departmentId?: string }[],
+        user.departmentId ? String(user.departmentId) : undefined,
+      );
       if (user.mustChangePassword) {
         const path = `${req.baseUrl}${req.path}`.replace(/\/$/, '');
         if (!TEMP_PASSWORD_ALLOWED.some((re) => re.test(path)))

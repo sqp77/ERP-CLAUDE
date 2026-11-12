@@ -3,7 +3,7 @@ import { badRequest, forbidden, unauthorized } from '../http/errors';
 import type { Actor } from '../http/context';
 import { recordAudit } from '../audit/service';
 import { getSetting } from '../settings/service';
-import { flattenPermissions } from '../rbac/service';
+import { expandAssignments, flattenPermissions } from '../rbac/service';
 import { notify } from '../notifications/service';
 import { env, isProd } from '../../config';
 import {
@@ -388,10 +388,17 @@ export async function listSessions(userId: string) {
 }
 
 export async function toCurrentUser(user: UserDoc): Promise<CurrentUser> {
-  const roles = user.roles.map((r) => ({
-    role: r.role,
-    departmentId: r.departmentId ? String(r.departmentId) : undefined,
-  }));
+  const deptId = user.departmentId ? String(user.departmentId) : undefined;
+  // Implied roles travel to the UI marked `implied` (DECISIONS §20 change 3); they are never written back.
+  const roles = (
+    await expandAssignments(
+      user.roles.map((r) => ({
+        role: r.role,
+        departmentId: r.departmentId ? String(r.departmentId) : undefined,
+      })),
+      deptId,
+    )
+  ).map((r) => ({ role: r.role, departmentId: r.departmentId, ...(r.implied ? { implied: true } : {}) }));
   return {
     id: String(user._id),
     email: user.email,
@@ -402,7 +409,7 @@ export async function toCurrentUser(user: UserDoc): Promise<CurrentUser> {
     status: user.status,
     mfaEnabled: user.totpEnabled,
     mfaRequired: await mfaRequiredFor(roles.map((r) => r.role)),
-    permissions: await flattenPermissions(roles, String(user._id)),
+    permissions: await flattenPermissions(roles, String(user._id), deptId),
   };
 }
 

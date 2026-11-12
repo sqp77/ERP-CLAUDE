@@ -28,6 +28,12 @@ const roleSchema = new Schema(
     departmentScoped: { type: Boolean, default: false },
     grants: { type: [grantSchema], default: [] },
     fieldRules: { type: [fieldRuleSchema], default: [] },
+    /**
+     * Resources whose default grant was seeded into this system role at least once (DECISIONS §20 change 1).
+     * The baseline adds a default grant only for a resource that is not listed here, so a grant the admin removed
+     * stays removed across cold starts while brand-new module resources still arrive.
+     */
+    seededResources: { type: [String], default: [] },
   },
   { timestamps: true },
 );

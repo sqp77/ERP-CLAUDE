@@ -65,11 +65,21 @@ export interface RoleDefinition {
   fieldRules: FieldRule[];
 }
 
-/** Role assignment stored on a user. */
+/** Role assignment stored on a user. `implied` marks a role derived at runtime (see DEPARTMENT_MANAGER_IMPLIED_ROLES). */
 export interface RoleAssignment {
   role: string;
   departmentId?: string;
+  implied?: boolean;
 }
+
+/**
+ * Roles a department manager carries implicitly for a given department code (DECISIONS §20 change 3): the
+ * manager of the Sales department always has Sales-manager rights, so there is never a Sales manager without them.
+ * Resolved by the RBAC service for permissions, field rules and role codes; never stored on the user.
+ */
+export const DEPARTMENT_MANAGER_IMPLIED_ROLES: Record<string, string> = {
+  sales: 'sales_manager',
+};
 
 export const ALL_ACTIONS: Action[] = [...ACTIONS];
 
@@ -100,6 +110,8 @@ export const GRANTABLE_ROLES: Record<string, readonly string[] | '*'> = {
   system_admin: '*',
   hr_officer: ['employee', 'department_manager'],
   hr_manager: ['employee', 'department_manager'],
+  // The Sales manager staffs the department (SAL §8.1); users must already belong to the Sales department.
+  sales_manager: ['sales_rep'],
 };
 
 export function grantableRolesFor(actorRoles: readonly string[]): Set<string> | '*' {

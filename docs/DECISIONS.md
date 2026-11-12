@@ -253,5 +253,36 @@ Review of commit 82b0f54 before any deploy; fixed in four commits, one per group
 - **G1 reverting a late task when its due date moves:** the status goes back to what it was before the job marked it late (from the task event), not blindly to "new".
 - **H10 (375 px):** fixed the three-column grids that overflowed; the rest was checked by reading the layout code, not in a device lab. A browser end-to-end suite is still missing (PHASE1.md §4).
 
+## 20. Sales module — plan approval and slice S1 (2026-11-12)
+`docs/SALES_PLAN.md` was approved on 2026-11-12 with the changes below. Sales is built before phase 2 (§7). Coverage: `docs/SALES_COVERAGE.md`; demo script: `docs/SALES.md`; prompt: `docs/prompts/sales.md`.
+
+### Defaults accepted (plan §9)
+- **Q2** quote approval only above the rep's discount limit (`sales.quoteApprovalMode`, default `above_limit`). [SAL §3, §7.2]
+- **Q3** `finance_manager` approves Sales requests at the Finance stage; `finance_staff` review and may return for completion; the approver is never the creator or owner. No amount tiers until the authority matrix exists. [SAL §6.1, FIN §12]
+- **Q8** organization types start as SAL §4.1 «حكومي، خاص، عام» (setting `crm.organizationTypes`); CS adds its values later. [SAL §4.1 vs CS §6.8]
+- **Q9** customer classification استراتيجي / منتظم / عرضي is set by the Sales manager by hand, with a history row per change. [SAL §12]
+- **Q10** rental delivery «داخل المنطقة الشرقية أو خارجها» is information only, shown to Operations. [SAL §5.5]
+- **Q12** manager **and** staff of Procurement / Finance / Operations act on their thin stage; Finance approve/reject stays `finance_manager` (Q3). [SAL §6.1]
+- **Q13** the 24-hour rule is **24 clock hours** from referral (`crm.leadRegistrationHours`); at breach the assigned rep and the Sales managers are notified once and the lead is flagged. [SAL §3]
+- **Q14** invoices live in a minimal `modules/finance/` register from S3 (Finance owns them; Sales reads). [SAL §7.3, §19, golden rule 2]
+- **Q15** Operations' 3-business-day scheduling SLA applies to every type reaching Operations, editable per workflow. [SAL §5.4, §6.1]
+- **Plan §10 all five points:** no new permissions engine; container sale goes to Procurement by default (`needsProcurement` true for CSR, false for SRT/CLN, overridable); invoice register in Finance; rental quote optional; scrap money transfer is a status unless Q16 says otherwise.
+
+### Still open — needed before S2/S3, not S1
+**Q1** discount limits (percentage/amount, per line/quote and the numbers) · **Q4** invoices today, ZATCA route and wave, option A or B · **Q5** email provider · **Q6** price list content, editors and market-price source · **Q7** the configurable lists (container types/sizes/colours/dimensions, contract types, waste and service types, destruction materials, scrap categories and task types, tender sources, meeting types, quote rejection reasons) · **Q11** KPI targets and the market-average source · **Q16** scrap transfer as status only or with a Finance step.
+**Provisional for S1 (editable settings, flagged "provisional" until the owner confirms Q7):** loss reasons `sales.lossReasons` = السعر / المنافس / التوقيت / لا حاجة حالياً / أخرى (مع توضيح); facility sizes `sales.facilitySizes` = صغيرة / متوسطة / كبيرة.
+
+### Changes requested with the approval
+1. **Admin tuning of system roles survives restarts.** `ensureCoreRoles` used to re-add every default grant whose resource was missing, so a grant the admin removed from a system role came back on every cold start. Each role now records `seededResources`; a default grant is added only for a resource never seeded for that role. Existing roles are migrated by marking their current default resources as seeded. Test: remove a grant, run the baseline, the grant stays removed; a brand-new resource is still added. [SAL §15 «قابلة للتخصيص»]
+2. **Nobody edits a role they hold.** `PUT /roles/:code` and `DELETE /roles/:code` return 403 `own_role` (audited with `meta.refused`) when the caller holds that role, like "لا يمكنك تغيير أدوارك بنفسك" (§15). Segregation-of-duties and financial checks key on **role codes in code** (as `finalDeciderRoles` does), never on grants alone. [FIN §12]
+3. **The Sales department manager has Sales-manager rights.** A `department_manager` assignment for the department whose code is `sales` implicitly carries the `sales_manager` role (`DEPARTMENT_MANAGER_IMPLIED_ROLES` in `packages/shared`, resolved by the RBAC service for permissions, field rules and `roleCodes`). There is no Sales manager without Sales rights; the implied role shows in `/auth/me` roles as `implied: true`. Test: a department manager of Sales with no explicit role lists every Sales customer; a department manager of HR cannot. [SAL §8, §15]
+4. **Finance "needs completion" state.** The Finance thin stage gets `finance_needs_info` «يحتاج استكمال بيانات» (PRC §4 label) with a required note; the Sales owner completes and resubmits to `at_finance`. [SAL §6.1, PRC §4] — S2.
+5. **Operations thin stage uses OPS §2.1 labels verbatim:** جديد / قيد المراجعة / مجدول / قيد التنفيذ / مكتمل / مؤجل / ملغي / مرفوض (reason required), replacing the plan's «لدى التشغيل» / «تم التنفيذ» so the OPS module takes the stage over without relabeling. Scrap follows OPS §2.2: visit → material, estimated quantity and weight → photos and inspection report → price agreed with Sales → pickup scheduled → actual weight and receipt report → notify Sales and Finance. [OPS §2.1, §2.2, SAL §5.6] — S2.
+6. **KPI «الكمية المباعة»** takes tons from the same invoices as «إجمالي الإيرادات» (invoice lines, Riyadh period), so «متوسط سعر الطن» divides two figures of one source. Before invoices exist the cards show «لا توجد بيانات من المالية». [SAL §11] — S4.
+7. **Q1 while limits are unset:** every discount needs **executive** approval (not the manager alone) and the quote shows «حدود الخصم غير محددة» (the owner's message was cut off after «حدود الخصم غير»; the rest of change 7 and any later changes are to be confirmed). — S3.
+
+### S1 implementation notes (built 2026-11-12) — confirm or correct
+_(filled in with the S1 report)_
+
 ## Still open (ask before building)
 Everything in the "Open decisions" section of `CLAUDE.md` that is not settled above, notably: accounting depth / general ledger, ZATCA route and wave, financial authority matrix and monthly cut-off, customer app and company portal, offline support for field staff, discount limits, points and rewards policy, certificate weight criterion, impact factors, organization-type list (SAL §4.1 vs CS §6.8), Finance-stage state labels in other modules (FIN §5 vs PRC §4 and MKT §8).
