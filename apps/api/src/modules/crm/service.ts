@@ -135,6 +135,10 @@ export async function customerLabels(
     .lean();
   return new Map(rows.map((c) => [String(c._id), { number: c.number, nameAr: c.nameAr }]));
 }
+export async function customerPartyId(customerId: string): Promise<string | null> {
+  const c = await Customer.findById(customerId).select('partyId').lean();
+  return c?.partyId ? String(c.partyId) : null;
+}
 export const countCustomers = (filter: FilterQuery<unknown>) =>
   Customer.countDocuments({ deletedAt: null, ...filter });
 export const countLeads = (filter: FilterQuery<unknown>) =>

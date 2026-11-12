@@ -57,6 +57,14 @@ export const NOTIFICATION_TYPES = [
   'sales.request.overdue',
   'sales.scrap.transfer',
   'sales.assetreturn.reminder',
+  // Quotes, invoices, contracts [SAL §14 5, 6, 11–14]
+  'sales.quote.status', // 5 تحديث حالة عرض السعر
+  'sales.quote.decided', // 6 اعتماد أو رفض عرض السعر
+  'sales.quote.approval_requested',
+  'finance.invoice.issued', // 11 إصدار فاتورة جديدة
+  'finance.invoice.overdue', // 12 تأخر سداد الفاتورة
+  'sales.contract.expiring', // 13 اقتراب انتهاء عقد
+  'sales.contract.renewal_due', // 14 اقتراب موعد تجديد التعاون
   'generic',
 ] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
@@ -114,5 +122,12 @@ export const NOTIFICATION_TITLES_AR: Record<NotificationType, string> = {
   'sales.request.overdue': 'طلب مبيعات تجاوز مهلة المرحلة',
   'sales.scrap.transfer': 'تحويل مبلغ سكراب',
   'sales.assetreturn.reminder': 'موعد المحادثة القادمة لفرصة رجيع أصول',
+  'sales.quote.status': 'تحديث حالة عرض السعر',
+  'sales.quote.decided': 'اعتماد أو رفض عرض السعر',
+  'sales.quote.approval_requested': 'عرض سعر بانتظار اعتمادك',
+  'finance.invoice.issued': 'إصدار فاتورة جديدة',
+  'finance.invoice.overdue': 'تأخر سداد الفاتورة',
+  'sales.contract.expiring': 'اقتراب انتهاء عقد',
+  'sales.contract.renewal_due': 'اقتراب موعد تجديد التعاون',
   generic: 'إشعار',
 };

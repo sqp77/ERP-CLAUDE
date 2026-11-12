@@ -1,7 +1,7 @@
 import type { RoleAssignment } from '@eayni/shared';
 import { User } from './core/auth/model';
 import { Department } from './core/org/model';
-import { effectivePermission } from './core/rbac/service';
+import { effectivePermission, roleCodesOf } from './core/rbac/service';
 import type { AuthedRequest } from './core/http/context';
 import { Customer, Lead } from './modules/crm/model';
 import {
@@ -14,6 +14,16 @@ import {
 } from './modules/crm/service';
 import { changeStage, createOpportunity } from './modules/sales/service';
 import { createRequest, transitionRequest } from './modules/sales/requests.service';
+import { createPriceItem } from './modules/sales/pricing.service';
+import {
+  createQuote,
+  respondQuote,
+  sendQuote,
+  submitQuote,
+  decideQuote,
+} from './modules/sales/quotes.service';
+import { createContract } from './modules/sales/contracts.service';
+import { registerInvoice, recordPayment } from './modules/finance/invoices.service';
 
 const hoursAgo = (h: number) => new Date(Date.now() - h * 3_600_000);
 const inDays = (d: number) => new Date(Date.now() + d * 86_400_000).toISOString();
@@ -37,27 +47,24 @@ export async function seedSales(): Promise<{ customers: number; leads: number }>
     resource: string,
     action: 'create' | 'edit' | 'approve' | 'view',
   ): Promise<AuthedRequest> => {
+    const deptId = u.departmentId ? String(u.departmentId) : undefined;
     const eff = await effectivePermission(
       u.roles as RoleAssignment[],
-      u.departmentId ? String(u.departmentId) : undefined,
+      deptId,
       resource,
       action,
       String(u._id),
     );
+    // Role codes include the implied ones (the Sales department manager is a sales_manager; Sales members are reps).
+    const roleCodes = await roleCodesOf(u.roles as RoleAssignment[], deptId);
     return {
-      auth: {
-        user: u,
-        roleCodes: u.roles.map((r) => r.role),
-        ip: '',
-        userAgent: 'seed',
-        requestId: 'seed',
-        session: {} as never,
-      },
+      auth: { user: u, roleCodes, ip: '', userAgent: 'seed', requestId: 'seed', session: {} as never },
       authz: { resource, action, scope: eff?.scope ?? 'own', departmentIds: eff?.departmentIds ?? [] },
       ip: '127.0.0.1',
       headers: {},
     } as unknown as AuthedRequest;
   };
+
   const [sultan, reem, majed, arwa] = await Promise.all(
     ['sultan', 'reem', 'majed', 'arwa'].map((n) => byEmail(`${n}@eayni.local`)),
   );
@@ -370,6 +377,101 @@ export async function seedSales(): Promise<{ customers: number; leads: number }>
     photoIds: [],
     tags: ['#مناقصة'],
   } as never);
-  void abdulaziz;
+  // Price list (Q6: filled from the screen by the Sales manager), quotes across the approval path, an order, a
+  // registered invoice with a partial payment, and a one-year contract [SAL §7].
+  const mgrPrice = await reqOf(sultan, 'sales.pricelist', 'view');
+  const cardboard = await createPriceItem(mgrPrice, {
+    kind: 'material',
+    nameAr: 'كرتون',
+    category: 'ورق',
+    unit: 'ton',
+    priceHalalas: 60_000_00,
+  });
+  const plastic = await createPriceItem(mgrPrice, {
+    kind: 'material',
+    nameAr: 'بلاستيك PET',
+    category: 'بلاستيك',
+    unit: 'ton',
+    priceHalalas: 2_200_00 * 50,
+  });
+  const visitSvc = await createPriceItem(mgrPrice, {
+    kind: 'service',
+    nameAr: 'زيارة جمع نفايات عامة',
+    unit: 'visit',
+    priceHalalas: 350_00,
+  });
+  const containerSale = await createPriceItem(mgrPrice, {
+    kind: 'material',
+    nameAr: 'حاوية 1100 لتر',
+    category: 'حاويات',
+    unit: 'piece',
+    priceHalalas: 2_500_00,
+  });
+  const reemQuotes = await reqOf(reem, 'sales.quotes', 'create');
+  const quoteA = await createQuote(reemQuotes, {
+    customerId: String(gulf._id),
+    opportunityId: String(
+      (await Opportunity.findOne({ customerId: gulf._id, serviceType: 'containerSale' }).lean())?._id ?? '',
+    ),
+    requestId: String(csr._id),
+    lines: [{ itemId: String(containerSale!._id), quantity: 50, discountPercentBp: 400 }],
+    attachmentIds: [],
+  } as never);
+  await submitQuote(reemQuotes, String(quoteA._id)); // limits unset → pending the executive
+  const quoteB = await createQuote(reemQuotes, {
+    customerId: String(school._id),
+    lines: [{ itemId: String(visitSvc!._id), quantity: 48 }],
+    attachmentIds: [],
+    notesForCustomer: 'زيارة أسبوعية لمدة سنة',
+  } as never);
+  await submitQuote(reemQuotes, String(quoteB._id)); // no discount → approved
+  await sendQuote(reemQuotes, String(quoteB._id), {
+    to: ['admin@alrowad.example'],
+    cc: [],
+    attachmentIds: [],
+  });
+  const accepted = await respondQuote(reemQuotes, String(quoteB._id), { response: 'accepted' });
+  const abdullah = await byEmail('abdullah@eayni.local');
+  await decideQuote(
+    await reqOf(abdullah, 'sales.quotes', 'approve'),
+    String(quoteA._id),
+    'approve',
+    'ضمن السياسة',
+  );
+  const financeReq = await reqOf(abdulaziz, 'finance.invoices', 'create');
+  const inv = await registerInvoice(financeReq, {
+    salesOrderId: String((accepted as { salesOrder?: { _id: unknown } }).salesOrder?._id),
+    kind: 'tax',
+    externalNumber: 'ERP-INV-2026-0117',
+    issueDateTime: new Date(Date.now() - 20 * 86_400_000).toISOString(),
+    dueDate: inDays(10).slice(0, 10),
+  });
+  await recordPayment(financeReq, String(inv._id), {
+    amountHalalas: Math.round(inv.totalHalalas / 2),
+    method: 'bank_transfer',
+    reference: 'TRX-20451',
+  });
+  await createContract(await reqOf(reem, 'sales.contracts', 'create'), {
+    customerId: String(school._id),
+    contractType: 'عقد نظافة سنوي',
+    quoteId: String(quoteB._id),
+    startDate: '2026-01-01',
+    endDate: '2026-12-31',
+    items: [
+      {
+        itemId: String(visitSvc!._id),
+        descriptionAr: 'زيارة جمع نفايات عامة',
+        quantity: 48,
+        unit: 'visit',
+        agreedPriceHalalas: 350_00,
+      },
+    ],
+    schedule: [
+      { plannedAt: inDays(3), kind: 'pickup' },
+      { plannedAt: inDays(10), kind: 'pickup' },
+    ],
+  } as never);
+  void plastic;
+  void cardboard;
   return { customers: await Customer.countDocuments(), leads: await Lead.countDocuments() };
 }

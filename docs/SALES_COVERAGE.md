@@ -14,10 +14,11 @@ Status legend: ✅ built · 🔜 planned slice · ⏸ waits for an owner answer 
 | §3 م1 | تحديد الموظف المسؤول عن متابعة العميل | `ownerUserId` on customer and opportunity; manager assigns leads (`POST /crm/leads/:id/assign`) and names an owner on creation | `crm.test.ts` leads test; `sales-s1.test.ts` reassign | ✅ S1 |
 | §3 م1 | تسجيل احتياج العميل والخدمة المطلوبة | log field `customerNeed`; opportunity `serviceType` (the seven services) | `crm.test.ts` log test | ✅ S1 |
 | §3 م1 | توثيق جميع المحادثات والاتصالات والاجتماعات | `communicationLogs` append-only (`POST/GET /crm/customers/:id/logs`) | `crm.test.ts` «communication log is append-only…» | ✅ S1 |
-| §3 م2–م3 | التسعير وإعداد العرض، إرسال العرض والمتابعة | quotes, price list, discount matrix, send via email adapter, customer replies, «مقبول/مرفوض/قيد التفاوض», rejection reasons | — | 🔜 S3 (Q1, Q5, Q7 pending) |
-| §3 م4 | التعاقد وإجراءات الشراء (المشتريات → المالية → مستندات الشراء) | thin Procurement and Finance stages on the Sales request | — | 🔜 S2 (Q3 default accepted) |
+| §3 م2 | تحديد نوع الخدمة أو المادة؛ إعداد عرض السعر وفق قائمة الأسعار المعتمدة؛ مراعاة أسعار السوق الأسبوعية؛ تطبيق الخصومات وفق مصفوفة الصلاحيات؛ اعتماد العرض من مدير المبيعات ضمن حدود صلاحياته؛ تحويل ما يتجاوزها إلى المدير التنفيذي | `quotes` built from `priceItems` (effective price + weekly market price shown), `computeLines` + `approvalLevelFor` (settings `sales.discountLimitBp` / `sales.quoteApprovalMode`; limits unset → executive, quote marked «حدود الخصم غير محددة»), `submit` → `pending_approval` → `approve` by the level's holder only | `sales-s3.test.ts` «discount matrix: with the limits unset…», «with limits set…» | ✅ S3 (Q1 numbers pending) |
+| §3 م3 | إرسال عرض السعر للعميل من خلال النظام؛ إمكانية الإرسال من بريد الموظف؛ إرفاق المستندات والصور؛ متابعة العميل وتوثيق ردوده؛ تحديث حالة العرض (مقبول، مرفوض، قيد التفاوض)؛ تسجيل أسباب الرفض | `POST /sales/quotes/:id/send` (customer document generated and stored; mailbox adapter `core/email`, disabled per Q5 → draft + `mailto:`, «أُرسل خارج النظام»); `respond` with the three states, rejection reason from `sales.quoteRejectionReasons`; revisions as new versions | «discount matrix…» (send → draft_unsent + mailto, reject needs reason, revise v2) | ✅ S3 (sending from the system waits for Q5) |
+| §3 م4 | الحصول على موافقة العميل؛ توقيع العقد أو أمر البيع؛ إحالة إلى المشتريات عند الحاجة → المالية → مستندات الشراء | quote `accepted` → `salesOrders` (net lines snapshot, signed file) and `customer_approve` on the linked request; Procurement / Finance stages (S2) | «acceptance → sales order…»; S2 container-sale test | ✅ S2+S3 |
 | §3 م5 | التنفيذ والتسليم (التشغيل، الأوزان، محاضر الاستلام) | thin Operations stage with OPS §2.1 labels (DECISIONS §20 change 5) | — | 🔜 S2 |
-| §3 م6 | الفوترة والتحصيل | Finance invoice register (DECISIONS §20 Q14), collection status read-only for Sales | — | 🔜 S3 (Q4 pending) |
+| §3 م6 | إصدار الفاتورة الإلكترونية بناءً على أمر البيع والاعتمادات؛ إرسالها؛ متابعة التحصيل مع المالية؛ تسجيل حالة السداد والمبالغ المستحقة؛ إغلاق الصفقة | `modules/finance` invoice register (Q4 option A: Finance records the invoice issued in the current system against the order; lines/customer from the order), payments append-only, collection state مستحق / محصل جزئياً / محصل بالكامل / متأخر, order → مفوتر → مغلق; Sales reads only | «acceptance → sales order; Finance registers the issued invoice…» | ✅ S3 (e-invoice issuance itself waits for Q4 / ZATCA) |
 | §3 ملاحظة | انتقال الطلب تلقائياً إلى القسم التالي مع إشعار للموظف المسؤول ومدير القسم | workflow definitions per service + hand-off events + notifications 7–10 | — | 🔜 S2 |
 
 ## §4 إدارة العملاء والفرص البيعية (CRM)
@@ -66,8 +67,16 @@ Status legend: ✅ built · 🔜 planned slice · ⏸ waits for an owner answer 
 | §6.1 م4 المشتريات بعد الاعتماد | الحالات: بدأ التنفيذ، قيد المعالجة، تم الرفض، تم الإلغاء، تم الإنجاز؛ بيانات المورد، نموذج الاستلام، تاريخ التسليم، الملاحظات، المستندات والصور، تحديث الحالة | states `execution_*` with verbatim labels; payload supplier / receipt form / delivery date / notes; notification 9 | container-sale test | ✅ S2 |
 | §6.1 م5 التشغيل | إشعار التشغيل، جدولة الزيارات خلال 3 أيام عمل، تسجيل المواعيد، متابعة التنفيذ، توثيق الاستلام والتسليم | OPS §2.1 states (change 5), `ops_new` SLA 3 business days (`addBusinessDays`, Fri–Sat + holidays), `ops_schedule` → calendar visit, `ops_complete` with quantities / weights / reports; notification 10 | container-sale test (due date over a weekend and a holiday, overdue reminder once) | ✅ S2 |
 | §6.2 | حالات الإغلاق: تم الإغلاق بنجاح / دون استكمال / إيقاف المشروع / إلغاء المشروع؛ الإغلاق بنجاح يُشعر التشغيل | `close_success` (notifies Operations, event `sales.request.closed_success`), `close_incomplete` (reason), `suspend` / `cancel` (manager, reason), `resume` | container-sale test; «a rep cannot act on another rep's request…» | ✅ S2 |
-| §6.3 | تنبيهات العقود الدورية | contracts | — | 🔜 S3 |
-## §7 الأسعار والخصومات والفواتير — 🔜 S3 (§7.1 price list; §7.2 matrix — Q1 pending, unset limits → executive approval per change 7; §7.3 invoices — Q4; §7.4 periodic contracts)
+| §6.3 | عقد سنة أو أكثر: تسجيل البداية والنهاية؛ تنبيه قبل الانتهاء بثلاثة أشهر؛ تذكير الموظف المسؤول بالتجديد؛ إصدار شهادة تعاون قبل الانتهاء بثلاثة أشهر؛ توثيق إصدارها وإرسالها | `salesContracts` (`yearOrMore`), job `sales.contracts.alerts` (`sales.contractAlertDaysBefore` = 90) → notifications 13 + 14 once; `POST …/certificates` from the window (CRT number, stored HTML), `…/certificates/:id/send` with a send log | «contracts: schedule dates are tracked, a contract of a year or more alerts…» | ✅ S3 |
+## §7 إدارة الأسعار والخصومات والفواتير
+
+| § | Bullet | Implementation | Test (`sales-s3.test.ts`) | Status |
+|---|---|---|---|---|
+| §7.1 | إضافة أنواع المواد وتصنيفاتها؛ سعر الوحدة أو الطن لكل مادة؛ أسعار الخدمات؛ التحديث وفق أسعار السوق الأسبوعية؛ تاريخ سريان السعر؛ حفظ سجل التغييرات؛ الموظفون المخولون بالتعديل؛ ربط العروض بالقائمة المعتمدة | `priceItems` (material / service, unit, category), `priceEntries` append-only with `validFrom` (future prices scheduled), `marketPrices` weekly rows, `sales.priceEditorRoles` (Q6 default: Sales manager), quotes take lines from the effective price only | «price list: only editor roles write; every price change is a new append-only entry…» | ✅ S3 (content from the screen, Q6) |
+| §7.2 | حد الخصم لموظف المبيعات؛ حد مدير المبيعات؛ تحويل ما يتجاوزها إلى المدير التنفيذي؛ منع اعتماد الخصم من غير مخول؛ سجل الخصومات والاعتمادات؛ اسم معتمد السعر النهائي | `sales.discountLimitBp` {rep, manager} (unset → executive, change 7), `approvalLevelFor`, `decideQuote` refuses the wrong level and the author (403), `quoteEvents` + audit per approval, `approval.approvedByName` shown | «with limits set: within the rep limit auto-approves, above it the manager, above the manager the executive…» | ✅ S3 (numbers pending Q1) |
+| §7.3 | ربط أمر البيع بالفاتورة؛ تعبئة بيانات العميل تلقائياً؛ الخدمة والكمية والسعر؛ الضريبة والإجمالي؛ الإصدار بعد الاعتمادات؛ الإرسال من النظام؛ المشاركة من بريد الموظف؛ إرفاق المستندات؛ حفظ نسخة في ملف العميل؛ متابعة الفاتورة والسداد | `invoices` register from the order (lines, totals, customer legal data from the party), ZATCA fields stored (uuid, sequence, state «بانتظار الإرسال», kind tax/simplified), customer copy HTML, payments and collection state; email through the mailbox adapter | «acceptance → sales order; Finance registers the issued invoice (option A)…» | ✅ S3 (issuance in the system + Fatoora: Finance phase 3 / Q4) |
+| §7.3 متطلب مهم | لا تظهر للعميل تفاصيل الخصم الداخلية ولا السعر السابق ولا الفرق؛ الفاتورة النهائية المعتمدة فقط؛ سجل التعديلات داخليًا | `toCustomerQuoteDto` + `renderCustomerQuoteHtml` carry net prices only (no list price / discount keys exist on the DTO); the order snapshot stores net prices; internal fields (`listPriceHalalas`, discounts, `approval`, `events`) only for the owner, Sales management, Finance and the executive | «discount matrix…» (document contains no «خصم» and no list price) | ✅ S3 |
+| §7.4 | بيانات العميل؛ نوع العقد؛ المدة؛ المواد أو الخدمات؛ الكميات؛ مواعيد التسليم والاستلام؛ الأسعار المتفق عليها؛ العقد الموقع؛ متابعة كل موعد تسليم؛ تنبيهات التجديد والانتهاء؛ سجل العمليات | `salesContracts` with `items`, `schedule[]` (planned / done / missed per date), signed file, `contractEvents` append-only, renewal (`renewalOf` / `renewedById`), alerts job | «contracts: schedule dates are tracked…» | ✅ S3 (contract types list pending Q7) |
 
 ## §8 صلاحيات مدير قسم المبيعات
 
@@ -108,12 +117,16 @@ Status legend: ✅ built · 🔜 planned slice · ⏸ waits for an owner answer 
 | 2 | إسناد عميل إلى موظف | `crm.customer.assigned` | lead assignment, customer created for another owner, transfer recipient | `crm.test.ts` leads + transfer | ✅ S1 |
 | 3 | قرب موعد متابعة العميل | `crm.followup.due` | jobs `crm.followups`, `sales.followups` | `crm.test.ts` follow-up | ✅ S1 |
 | 4 | اقتراب موعد اجتماع أو زيارة | `meeting.reminder` (core) | calendar | core tests | ✅ core (Sales fields S4) |
-| 5–6 | تحديث حالة عرض السعر؛ اعتماد أو رفض عرض السعر | — | S3 | — | 🔜 |
+| 5 | تحديث حالة عرض السعر | `sales.quote.status` | send / accepted / rejected / negotiating → Sales managers | `sales-s3.test.ts` «discount matrix…» | ✅ S3 |
+| 6 | اعتماد أو رفض عرض السعر | `sales.quote.decided` (+ `sales.quote.approval_requested` to the approvers) | `decideQuote` → the quote's owner | same | ✅ S3 |
 | 7 | وصول طلب جديد إلى المشتريات | `sales.request.to_procurement` | `send_to_procurement` → Procurement managers and members | S2 container-sale test | ✅ S2 |
 | 8 | اعتماد أو رفض الطلب من المالية | `sales.request.finance_decided` | Finance decisions (incl. «يحتاج استكمال بيانات») → Sales owner + managers + Procurement | same | ✅ S2 |
 | 9 | تحديث حالة الطلب من المشتريات | `sales.request.procurement_updated` | `execution_*` → Sales | same | ✅ S2 |
 | 10 | اكتمال التنفيذ من التشغيل | `sales.request.operations_completed` | `ops_complete`, `estimate_done`, `record_collection` (+ Finance for scrap, OPS §2.2) → Sales | same; scrap test | ✅ S2 |
-| 11–14 | الفواتير، العقود، التعاون | — | S3 | — | 🔜 |
+| 11 | إصدار فاتورة جديدة | `finance.invoice.issued` | `registerInvoice` → Sales owner + managers | «acceptance → sales order…» | ✅ S3 |
+| 12 | تأخر سداد الفاتورة | `finance.invoice.overdue` | daily job → Sales owner, managers, Finance, once | same | ✅ S3 |
+| 13 | اقتراب انتهاء عقد | `sales.contract.expiring` | daily job, 90 days before, once → Sales | «contracts…» | ✅ S3 |
+| 14 | اقتراب موعد تجديد التعاون | `sales.contract.renewal_due` | same job → the owner | same | ✅ S3 |
 | 15 | وجود مشكلة أو استفسار من قسم آخر | — | S4 (discussions) | — | 🔜 |
 | 16 | تغيير الموظف المسؤول عن العميل أو الطلب | `crm.owner_changed`, `crm.customer.assigned` | transfer and reassignment → previous owner; a request created for another owner → that owner | `crm.test.ts` transfer; `sales-s1.test.ts` reassign | ✅ S1/S2 |
 
@@ -135,9 +148,9 @@ Status legend: ✅ built · 🔜 planned slice · ⏸ waits for an owner answer 
 | APIs للتكامل | OpenAPI document | 🔜 S5 |
 | سجل تدقيق لجميع الإجراءات | `recordAudit` on every write (customers, contacts, logs, leads, opportunities, tags, transfers) | ✅ S1 |
 | البحث والتصفية المتقدمة | Arabic-normalised search on name/city/activity, phone digits, number; filters by status/source/classification/tag/owner/follow-up | ✅ S1 |
-| حماية بيانات العملاء والعقود والأسعار | scope rules, duplicate check without leakage; price/discount field rules in S3 | ✅/🔜 |
+| حماية بيانات العملاء والعقود والأسعار | scope rules, duplicate check without leakage; quote internals (list price, discounts, approvals, history) only for the owner, Sales management, Finance and the executive; invoice views audited as sensitive | ✅ |
 | النسخ الاحتياطية | Atlas backup note in DEPLOY.md | 🔜 S5 |
 
-## §18 المخرجات (20) — S1 delivers 1 (landing), 2 (CRM), 3 (customer file + log), 4 (leads), 18 (permissions); S2 delivers 5 (service and request screens) and the Procurement / Finance / Operations part of 19 (queues «الطلبات الواردة من المبيعات» + hand-off events); see `docs/SALES_PLAN.md` §6 for the rest.
+## §18 المخرجات (20) — S1: 1, 2, 3, 4, 18; S2: 5 and the PRC/FIN/OPS part of 19; S3: 6 (quotes), 7 (price list), 8 (discount matrix view), 9 (periodic contracts), 10 (invoices and collection). Remaining: 11–17, 20 (S4–S5).
 
 ## §19 التوصيات — S1: ملف موحد ✅ · رقم مرجعي تلقائي ✅ · الاحتفاظ بالمحادثات عند تغيير الموظف ✅ · عدم تجاوز الصلاحيات ✅ · S2: كل الخدمات مرتبطة بملف العميل نفسه ✅ (`customerId` required) · مسارات اعتماد مرنة ✅ (workflow definitions) · الطلبات المحولة تظهر في حساب القسم المستلم مع إشعار فوري ✅ (`?view=incoming`, notifications 7/to_finance/to_operations) · سجل انتقال الطلب بين الأقسام واسم الموظف في كل مرحلة ✅ (stage log) · سبب تأخر الطلب والجهة المسؤولة ✅ (`delay-reason`) · البقية (ربط الإيرادات بالمالية، البريد، التقارير) S3–S5.

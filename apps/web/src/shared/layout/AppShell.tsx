@@ -28,6 +28,7 @@ import {
   X,
   KanbanSquare,
   HandCoins,
+  Landmark,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { usePrefs } from '@/lib/preferences';
@@ -96,6 +97,25 @@ export function AppShell() {
       label: t('nav.incomingFromSales'),
       icon: Inbox,
       show: !!reqMeta.data?.incomingHolders.length,
+    },
+    { to: '/sales/quotes', label: t('nav.quotes'), icon: FileText, show: can('sales.quotes', 'view') },
+    {
+      to: '/sales/pricelist',
+      label: t('nav.pricelist'),
+      icon: HandCoins,
+      show: can('sales.pricelist', 'view'),
+    },
+    {
+      to: '/sales/contracts',
+      label: t('nav.contracts'),
+      icon: FileCheck2,
+      show: can('sales.contracts', 'view'),
+    },
+    {
+      to: '/sales/invoices',
+      label: t('nav.invoices'),
+      icon: Landmark,
+      show: can('finance.invoices', 'view'),
     },
     {
       to: '/cs/refer-lead',

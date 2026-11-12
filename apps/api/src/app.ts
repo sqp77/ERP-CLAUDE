@@ -30,6 +30,10 @@ import { partiesRouter } from './core/parties/routes';
 import { crmRouter } from './modules/crm/routes';
 import { salesRouter } from './modules/sales/routes';
 import { salesRequestsRouter } from './modules/sales/requests.routes';
+import { pricingRouter } from './modules/sales/pricing.routes';
+import { quotesRouter } from './modules/sales/quotes.routes';
+import { contractsRouter } from './modules/sales/contracts.routes';
+import { invoicesRouter } from './modules/finance/invoices.routes';
 import { hrRouter } from './modules/hr/routes';
 import { portalRouter, profileChangesRouter } from './modules/hr/portalRoutes';
 import { requestsRouter } from './modules/hr/requests.routes';
@@ -91,6 +95,10 @@ export function createApp(): Express {
   v1.use('/parties', partiesRouter);
   v1.use('/crm', crmRouter);
   v1.use('/sales/requests', salesRequestsRouter);
+  v1.use('/sales/pricelist', pricingRouter);
+  v1.use('/sales/quotes', quotesRouter);
+  v1.use('/sales/contracts', contractsRouter);
+  v1.use('/finance/invoices', invoicesRouter);
   v1.use('/sales', salesRouter);
   app.use('/api/v1', v1);
 

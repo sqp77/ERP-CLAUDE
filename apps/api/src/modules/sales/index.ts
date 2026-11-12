@@ -11,6 +11,10 @@ import {
 import { Opportunity } from './model';
 import { SalesRequest } from './requests.model';
 import { canAccessRequest, runAssetReturnReminders, runRequestOverdueAlerts } from './requests.service';
+import { canAccessQuote } from './quotes.service';
+import { Quote } from './quotes.model';
+import { canAccessContract, runContractAlerts } from './contracts.service';
+import { SalesContract } from './contracts.model';
 import {
   canAccessOpportunity,
   createOpportunityIn,
@@ -106,5 +110,33 @@ export function registerSalesModule(): void {
     else await SalesRequest.updateMany({ tags: from }, { $pull: { tags: from } });
   });
   registerJob('sales.requests.overdue', (now) => runRequestOverdueAlerts(now), 'frequent');
+  // Quotes and contracts [SAL §6.3, §7]: files hang on them; contract alerts run daily.
+  registerRecordAccess('quote', (req, id) => canAccessQuote(req, id));
+  registerRecordAccess('sales_contract', (req, id) => canAccessContract(req, id));
+  registerRecordResolver('quote', async (idOrNumber) => {
+    const q = await Quote.findOne({
+      deletedAt: null,
+      $or: [
+        ...(/^[0-9a-f]{24}$/i.test(idOrNumber) ? [{ _id: idOrNumber }] : []),
+        { number: idOrNumber.toUpperCase() },
+      ],
+    })
+      .select('number')
+      .lean();
+    return q ? { id: String(q._id), label: q.number } : null;
+  });
+  registerRecordResolver('sales_contract', async (idOrNumber) => {
+    const c = await SalesContract.findOne({
+      deletedAt: null,
+      $or: [
+        ...(/^[0-9a-f]{24}$/i.test(idOrNumber) ? [{ _id: idOrNumber }] : []),
+        { number: idOrNumber.toUpperCase() },
+      ],
+    })
+      .select('number')
+      .lean();
+    return c ? { id: String(c._id), label: c.number } : null;
+  });
+  registerJob('sales.contracts.alerts', (now) => runContractAlerts(now), 'daily');
   registerJob('sales.assetreturn.reminders', (now) => runAssetReturnReminders(now), 'frequent');
 }

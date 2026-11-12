@@ -5,6 +5,7 @@ import { DEFAULT_REPORT_TYPES, reportTypesSchema } from './schemas/hrReports';
 import { DEFAULT_ORGANIZATION_TYPES } from './schemas/crm';
 import { DEFAULT_FACILITY_SIZES, DEFAULT_LOSS_REASONS } from './schemas/sales';
 import { SALES_LIST_KEYS } from './schemas/salesRequests';
+import { DEFAULT_QUOTE_REJECTION_REASONS } from './schemas/salesPricing';
 
 /**
  * Settings registry: everything the specs want configurable lives here with a default and a schema
@@ -81,6 +82,54 @@ export const SETTING_DEFINITIONS = {
     group: 'sales',
     schema: z.array(z.string()).min(1),
     default: ['sales_manager', 'finance_manager', 'finance_staff'],
+  }),
+  'sales.discountLimitBp': def({
+    key: 'sales.discountLimitBp',
+    labelAr: 'حدود الخصم (نقاط أساس من سعر القائمة): موظف المبيعات ومدير المبيعات',
+    descriptionAr:
+      'Q1 لم يُجَب بعد: الحدّان فارغان → كل خصم يحتاج اعتماد المدير التنفيذي ويظهر «حدود الخصم غير محددة» (DECISIONS §20 change 7). 1000 = 10%',
+    group: 'sales',
+    schema: z.object({
+      rep: z.number().int().min(0).max(10_000).nullable(),
+      manager: z.number().int().min(0).max(10_000).nullable(),
+    }),
+    default: { rep: null, manager: null },
+  }),
+  'sales.quoteApprovalMode': def({
+    key: 'sales.quoteApprovalMode',
+    labelAr: 'اعتماد عرض السعر: فوق حد الخصم فقط أو دائمًا',
+    group: 'sales',
+    schema: z.enum(['above_limit', 'always']),
+    default: 'above_limit', // DECISIONS §20 Q2
+  }),
+  'sales.priceEditorRoles': def({
+    key: 'sales.priceEditorRoles',
+    labelAr: 'الأدوار المخوّلة بتعديل قائمة الأسعار وأسعار السوق',
+    group: 'sales',
+    schema: z.array(z.string()).min(1),
+    default: ['sales_manager'], // DECISIONS §20 Q6 default
+  }),
+  'sales.quoteValidityDays': def({
+    key: 'sales.quoteValidityDays',
+    labelAr: 'مدة صلاحية عرض السعر الافتراضية (أيام)',
+    group: 'sales',
+    schema: z.number().int().min(1).max(365),
+    default: 30,
+  }),
+  'sales.quoteRejectionReasons': def({
+    key: 'sales.quoteRejectionReasons',
+    labelAr: 'أسباب رفض عرض السعر (مؤقتة حتى اعتماد المالك)',
+    group: 'sales',
+    schema: z.array(z.string().trim().min(1).max(120)).min(1).max(50),
+    default: DEFAULT_QUOTE_REJECTION_REASONS, // provisional (Q7)
+  }),
+  'sales.contractAlertDaysBefore': def({
+    key: 'sales.contractAlertDaysBefore',
+    labelAr: 'التنبيه قبل انتهاء العقود السنوية (أيام)',
+    descriptionAr: 'ثلاثة أشهر بنص SAL §6.3؛ شهادة التعاون تُتاح من هذا الموعد',
+    group: 'sales',
+    schema: z.number().int().min(1).max(365),
+    default: 90,
   }),
   'sales.followUpReminderHours': def({
     key: 'sales.followUpReminderHours',

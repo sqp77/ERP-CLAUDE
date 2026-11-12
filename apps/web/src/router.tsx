@@ -51,6 +51,11 @@ import { ReferLeadPage } from './pages/cs/ReferLeadPage';
 import { RequestsPage } from './pages/sales/requests/RequestsPage';
 import { NewRequestPage } from './pages/sales/requests/NewRequestPage';
 import { RequestDetailPage as SalesRequestDetailPage } from './pages/sales/requests/RequestDetailPage';
+import { PriceListPage } from './pages/sales/pricing/PriceListPage';
+import { QuotesPage } from './pages/sales/pricing/QuotesPage';
+import { QuotePage } from './pages/sales/pricing/QuotePage';
+import { ContractsPage, ContractPage } from './pages/sales/pricing/ContractsPage';
+import { InvoicesPage } from './pages/sales/pricing/InvoicesPage';
 
 export const router = createBrowserRouter([
   {
@@ -158,6 +163,31 @@ export const router = createBrowserRouter([
               { path: '/sales/requests', element: <RequestsPage /> },
               { path: '/sales/requests/:id', element: <SalesRequestDetailPage /> },
               { path: '/incoming', element: <RequestsPage incoming /> },
+              {
+                element: <RequirePermission resource="sales.pricelist" action="view" />,
+                children: [{ path: '/sales/pricelist', element: <PriceListPage /> }],
+              },
+              {
+                element: <RequirePermission resource="sales.quotes" action="view" />,
+                children: [
+                  { path: '/sales/quotes', element: <QuotesPage /> },
+                  { path: '/sales/quotes/:id', element: <QuotePage /> },
+                ],
+              },
+              {
+                element: <RequirePermission resource="sales.contracts" action="view" />,
+                children: [
+                  { path: '/sales/contracts', element: <ContractsPage /> },
+                  { path: '/sales/contracts/:id', element: <ContractPage /> },
+                ],
+              },
+              {
+                element: <RequirePermission resource="finance.invoices" action="view" />,
+                children: [
+                  { path: '/sales/invoices', element: <InvoicesPage /> },
+                  { path: '/sales/invoices/:id', element: <InvoicesPage /> },
+                ],
+              },
               { path: '/cs/refer-lead', element: <ReferLeadPage /> },
               {
                 element: <RequirePermission resource="holidays" action="edit" />,

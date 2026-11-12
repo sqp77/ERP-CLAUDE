@@ -14,6 +14,9 @@ const ROUTES: Record<string, (id: string) => string> = {
   opportunity: (id) => `/sales/pipeline?opportunity=${id}`,
   lead: (id) => `/sales/leads?lead=${id}`,
   sales_request: (id) => `/sales/requests/${id}`,
+  quote: (id) => `/sales/quotes/${id}`,
+  sales_contract: (id) => `/sales/contracts/${id}`,
+  invoice: (id) => `/sales/invoices/${id}`,
 };
 
 export function recordLink(type: string | undefined, id: string | undefined): string | undefined {

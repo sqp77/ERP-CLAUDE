@@ -18,6 +18,7 @@ import { SALES_ROLES } from './modules/sales/roles';
 import { SALES_WORKFLOWS } from './modules/sales/workflows';
 import { registerCrmModule } from './modules/crm';
 import { registerSalesModule } from './modules/sales';
+import { FINANCE_INVOICE_GRANTS, registerFinanceModule } from './modules/finance';
 import { ensureDefaultTags } from './core/tags/service';
 import { DEFAULT_SALES_TAGS } from '@eayni/shared';
 import { CORE_ROLES } from './core/rbac/defaults';
@@ -42,6 +43,7 @@ export function registerModules(): void {
   registerNewsModule();
   registerCrmModule();
   registerSalesModule();
+  registerFinanceModule();
 
   registerExportResource({
     resource: 'users',
@@ -68,7 +70,13 @@ export const registerCoreJobs = registerModules;
 
 /** Make sure configuration data exists (roles, workflow defaults). Safe to run on every start. */
 export async function ensureBaseline(): Promise<void> {
-  await ensureCoreRoles([...CORE_ROLES, ...SALES_ROLES]);
+  // Finance roles gain the invoice register (Finance phase 0) through the same never-seeded-resource rule.
+  const coreWithFinance = CORE_ROLES.map((r) =>
+    r.code === 'finance_staff' || r.code === 'finance_manager'
+      ? { ...r, grants: [...r.grants, ...FINANCE_INVOICE_GRANTS] }
+      : r,
+  );
+  await ensureCoreRoles([...coreWithFinance, ...SALES_ROLES]);
   for (const def of [...DEFAULT_WORKFLOWS, ...SALES_WORKFLOWS]) await ensureWorkflow(def);
   await ensureDefaultTags('sales', DEFAULT_SALES_TAGS); // [SAL §10.4]
   await backfillIdentityHashes();
