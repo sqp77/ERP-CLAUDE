@@ -2,7 +2,7 @@
 
 Answers from the product owner (Saud, IT) that settle what `docs/SPECS.md` leaves open or where two specs disagree. This file **overrides the defaults in `CLAUDE.md`**. Every decision cites the spec sections it settles. Dates are Gregorian.
 
-Last updated: 2026-11-04.
+Last updated: 2026-11-12.
 
 ## 1. Infrastructure and accounts — not decided yet
 - AWS account, hosting region and data-residency requirement, MongoDB Atlas cluster, staging domain, email sending domain and brand assets are **not decided**.
@@ -62,6 +62,7 @@ Starting defaults. **Every route is workflow configuration that HR can change** 
 - **Attendance is not in phase 1.** It is **phase 2**, following HR §8 ("التشغيل اليومي"). Geofence radius, lateness tolerance, overtime and deductions are decided in that phase, all as settings. [HR §3.4, §3.6]
 - **Salary data is in phase 1:** HR enters basic salary, allowances and advances so the portal's financial details work. [EP §8] Payroll runs come later. [HR §3.6]
 - **HR owns salary data; Finance reads it.** This resolves EP §8.1 ("الموارد البشرية أو المالية"). Rule 5 of CLAUDE.md (financial figures come from Finance) applies to department budgets and revenue, not to the salary master.
+- **Sales before attendance (owner decision 2026-11-12).** The Sales module [SAL] is built next, in the five SAL §17 phases (slices S1–S5), together with the shared pieces it needs (CRM core, minimal party master FIN §8, tags, KPI framework, department discussions, email adapter) and thin hand-off stages for Procurement, Finance and Operations on the same Sales record. **Phase 2 (attendance) moves after Sales.** The plan and the open questions are in `docs/SALES_PLAN.md`; coding starts only after the owner approves it (SAL closing note). [SAL §17, §19]
 
 ## 8. Tickets [EP §9, IT §7.1, FIN §3, PRC §2]
 - Portal tickets addressed to **Finance** and **Procurement** are **the same records** as the FIN §3 financial request and the PRC §2 purchase request: one form, one number, no second entry point. Those two targets are **hidden in the department list until their modules exist**. [EP §9.1 note]
