@@ -164,7 +164,7 @@ describe('staging readiness 2/4/5 — scripts and config', () => {
     const deploy = readFileSync(root + 'scripts/deploy-web.sh', 'utf8');
     expect(deploy).not.toMatch(/s3 sync[^\n]*--delete/);
     const prune = readFileSync(root + 'scripts/prune-web-assets.sh', 'utf8');
-    expect(prune).toContain('index.html');
+    expect(prune).toContain('_deploy/files.txt');
     expect(prune).toContain('LastModified');
     const smoke = readFileSync(root + 'scripts/smoke-staging.sh', 'utf8');
     expect(smoke).toContain('PASS (IPv6)');

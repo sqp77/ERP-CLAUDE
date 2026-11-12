@@ -149,11 +149,16 @@ deletes exactly that set and keeps departments, roles, settings, real users and 
 
 `deploy-web.sh` never deletes: a tab still running the previous build can lazy-load its old chunks. The web app
 also listens for Vite's `vite:preloadError` and reloads once (guarded per path in `sessionStorage`) so a stale tab
-recovers after a deploy. Old assets are removed later:
+recovers after a deploy. With every build `deploy-web.sh` also uploads `_deploy/files.txt`, the complete file list of
+that build (`scripts/web-file-list.sh apps/web/dist`), because index.html alone never names the logo, local fonts or
+lazy chunks that JS/CSS reference. Old assets are removed later:
 
 ```bash
-scripts/prune-web-assets.sh staging 14   # assets not referenced by the live index.html and older than 14 days
+scripts/prune-web-assets.sh staging 14   # assets not in the live build's file list and older than 14 days
 ```
+
+Prune stops and deletes nothing when `_deploy/files.txt` is missing (a bucket last filled by an older
+`deploy-web.sh`): run `deploy-web.sh` once first.
 
 ## Other SSM parameters
 
