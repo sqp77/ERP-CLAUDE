@@ -43,6 +43,9 @@ import {
   useSalesTeam,
   type OpportunityRow,
 } from './_data';
+import { DrillBanner, useDrill, type DrillKey } from './DrillFilters';
+
+const DRILL: DrillKey[] = ['createdFrom', 'createdTo', 'closedFrom', 'closedTo'];
 
 /** إدارة الفرص البيعية (Sales Pipeline) [SAL §4.2]: Kanban by stage or a table; filters; expected value, owner, last contact, next follow-up. */
 export function PipelinePage() {
@@ -60,7 +63,9 @@ export function PipelinePage() {
     setParams(next, { replace: true });
   };
   const view = get('view') === 'table' ? 'table' : 'kanban';
+  const drill = useDrill(DRILL);
   const list = useOpportunities({
+    ...drill,
     stage: get('stage') || undefined,
     open: get('open') === 'true',
     serviceType: get('serviceType') || undefined,
@@ -130,6 +135,7 @@ export function PipelinePage() {
           </>
         }
       />
+      <DrillBanner keys={DRILL} />
       <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
         <Input
           value={get('q')}

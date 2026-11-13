@@ -29,6 +29,12 @@ import {
   KanbanSquare,
   HandCoins,
   Landmark,
+  LayoutDashboard,
+  Gauge,
+  Target,
+  ListChecks,
+  Library,
+  MessagesSquare,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { usePrefs } from '@/lib/preferences';
@@ -74,6 +80,12 @@ export function AppShell() {
   const salesItems = [
     { to: '/sales', label: t('nav.salesHome'), icon: HandCoins, show: can('crm.customers', 'view') },
     {
+      to: '/sales/dashboard',
+      label: t('nav.salesDashboard'),
+      icon: LayoutDashboard,
+      show: can('sales.dashboard', 'view'),
+    },
+    {
       to: '/sales/customers',
       label: t('nav.customers'),
       icon: Building2,
@@ -117,6 +129,15 @@ export function AppShell() {
       icon: Landmark,
       show: can('finance.invoices', 'view'),
     },
+    { to: '/sales/kpi', label: t('nav.salesKpi'), icon: Gauge, show: can('sales.kpi', 'view') },
+    { to: '/sales/targets', label: t('nav.salesTargets'), icon: Target, show: can('sales.targets', 'view') },
+    {
+      to: '/sales/tasks',
+      label: t('nav.salesTasks'),
+      icon: ListChecks,
+      show: can('sales.dashboard', 'view'),
+    },
+    { to: '/sales/library', label: t('nav.salesLibrary'), icon: Library, show: can('sales.library', 'view') },
     {
       to: '/cs/refer-lead',
       label: t('nav.referLead'),
@@ -141,6 +162,12 @@ export function AppShell() {
     { to: '/tasks', label: t('nav.tasks'), icon: ClipboardList, show: can('tasks', 'view') },
     { to: '/tasks/board', label: t('nav.taskBoard'), icon: ClipboardList, show: can('tasks', 'create') },
     { to: '/calendar', label: t('nav.calendar'), icon: CalendarDays, show: can('calendar', 'view') },
+    {
+      to: '/discussions',
+      label: t('nav.discussions'),
+      icon: MessagesSquare,
+      show: can('discussions', 'view'),
+    },
     { to: '/me/reports', label: t('nav.myReports'), icon: FileText, show: can('hr.reports', 'view') },
     { to: '/news', label: t('nav.news'), icon: Newspaper, show: can('news', 'view') },
     { to: '/notifications', label: t('nav.notifications'), icon: Bell, show: true },

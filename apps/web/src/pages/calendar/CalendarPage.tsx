@@ -35,6 +35,7 @@ import {
   cx,
 } from '@/shared/ui';
 import { useToast } from '@/shared/ui/Toast';
+import { useRequestsMeta } from '../sales/requests/_data';
 
 interface Ev {
   _id: string;
@@ -45,9 +46,16 @@ interface Ev {
   endAt: string;
   allDay?: boolean;
   location?: string;
+  locationUrl?: string;
   meetingUrl?: string;
   description?: string;
   outcome?: string;
+  nextFollowUpAt?: string | null;
+  /** SAL §9: «نوع الاجتماع», the organizer of an event, and the one-time Marketing notice. */
+  meetingType?: string;
+  organizer?: string;
+  needsMarketing?: boolean;
+  marketingNotifiedAt?: string | null;
   participantIds?: string[];
   ownerId?: string;
   readOnly: boolean;
@@ -138,6 +146,17 @@ export function CalendarPage() {
     enabled: !!deepId,
   });
   const [jumpedTo, setJumpedTo] = useState<string | null>(null);
+  // «جدولة اجتماع» from a customer or request [SAL §9 «ربط الاجتماع بملف العميل»]: /calendar?new=<type>:<id>.
+  const newParam = params.get('new');
+  const preset = useMemo(() => {
+    if (!newParam) return undefined;
+    const [type, ...rest] = newParam.split(':');
+    const id = rest.join(':');
+    return type && id ? { linkType: type, linkId: id } : undefined;
+  }, [newParam]);
+  useEffect(() => {
+    if (preset) setOpen(true);
+  }, [preset]);
   useEffect(() => {
     if (!deepId || !deep.data || jumpedTo === deepId) return;
     const start = new Date(deep.data.startAt);
@@ -335,7 +354,11 @@ export function CalendarPage() {
       />
       <NewEventDialog
         open={open}
-        onClose={() => setOpen(false)}
+        preset={preset}
+        onClose={() => {
+          setOpen(false);
+          if (newParam) setParams({});
+        }}
         onCreated={() => qc.invalidateQueries({ queryKey: ['calendar'] })}
       />
     </>
@@ -357,17 +380,28 @@ function EventDialog({
   const { t } = useTranslation();
   const { formatDate } = usePrefs();
   const toast = useToast();
-  const [mode, setMode] = useState<'status' | 'reschedule' | null>(null);
+  const [mode, setMode] = useState<'status' | 'reschedule' | 'marketing' | null>(null);
   const [status, setStatus] = useState<EventStatus>('done');
   const [outcome, setOutcome] = useState('');
+  const [nextFollowUp, setNextFollowUp] = useState('');
+  const [organizer, setOrganizer] = useState('');
+  const [mLocation, setMLocation] = useState('');
   const [startAt, setStartAt] = useState('');
   const [endAt, setEndAt] = useState('');
   const save = useMutation({
-    mutationFn: (body: Record<string, unknown>) => patch(`/calendar/events/${ev!._id}`, body),
-    onSuccess: () => {
+    mutationFn: (body: Record<string, unknown>) =>
+      patch<{ marketingNotice?: string }>(`/calendar/events/${ev!._id}`, body),
+    onSuccess: (r) => {
       onChanged();
       setMode(null);
-      toast(t('actions.save'));
+      toast(
+        r?.marketingNotice === 'sent'
+          ? t('calendar.marketingSent')
+          : r?.marketingNotice === 'no_department'
+            ? t('calendar.marketingNoDept')
+            : t('actions.save'),
+        r?.marketingNotice === 'no_department' ? 'error' : undefined,
+      );
       onClose();
     },
     onError: (e) => toast(errorMessage(e), 'error'),
@@ -399,10 +433,38 @@ function EventDialog({
               ev.allDay ? { dateStyle: 'medium' } : { dateStyle: 'medium', timeStyle: 'short' },
             )}
           </dd>
+          {ev.meetingType && (
+            <>
+              <dt className="text-slate-500">{t('calendar.meetingType')}</dt>
+              <dd>{ev.meetingType}</dd>
+            </>
+          )}
           {ev.location && (
             <>
               <dt className="text-slate-500">{t('calendar.location')}</dt>
               <dd>{ev.location}</dd>
+            </>
+          )}
+          {ev.locationUrl && (
+            <>
+              <dt className="text-slate-500">{t('calendar.locationUrl')}</dt>
+              <dd>
+                <a
+                  href={ev.locationUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="break-all text-brand-700 hover:underline"
+                  dir="ltr"
+                >
+                  {ev.locationUrl}
+                </a>
+              </dd>
+            </>
+          )}
+          {ev.organizer && (
+            <>
+              <dt className="text-slate-500">{t('calendar.organizer')}</dt>
+              <dd>{ev.organizer}</dd>
             </>
           )}
           {ev.meetingUrl && (
@@ -433,6 +495,14 @@ function EventDialog({
               <dd className="whitespace-pre-wrap">{ev.outcome}</dd>
             </>
           )}
+          {ev.nextFollowUpAt && (
+            <>
+              <dt className="text-slate-500">{t('calendar.nextFollowUp')}</dt>
+              <dd className="tabular">
+                {formatDate(ev.nextFollowUpAt, { dateStyle: 'medium', timeStyle: 'short' })}
+              </dd>
+            </>
+          )}
           {ev.link && (
             <>
               <dt className="text-slate-500">{t('calendar.linkedRecord')}</dt>
@@ -448,6 +518,13 @@ function EventDialog({
             </>
           )}
         </dl>
+        {ev.marketingNotifiedAt && (
+          <Alert kind="success">
+            {t('calendar.marketingNotifiedOn', {
+              date: formatDate(ev.marketingNotifiedAt, { dateStyle: 'medium' }),
+            })}
+          </Alert>
+        )}
         {!ev.readOnly && mine && ev.status !== 'cancelled' && (
           <div className="flex flex-wrap gap-2 border-t border-slate-100 pt-3">
             <Button variant="secondary" onClick={() => setMode('status')}>
@@ -456,6 +533,18 @@ function EventDialog({
             {ev.ownerId === meId && (
               <Button variant="secondary" onClick={() => setMode('reschedule')}>
                 {t('calendar.reschedule')}
+              </Button>
+            )}
+            {ev.ownerId === meId && !ev.marketingNotifiedAt && (
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setOrganizer(ev.organizer ?? '');
+                  setMLocation(ev.location ?? '');
+                  setMode('marketing');
+                }}
+              >
+                {t('calendar.notifyMarketing')}
               </Button>
             )}
             {ev.ownerId === meId && (
@@ -481,8 +570,19 @@ function EventDialog({
                 ))}
               </Select>
             </Field>
-            <Field label={t('calendar.outcome')}>
+            <Field
+              label={t('calendar.outcome')}
+              hint={ev.link?.type === 'customer' ? t('calendar.outcomeToLogHint') : undefined}
+            >
               <Textarea rows={2} value={outcome} onChange={(e) => setOutcome(e.target.value)} />
+            </Field>
+            <Field label={t('calendar.nextFollowUp')}>
+              <Input
+                type="datetime-local"
+                dir="ltr"
+                value={nextFollowUp}
+                onChange={(e) => setNextFollowUp(e.target.value)}
+              />
             </Field>
             <div className="flex justify-end gap-2">
               <Button variant="secondary" onClick={() => setMode(null)}>
@@ -490,9 +590,38 @@ function EventDialog({
               </Button>
               <Button
                 loading={save.isPending}
-                onClick={() => save.mutate({ status, outcome: outcome || undefined })}
+                onClick={() =>
+                  save.mutate({
+                    status,
+                    outcome: outcome || undefined,
+                    nextFollowUpAt: nextFollowUp ? localInputToIso(nextFollowUp) : undefined,
+                  })
+                }
               >
                 {t('actions.save')}
+              </Button>
+            </div>
+          </div>
+        )}
+        {mode === 'marketing' && (
+          <div className="space-y-2 rounded-lg bg-slate-50 p-3">
+            <p className="text-xs text-slate-600">{t('calendar.marketingHint')}</p>
+            <Field label={t('calendar.location')} required>
+              <Input value={mLocation} onChange={(e) => setMLocation(e.target.value)} />
+            </Field>
+            <Field label={t('calendar.organizer')} required>
+              <Input value={organizer} onChange={(e) => setOrganizer(e.target.value)} />
+            </Field>
+            <div className="flex justify-end gap-2">
+              <Button variant="secondary" onClick={() => setMode(null)}>
+                {t('actions.cancel')}
+              </Button>
+              <Button
+                disabled={!organizer.trim() || !mLocation.trim()}
+                loading={save.isPending}
+                onClick={() => save.mutate({ needsMarketing: true, organizer, location: mLocation })}
+              >
+                {t('calendar.notifyMarketing')}
               </Button>
             </div>
           </div>
@@ -550,6 +679,10 @@ interface NewEventForm {
   description?: string;
   linkType?: string;
   linkId?: string;
+  meetingType?: string;
+  organizer?: string;
+  locationUrl?: string;
+  needsMarketing?: boolean;
 }
 
 /** New meeting / visit / training with participants (name search) and an optional linked record [EP §13.8, §13.12]. */
@@ -557,10 +690,12 @@ function NewEventDialog({
   open,
   onClose,
   onCreated,
+  preset,
 }: {
   open: boolean;
   onClose: () => void;
   onCreated: () => void;
+  preset?: { linkType: string; linkId: string };
 }) {
   const { t } = useTranslation();
   const toast = useToast();
@@ -573,24 +708,43 @@ function NewEventDialog({
     enabled: open && pq.trim().length >= 2,
   });
   const form = useForm<NewEventForm>({ defaultValues: { type: 'meeting' } });
+  const meetingTypes = useRequestsMeta().data?.lists.meetingTypes ?? [];
+  const needsMarketing = form.watch('needsMarketing');
+  useEffect(() => {
+    if (open && preset) {
+      form.setValue('linkType', preset.linkType);
+      form.setValue('linkId', preset.linkId);
+    }
+  }, [open, preset, form]);
   const required = t('common.requiredField');
   const err = (k: 'title' | 'startAt' | 'endAt') => form.formState.errors[k]?.message;
   const create = form.handleSubmit(async (v) => {
     setError(undefined);
     try {
-      await post('/calendar/events', {
+      const r = await post<{ marketingNotice?: string }>('/calendar/events', {
         title: v.title,
         type: v.type,
         startAt: localInputToIso(v.startAt),
         endAt: localInputToIso(v.endAt),
         allDay: !!v.allDay,
         location: v.location || undefined,
+        locationUrl: v.locationUrl || undefined,
         meetingUrl: v.meetingUrl || undefined,
         description: v.description || undefined,
         participantIds: participants.map((p) => p.userId),
         link: v.linkType && v.linkId ? { type: v.linkType, id: v.linkId.trim() } : undefined,
+        meetingType: v.meetingType || undefined,
+        organizer: v.organizer || undefined,
+        needsMarketing: !!v.needsMarketing,
       });
-      toast(t('actions.save'));
+      toast(
+        r.marketingNotice === 'sent'
+          ? t('calendar.marketingSent')
+          : r.marketingNotice === 'no_department'
+            ? t('calendar.marketingNoDept')
+            : t('actions.save'),
+        r.marketingNotice === 'no_department' ? 'error' : undefined,
+      );
       onCreated();
       form.reset({ type: 'meeting' });
       setParticipants([]);
@@ -663,16 +817,53 @@ function NewEventDialog({
             </div>
           </div>
         </Field>
-        <Field label={t('calendar.location')}>
+        <Field
+          label={t('calendar.meetingType')}
+          hint={!meetingTypes.length ? t('calendar.meetingTypeFree') : undefined}
+        >
+          {meetingTypes.length ? (
+            <Select {...form.register('meetingType')}>
+              <option value="">—</option>
+              {meetingTypes.map((m) => (
+                <option key={m} value={m}>
+                  {m}
+                </option>
+              ))}
+            </Select>
+          ) : (
+            <Input {...form.register('meetingType')} />
+          )}
+        </Field>
+        <Field label={t('calendar.location')} required={!!needsMarketing}>
           <Input {...form.register('location')} />
         </Field>
-        <Field label={t('calendar.meetingUrl')}>
-          <Input dir="ltr" type="url" {...form.register('meetingUrl')} />
-        </Field>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <Field label={t('calendar.locationUrl')}>
+            <Input dir="ltr" type="url" {...form.register('locationUrl')} />
+          </Field>
+          <Field label={t('calendar.meetingUrl')}>
+            <Input dir="ltr" type="url" {...form.register('meetingUrl')} />
+          </Field>
+        </div>
+        <label className="flex items-start gap-2 rounded-lg border border-slate-200 p-3 text-sm">
+          <input type="checkbox" className="mt-1" {...form.register('needsMarketing')} />
+          <span>
+            <span className="font-medium">{t('calendar.needsMarketing')}</span>
+            <span className="block text-xs text-slate-500">{t('calendar.marketingHint')}</span>
+          </span>
+        </label>
+        {needsMarketing && (
+          <Field label={t('calendar.organizer')} required>
+            <Input {...form.register('organizer')} />
+          </Field>
+        )}
         <div className="grid grid-cols-2 gap-3">
           <Field label={t('calendar.linkedRecord')}>
             <Select {...form.register('linkType')}>
               <option value="">—</option>
+              <option value="customer">{t('tasks.sources.customer')}</option>
+              <option value="opportunity">{t('tasks.sources.opportunity')}</option>
+              <option value="sales_request">{t('tasks.sources.sales_request')}</option>
               <option value="task">{t('tasks.sources.task')}</option>
               <option value="ticket">{t('tasks.sources.ticket')}</option>
               <option value="hr_request">{t('tasks.sources.hr_request')}</option>

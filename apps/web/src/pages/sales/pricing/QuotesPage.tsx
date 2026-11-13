@@ -28,6 +28,9 @@ import { useToast } from '@/shared/ui/Toast';
 import { sar } from '../../hr/_data';
 import { useCustomers } from '../_data';
 import { quoteTone, usePriceList, useQuotes } from './_data';
+import { DrillBanner, useDrill, type DrillKey } from '../DrillFilters';
+
+const DRILL: DrillKey[] = ['sentFrom', 'sentTo', 'latest', 'ownerUserId'];
 
 /** عروض الأسعار [SAL §3 م2–م3, §18]: list with the approval queue, and the builder from the approved price list [§7.1]. */
 export function QuotesPage() {
@@ -44,7 +47,9 @@ export function QuotesPage() {
     setParams(next, { replace: true });
   };
   const approver = user?.roles.some((r) => r.role === 'sales_manager' || r.role === 'executive');
+  const drill = useDrill(DRILL);
   const list = useQuotes({
+    ...drill,
     state: get('state') || undefined,
     customerId: get('customerId') || undefined,
     awaitingMyApproval: get('approvals') === 'true',
@@ -69,6 +74,7 @@ export function QuotesPage() {
           </>
         }
       />
+      <DrillBanner keys={DRILL} />
       <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
         <Input
           value={get('q')}

@@ -29,6 +29,7 @@ import { FileUploader, downloadAttachment } from '@/shared/files/FileUploader';
 import { sar } from '../hr/_data';
 import { TransferDialog } from './CustomersPage';
 import { OpportunityDialog } from './PipelinePage';
+import { DiscussionPanel } from '../discussions/DiscussionsPage';
 import {
   stageTone,
   statusTone,
@@ -39,8 +40,8 @@ import {
   type ContactRow,
 } from './_data';
 
-type Tab = 'log' | 'contacts' | 'opportunities' | 'data' | 'history';
-const TABS: Tab[] = ['log', 'contacts', 'opportunities', 'data', 'history'];
+type Tab = 'log' | 'contacts' | 'opportunities' | 'discussions' | 'data' | 'history';
+const TABS: Tab[] = ['log', 'contacts', 'opportunities', 'discussions', 'data', 'history'];
 
 /** ملف العميل وسجل التواصل [SAL §4.1, §18]: one file per organization; the log is chronological and append-only. */
 export function CustomerPage() {
@@ -120,6 +121,9 @@ export function CustomerPage() {
                 {t('sales.transfer.single')}
               </Button>
             )}
+            <Link to={`/calendar?new=customer:${id}`}>
+              <Button variant="secondary">{t('sales.customers.scheduleMeeting')}</Button>
+            </Link>
             <Button onClick={() => setOppOpen('new')}>{t('sales.opportunities.new')}</Button>
           </>
         }
@@ -185,6 +189,14 @@ export function CustomerPage() {
                     <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
                       <span>
                         <Badge tone="slate">{t(`sales.methods.${l.method}`)}</Badge> {l.authorName}
+                        {l.source?.type === 'calendar_event' && (
+                          <Link
+                            to={`/calendar?event=${l.source.id}`}
+                            className="ms-2 text-brand-700 hover:underline"
+                          >
+                            {t('sales.log.fromCalendar')}
+                          </Link>
+                        )}
                       </span>
                       <span className="tabular">{formatDateTime(l.at)}</span>
                     </div>
@@ -219,6 +231,8 @@ export function CustomerPage() {
           <LogComposer customerId={id} onDone={refresh} />
         </div>
       )}
+
+      {tab === 'discussions' && <DiscussionPanel recordType="customer" recordId={id} />}
 
       {tab === 'contacts' && (
         <Card

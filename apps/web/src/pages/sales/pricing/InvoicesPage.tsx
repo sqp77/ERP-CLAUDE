@@ -36,6 +36,9 @@ import {
   type InvoiceRow,
   type InvoiceTotals,
 } from './_data';
+import { DrillBanner, useDrill, type DrillKey } from '../DrillFilters';
+
+const DRILL: DrillKey[] = ['issuedFrom', 'issuedTo', 'unpaid', 'ownerUserId', 'serviceType'];
 
 /**
  * الفواتير والتحصيل [SAL §7.3, §18; FIN §7]: Finance registers the invoice issued in the current system against a sales
@@ -56,7 +59,9 @@ export function InvoicesPage() {
     setParams(next, { replace: true });
   };
   const finance = can('finance.invoices', 'create');
+  const drill = useDrill(DRILL);
   const list = useInvoices({
+    ...drill,
     collectionState: get('collectionState') || undefined,
     overdue: get('overdue') === 'true',
     customerId: get('customerId') || undefined,
@@ -82,6 +87,7 @@ export function InvoicesPage() {
           ) : undefined
         }
       />
+      <DrillBanner keys={DRILL} />
       <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
         <Input
           value={get('q')}

@@ -81,6 +81,8 @@ export interface LogRow {
   nextFollowUpAt?: string;
   attachmentIds: string[];
   opportunityId?: string;
+  /** Written by the system from another record (a calendar meeting's outcome — SAL §9). */
+  source?: { type: string; id: string; label?: string };
 }
 export interface OpportunityRow {
   _id: string;

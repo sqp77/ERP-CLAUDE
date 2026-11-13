@@ -17,6 +17,7 @@ const ROUTES: Record<string, (id: string) => string> = {
   quote: (id) => `/sales/quotes/${id}`,
   sales_contract: (id) => `/sales/contracts/${id}`,
   invoice: (id) => `/sales/invoices/${id}`,
+  discussion: (id) => `/discussions/${id}`,
 };
 
 export function recordLink(type: string | undefined, id: string | undefined): string | undefined {

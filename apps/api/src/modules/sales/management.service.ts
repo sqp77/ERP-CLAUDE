@@ -61,6 +61,9 @@ type Eff = { scope: string; departmentIds: string[] };
 const authzOf = (resource: string, action: string, eff: Eff): Authz =>
   ({ resource, action, ...eff }) as Authz;
 
+/** A list link with its filter (one number, one list). Every path here is a web route (/sales/…). */
+const listLink = (path: string, params: Record<string, string | number | boolean | undefined | null>) =>
+  `${path}${qs(params)}`;
 const qs = (params: Record<string, string | number | boolean | undefined | null>) => {
   const u = new URLSearchParams();
   for (const [k, v] of Object.entries(params))
@@ -534,32 +537,44 @@ export async function salesKpis(
   const owner = userId ? { ownerUserId: userId } : {};
   const svc = q.serviceType ? { serviceType: q.serviceType } : {};
   const board: SalesKpiResult['board'] = {
-    monthlyTarget: { value: revTarget, link: `/sales/targets${qs({ period })}` },
+    monthlyTarget: { value: revTarget, link: listLink('/sales/targets', { period }) },
     achieved: {
       value: revenue,
-      link: `/sales/invoices${qs({ issuedFrom: days.from, issuedTo: days.to, ...owner, ...svc })}`,
+      link: listLink('/sales/invoices', { issuedFrom: days.from, issuedTo: days.to, ...owner, ...svc }),
     },
     achievementBp: { value: revenue === null ? null : achievementBp(revenue, revTarget) },
     remaining: { value: remaining },
     newCustomers: {
       value: custFilter ? await countCustomers(custFilter) : null,
-      link: `/sales/customers${qs({ createdFrom: days.from, createdTo: days.to, ...owner })}`,
+      link: listLink('/sales/customers', { createdFrom: days.from, createdTo: days.to, ...owner }),
     },
     opportunities: {
       value: oppFilter ? await Opportunity.countDocuments(oppFilter) : null,
-      link: `/sales/pipeline${qs({ createdFrom: days.from, createdTo: days.to, view: 'table', ...owner, ...svc })}`,
+      link: listLink('/sales/pipeline', {
+        createdFrom: days.from,
+        createdTo: days.to,
+        view: 'table',
+        ...owner,
+        ...svc,
+      }),
     },
-    quotesSent: { value: sent, link: `/sales/quotes${qs({ ...quoteQuery, ownerUserId: userId })}` },
-    quotesAccepted: { value: accepted, link: `/sales/quotes${qs({ ...quoteQuery, state: 'accepted' })}` },
-    quotesRejected: { value: rejected, link: `/sales/quotes${qs({ ...quoteQuery, state: 'rejected' })}` },
+    quotesSent: { value: sent, link: listLink('/sales/quotes', { ...quoteQuery, ownerUserId: userId }) },
+    quotesAccepted: {
+      value: accepted,
+      link: listLink('/sales/quotes', { ...quoteQuery, state: 'accepted' }),
+    },
+    quotesRejected: {
+      value: rejected,
+      link: listLink('/sales/quotes', { ...quoteQuery, state: 'rejected' }),
+    },
     revenue: {
       value: revenue,
-      link: `/sales/invoices${qs({ issuedFrom: days.from, issuedTo: days.to, ...owner, ...svc })}`,
+      link: listLink('/sales/invoices', { issuedFrom: days.from, issuedTo: days.to, ...owner, ...svc }),
     },
     unpaidInvoices: {
       value: unpaid ? unpaid.length : null,
       amountHalalas: unpaid ? unpaid.reduce((a, u) => a + (u.remainingHalalas ?? 0), 0) : null,
-      link: `/sales/invoices${qs({ unpaid: true, ...owner, ...svc })}`,
+      link: listLink('/sales/invoices', { unpaid: true, ...owner, ...svc }),
     },
     avgCollectionDays: { value: avgCollectionDays },
   };
@@ -646,7 +661,7 @@ export async function salesDashboard(req: AuthedRequest, q: { period?: string },
     remaining: kpi.board.remaining,
     openDealsValue: {
       value: openDeals ? openDeals.reduce((a, o) => a + (o.expectedValueHalalas ?? 0), 0) : null,
-      link: `/sales/pipeline${qs({ open: true, view: 'table', ...owner })}`,
+      link: listLink('/sales/pipeline', { open: true, view: 'table', ...owner }),
     },
     won: await card(
       () => opp({ stage: 'won', closedFrom: days.from, closedTo: days.to }),
@@ -727,22 +742,22 @@ export async function salesDashboard(req: AuthedRequest, q: { period?: string },
     invoices: {
       value: issued ? issued.length : null,
       amountHalalas: sum(issued, 'totalHalalas'),
-      link: `/sales/invoices${qs({ ...issuedWindow, ...owner })}`,
+      link: listLink('/sales/invoices', { ...issuedWindow, ...owner }),
     },
     paid: {
       value: issued ? issued.filter((i) => i.collectionState === 'collected').length : null,
       amountHalalas: sum(issued, 'collectedHalalas'),
-      link: `/sales/invoices${qs({ ...issuedWindow, collectionState: 'collected', ...owner })}`,
+      link: listLink('/sales/invoices', { ...issuedWindow, collectionState: 'collected', ...owner }),
     },
     unpaid: {
       value: unpaid ? unpaid.length : null,
       amountHalalas: sum(unpaid, 'remainingHalalas'),
-      link: `/sales/invoices${qs({ unpaid: true, ...owner })}`,
+      link: listLink('/sales/invoices', { unpaid: true, ...owner }),
     },
     overdue: {
       value: overdue ? overdue.length : null,
       amountHalalas: sum(overdue, 'remainingHalalas'),
-      link: `/sales/invoices${qs({ overdue: true, ...owner })}`,
+      link: listLink('/sales/invoices', { overdue: true, ...owner }),
     },
     avgCollectionDays: kpi.board.avgCollectionDays,
   };
@@ -784,7 +799,7 @@ export async function salesDashboard(req: AuthedRequest, q: { period?: string },
         links: {
           customers: `/sales/customers${qs({ ownerUserId: uid })}`,
           invoices: `/sales/invoices${qs({ ...issuedWindow, ownerUserId: uid })}`,
-          tasks: `/tasks${qs({ assigneeId: uid })}`,
+          tasks: `/sales/tasks${qs({ assigneeId: uid })}`,
         },
       };
     }),
@@ -840,13 +855,9 @@ export async function listLibrary(req: AuthedRequest) {
   const rows = await SalesLibraryDoc.find({ deletedAt: null, replacedById: null, ...filter })
     .sort({ category: 1, title: 1 })
     .lean();
-  const counts = await SalesLibraryDoc.aggregate<{ _id: unknown; n: number }>([
-    { $match: { deletedAt: null, ...filter } },
-    { $group: { _id: '$title', n: { $sum: 1 } } },
-  ]);
-  const versions = new Map(counts.map((c) => [String(c._id), c.n]));
   const canManage = !!(await permissionOn(req, 'sales.library', 'create'));
-  return { items: rows.map((r) => ({ ...r, versions: versions.get(r.title) ?? 1 })), canManage };
+  // The version number counts the chain (each upload of a new version adds one), whatever the title became.
+  return { items: rows.map((r) => ({ ...r, versions: r.version ?? 1 })), canManage };
 }
 
 export async function libraryHistory(req: AuthedRequest, id: string) {

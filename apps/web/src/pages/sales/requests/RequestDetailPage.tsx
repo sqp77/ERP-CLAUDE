@@ -28,6 +28,7 @@ import { useToast } from '@/shared/ui/Toast';
 import { FileUploader, downloadAttachment } from '@/shared/files/FileUploader';
 import { sar } from '../../hr/_data';
 import { useSalesTeam } from '../_data';
+import { DiscussionPanel } from '../../discussions/DiscussionsPage';
 import {
   SERVICE_FIELDS,
   SINGLE_FILE_KEYS,
@@ -403,6 +404,10 @@ export function RequestDetailPage() {
             </Card>
           )}
         </div>
+      </div>
+
+      <div className="mt-3">
+        <DiscussionPanel recordType="sales_request" recordId={r._id} />
       </div>
 
       <Card title={t('sales.requests.stageLog')} className="mt-3">

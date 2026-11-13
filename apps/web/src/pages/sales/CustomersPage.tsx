@@ -25,6 +25,9 @@ import {
 } from '@/shared/ui';
 import { useToast } from '@/shared/ui/Toast';
 import { NewCustomerDialog } from './NewCustomerDialog';
+import { DrillBanner, useDrill, type DrillKey } from './DrillFilters';
+
+const DRILL: DrillKey[] = ['createdFrom', 'createdTo'];
 import { statusTone, useCustomers, useSalesTags, useSalesTeam, type TagRow } from './_data';
 
 /** قاعدة بيانات العملاء [SAL §4, §12 ثانياً]: search with Arabic normalization, filters, tags; the manager transfers in bulk and manages tags. */
@@ -50,7 +53,9 @@ export function CustomersPage() {
   const [transferOpen, setTransferOpen] = useState(false);
   const [tagsOpen, setTagsOpen] = useState(false);
   const page = Number(get('page') || 1);
+  const drill = useDrill(DRILL);
   const list = useCustomers({
+    ...drill,
     q: get('q') || undefined,
     status: get('status') || undefined,
     source: get('source') || undefined,
@@ -90,6 +95,7 @@ export function CustomersPage() {
           </>
         }
       />
+      <DrillBanner keys={DRILL} />
       <form
         className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6"
         onSubmit={(e) => {

@@ -56,6 +56,12 @@ import { QuotesPage } from './pages/sales/pricing/QuotesPage';
 import { QuotePage } from './pages/sales/pricing/QuotePage';
 import { ContractsPage, ContractPage } from './pages/sales/pricing/ContractsPage';
 import { InvoicesPage } from './pages/sales/pricing/InvoicesPage';
+import { SalesDashboardPage } from './pages/sales/management/SalesDashboardPage';
+import { SalesKpiPage } from './pages/sales/management/SalesKpiPage';
+import { SalesTargetsPage } from './pages/sales/management/SalesTargetsPage';
+import { SalesLibraryPage } from './pages/sales/management/SalesLibraryPage';
+import { SalesTasksPage } from './pages/sales/management/SalesTasksPage';
+import { DiscussionPage, DiscussionsPage } from './pages/discussions/DiscussionsPage';
 
 export const router = createBrowserRouter([
   {
@@ -186,6 +192,33 @@ export const router = createBrowserRouter([
                 children: [
                   { path: '/sales/invoices', element: <InvoicesPage /> },
                   { path: '/sales/invoices/:id', element: <InvoicesPage /> },
+                ],
+              },
+              // Sales S4 — management and follow-up [SAL §17 المرحلة الرابعة]
+              {
+                element: <RequirePermission resource="sales.dashboard" action="view" />,
+                children: [
+                  { path: '/sales/dashboard', element: <SalesDashboardPage /> },
+                  { path: '/sales/tasks', element: <SalesTasksPage /> },
+                ],
+              },
+              {
+                element: <RequirePermission resource="sales.kpi" action="view" />,
+                children: [{ path: '/sales/kpi', element: <SalesKpiPage /> }],
+              },
+              {
+                element: <RequirePermission resource="sales.targets" action="view" />,
+                children: [{ path: '/sales/targets', element: <SalesTargetsPage /> }],
+              },
+              {
+                element: <RequirePermission resource="sales.library" action="view" />,
+                children: [{ path: '/sales/library', element: <SalesLibraryPage /> }],
+              },
+              {
+                element: <RequirePermission resource="discussions" action="view" />,
+                children: [
+                  { path: '/discussions', element: <DiscussionsPage /> },
+                  { path: '/discussions/:id', element: <DiscussionPage /> },
                 ],
               },
               { path: '/cs/refer-lead', element: <ReferLeadPage /> },
