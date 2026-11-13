@@ -31,6 +31,7 @@ import { departmentManagerUserIds } from '../../core/tasks/jobs';
 import { lookupAssignee } from '../../core/tasks/service';
 import { roleCodesOf } from '../../core/rbac/service';
 import { withTransaction } from '../../db';
+import { riyadhDayRange } from '../../core/dates/businessDays';
 import {
   CommunicationLog,
   Contact,
@@ -163,7 +164,7 @@ export function customerScopeFilter(user: UserDoc, authz: Authz): FilterQuery<un
 export async function permissionOn(
   req: AuthedRequest,
   resource: string,
-  action: 'view' | 'edit' | 'create' | 'approve',
+  action: 'view' | 'edit' | 'create' | 'approve' | 'delete' | 'export',
 ) {
   return effectivePermission(
     req.auth.user.roles as RoleAssignment[],
@@ -502,17 +503,30 @@ export interface ListCustomersQuery {
   tag?: string;
   followUpDue?: boolean;
   referredFromCs?: boolean;
+  createdFrom?: string;
+  createdTo?: string;
   sort: 'recent' | 'name' | 'followUp' | 'lastContact';
 }
-export async function listCustomers(req: AuthedRequest, q: ListCustomersQuery) {
-  const filter: FilterQuery<unknown> = { deletedAt: null, ...customerScopeFilter(req.auth.user, req.authz!) };
+/**
+ * The customer list filter, shared by the list and the Sales dashboard so every card opens exactly the records it
+ * counts [SAL §13]. `authz` is the caller's `crm.customers` view permission.
+ */
+export function customerListFilter(
+  user: UserDoc,
+  authz: Authz,
+  q: Partial<ListCustomersQuery>,
+  now = new Date(),
+): FilterQuery<unknown> {
+  const filter: FilterQuery<unknown> = { deletedAt: null, ...customerScopeFilter(user, authz) };
   if (q.status) filter.status = q.status;
   if (q.source) filter.source = q.source;
   if (q.classification) filter.classification = q.classification;
   if (q.ownerUserId) filter.ownerUserId = q.ownerUserId;
   if (q.tag) filter.tags = q.tag;
-  if (q.followUpDue) filter.nextFollowUpAt = { $lt: new Date() };
+  if (q.followUpDue) filter.nextFollowUpAt = { $lt: now };
   if (q.referredFromCs) filter.leadId = { $ne: null };
+  const created = riyadhDayRange(q.createdFrom, q.createdTo);
+  if (created) filter.createdAt = created;
   if (q.q) {
     const d = digits(q.q);
     filter.$and = [
@@ -527,6 +541,11 @@ export async function listCustomers(req: AuthedRequest, q: ListCustomersQuery) {
       },
     ];
   }
+  return filter;
+}
+
+export async function listCustomers(req: AuthedRequest, q: ListCustomersQuery) {
+  const filter = customerListFilter(req.auth.user, req.authz!, q);
   const sort: Record<string, 1 | -1> =
     q.sort === 'name'
       ? { nameAr: 1 }

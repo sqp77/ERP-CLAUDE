@@ -1,5 +1,7 @@
 import { Types, type ClientSession } from 'mongoose';
 import { SalesOrder } from './quotes.model';
+import { SalesContract } from './contracts.model';
+import { SalesRequest } from './requests.model';
 
 /**
  * The Sales module owns sales orders; Finance invoices them through these functions (golden rules 2 and 6:
@@ -51,4 +53,21 @@ export async function attachInvoiceToOrder(
 /** The order closes once fully invoiced and every invoice collected; Finance calls this after the last payment. */
 export async function markOrderClosed(id: string, session?: ClientSession): Promise<void> {
   await SalesOrder.updateOne({ _id: id, state: 'invoiced' }, { $set: { state: 'closed' } }, { session });
+}
+
+/**
+ * The Sales service behind an invoice source (S4, KPI and report filter «نوع الخدمة» [SAL §11.2, §12]): the request
+ * the order's quote or the contract came from; undefined when the order or contract has no request.
+ */
+export async function serviceTypeOfSource(src: {
+  salesOrderId?: string;
+  contractId?: string;
+}): Promise<string | undefined> {
+  let requestId: unknown;
+  if (src.salesOrderId)
+    requestId = (await SalesOrder.findById(src.salesOrderId).select('requestId').lean())?.requestId;
+  else if (src.contractId)
+    requestId = (await SalesContract.findById(src.contractId).select('requestId').lean())?.requestId;
+  if (!requestId) return undefined;
+  return (await SalesRequest.findById(requestId).select('type').lean())?.type ?? undefined;
 }

@@ -21,6 +21,7 @@ import { escapeHtml, htmlDocument } from '../../core/templates/render';
 import { composeAndSend } from '../../core/email/service';
 import { User } from '../../core/auth/model';
 import { withTransaction } from '../../db';
+import { riyadhDayRange } from '../../core/dates/businessDays';
 import {
   canAccessCustomer,
   customerLabels,
@@ -362,13 +363,30 @@ export interface ListQuotesQuery {
   ownerUserId?: string;
   awaitingMyApproval?: boolean;
   q?: string;
+  sentFrom?: string;
+  sentTo?: string;
+  /** Only the newest version of each offer (no later revision). */
+  latest?: boolean;
 }
-export async function listQuotes(req: AuthedRequest, query: ListQuotesQuery) {
-  const eff = await permissionOn(req, 'sales.quotes', 'view');
-  if (!eff) throw forbidden();
+/** The quote list filter, shared by the list and the KPI board / dashboard (SAL §11.2, §13). */
+export function quoteListFilter(
+  req: AuthedRequest,
+  eff: { scope: string; departmentIds: string[] },
+  query: Partial<ListQuotesQuery>,
+): FilterQuery<unknown> {
   const filter: FilterQuery<unknown> = { deletedAt: null, ...scopeFilter(req, eff) };
   for (const k of ['state', 'customerId', 'opportunityId', 'requestId', 'ownerUserId'] as const)
     if (query[k]) filter[k] = query[k];
+  const sent = riyadhDayRange(query.sentFrom, query.sentTo);
+  if (sent) filter.sentAt = sent;
+  if (query.latest) filter.supersededById = null;
+  return filter;
+}
+
+export async function listQuotes(req: AuthedRequest, query: ListQuotesQuery) {
+  const eff = await permissionOn(req, 'sales.quotes', 'view');
+  if (!eff) throw forbidden();
+  const filter = quoteListFilter(req, eff, query);
   if (query.awaitingMyApproval) {
     filter.state = 'pending_approval';
     const levels: string[] = [];
@@ -991,7 +1009,8 @@ export async function reviseQuote(req: AuthedRequest, id: string) {
   const { q } = await loadFor(req, id, 'edit');
   if (!['sent', 'negotiating', 'rejected'].includes(q.state))
     throw conflict('تُنشأ نسخة جديدة بعد الإرسال أو التفاوض أو الرفض');
-  return createQuote(
+  if (q.supersededById) throw conflict('لهذا العرض نسخة أحدث');
+  const created = await createQuote(
     req,
     {
       customerId: String(q.customerId),
@@ -1011,6 +1030,12 @@ export async function reviseQuote(req: AuthedRequest, id: string) {
     },
     { previousQuoteId: String(q._id), version: (q.version ?? 1) + 1 },
   );
+  // One offer per chain for «نسبة تحويل العروض» [SAL §11]: the previous version is marked superseded (set once).
+  await Quote.updateOne(
+    { _id: q._id, supersededById: null },
+    { $set: { supersededById: (created as { _id: unknown })._id } },
+  );
+  return created;
 }
 
 export async function cancelQuote(req: AuthedRequest, id: string, reason: string) {

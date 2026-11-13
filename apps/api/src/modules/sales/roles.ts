@@ -27,6 +27,11 @@ export const SALES_ROLES: RoleDefinition[] = [
       { resource: 'calendar', actions: ['view', 'create', 'edit'], scope: 'own' },
       { resource: 'comments', actions: ['view', 'create'], scope: 'own' },
       { resource: 'documents', actions: ['view'], scope: 'own' },
+      // S4 [SAL §8.2, §11, §13, §15 «متابعة المهام والمستهدفات الخاصة به»]
+      { resource: 'sales.targets', actions: ['view'], scope: 'own' },
+      { resource: 'sales.kpi', actions: ['view'], scope: 'own' },
+      { resource: 'sales.dashboard', actions: ['view'], scope: 'own' },
+      { resource: 'sales.library', actions: ['view'], scope: 'department' },
     ],
     fieldRules: [],
   },
@@ -69,6 +74,11 @@ export const SALES_ROLES: RoleDefinition[] = [
       { resource: 'comments', actions: ['view', 'create'], scope: 'department' },
       { resource: 'documents', actions: ['view'], scope: 'department' },
       { resource: 'exports', actions: ['view', 'create'], scope: 'department' },
+      // S4 [SAL §8.2 «رفع إجراءات العمل والتعليمات», §8.3, §11.1 «تحديد المستهدفات», §13]
+      { resource: 'sales.targets', actions: ['view', 'edit'], scope: 'department' },
+      { resource: 'sales.kpi', actions: ['view'], scope: 'department' },
+      { resource: 'sales.dashboard', actions: ['view'], scope: 'department' },
+      { resource: 'sales.library', actions: ['view', 'create', 'edit', 'delete'], scope: 'department' },
     ],
     fieldRules: [],
   },

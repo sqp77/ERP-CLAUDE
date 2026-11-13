@@ -29,6 +29,8 @@ const quoteSchema = new Schema(
     number: { type: String, required: true, unique: true },
     version: { type: Number, default: 1 },
     previousQuoteId: { type: Schema.Types.ObjectId, ref: 'Quote' },
+    /** Set on the previous version when a revision is created, so conversion counts one offer per chain (S4). */
+    supersededById: { type: Schema.Types.ObjectId, ref: 'Quote', default: null },
     customerId: { type: Schema.Types.ObjectId, ref: 'Customer', required: true, index: true },
     contactId: { type: Schema.Types.ObjectId, ref: 'Contact' },
     opportunityId: { type: Schema.Types.ObjectId, ref: 'Opportunity', index: true },

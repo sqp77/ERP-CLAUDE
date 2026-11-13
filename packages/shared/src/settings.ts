@@ -131,6 +131,18 @@ export const SETTING_DEFINITIONS = {
     schema: z.number().int().min(1).max(365),
     default: 90,
   }),
+  'sales.kpiTargets': def({
+    key: 'sales.kpiTargets',
+    labelAr: 'مستهدفات مؤشرات المبيعات الثابتة',
+    descriptionAr:
+      'نسبة تحويل العروض 40% ومتوسط مدة التحصيل 45 يومًا أو أقل بنص SAL §11؛ الإيرادات والكمية من المستهدفات الشهرية',
+    group: 'sales',
+    schema: z.object({
+      quoteConversionBp: z.number().int().min(0).max(10_000),
+      collectionDays: z.number().int().min(1).max(365),
+    }),
+    default: { quoteConversionBp: 4000, collectionDays: 45 },
+  }),
   'sales.followUpReminderHours': def({
     key: 'sales.followUpReminderHours',
     labelAr: 'التنبيه قبل موعد متابعة العميل (ساعات)',

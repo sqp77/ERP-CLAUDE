@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import { emailSchema, objectIdSchema, paginationSchema } from './common';
+import { emailSchema, objectIdSchema, paginationSchema, riyadhDaySchema } from './common';
+import { SALES_SERVICE_TYPES } from './sales';
 
 /**
  * Pricing, quotes, orders, contracts and the invoice register [SAL §3 م2–م6, §6.3, §7]. Money is integer halalas,
@@ -127,6 +128,11 @@ export const listQuotesQuerySchema = paginationSchema.extend({
   ownerUserId: objectIdSchema.optional(),
   awaitingMyApproval: z.coerce.boolean().optional(),
   q: z.string().trim().max(120).optional(),
+  /** Sent between two Riyadh days, inclusive (KPI «نسبة تحويل العروض» drill-down). */
+  sentFrom: riyadhDaySchema.optional(),
+  sentTo: riyadhDaySchema.optional(),
+  /** Newest version of each offer only (a revised quote is counted once — KPI conversion, S4). */
+  latest: z.coerce.boolean().optional(),
 });
 export const DEFAULT_QUOTE_REJECTION_REASONS = [
   'السعر',
@@ -312,4 +318,11 @@ export const listInvoicesQuerySchema = paginationSchema.extend({
   collectionState: z.enum(COLLECTION_STATES).optional(),
   overdue: z.coerce.boolean().optional(),
   q: z.string().trim().max(120).optional(),
+  /** Dashboard drill-downs [SAL §13 خامساً]: issued in a Riyadh window, unpaid, one rep's invoices. */
+  issuedFrom: riyadhDaySchema.optional(),
+  issuedTo: riyadhDaySchema.optional(),
+  unpaid: z.coerce.boolean().optional(),
+  ownerUserId: objectIdSchema.optional(),
+  /** KPI board filter «حسب نوع الخدمة» [SAL §11.2]. */
+  serviceType: z.enum(SALES_SERVICE_TYPES).optional(),
 });

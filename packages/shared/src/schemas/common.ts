@@ -19,3 +19,6 @@ export interface Paged<T> {
   page: number;
   limit: number;
 }
+
+/** A Riyadh calendar day, `YYYY-MM-DD` (list filters, dashboard drill-downs). */
+export const riyadhDaySchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'التاريخ بصيغة YYYY-MM-DD');

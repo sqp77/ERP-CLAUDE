@@ -397,5 +397,6 @@ export const SALES_LIST_KEYS = [
   'scrapCategories',
   'scrapTaskTypes',
   'tenderSources',
+  'meetingTypes', // SAL §9 «نوع الاجتماع» (S4; Q7)
 ] as const;
 export type SalesListKey = (typeof SALES_LIST_KEYS)[number];

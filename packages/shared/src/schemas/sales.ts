@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { objectIdSchema, paginationSchema } from './common';
+import { objectIdSchema, paginationSchema, riyadhDaySchema } from './common';
 
 /** Opportunity stages [SAL §4.1 رابعاً] — verbatim labels; a lost opportunity needs a reason. */
 export const OPPORTUNITY_STAGES = [
@@ -109,6 +109,11 @@ export const listOpportunitiesQuerySchema = paginationSchema.extend({
   tag: z.string().trim().max(60).optional(),
   followUpDue: z.coerce.boolean().optional(),
   q: z.string().trim().max(120).optional(),
+  /** Riyadh days, inclusive: created in the window, or won / lost in it (dashboard drill-downs, SAL §13). */
+  createdFrom: riyadhDaySchema.optional(),
+  createdTo: riyadhDaySchema.optional(),
+  closedFrom: riyadhDaySchema.optional(),
+  closedTo: riyadhDaySchema.optional(),
 });
 
 /** Tags (hashtags) [SAL §10.4]: scope = module; the department manager adds and edits them. */

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { emailSchema, objectIdSchema, paginationSchema, phoneSchema } from './common';
+import { emailSchema, objectIdSchema, paginationSchema, phoneSchema, riyadhDaySchema } from './common';
 
 /**
  * CRM core shared by Sales, Customer Service, Operations and Sustainability [SAL §4.1, §19; CS §6.2–6.3, §6.8].
@@ -185,6 +185,9 @@ export const listCustomersQuerySchema = paginationSchema.extend({
   /** Customers whose next follow-up date has passed [SAL §13 ثانياً]. */
   followUpDue: z.coerce.boolean().optional(),
   referredFromCs: z.coerce.boolean().optional(),
+  /** Created between two Riyadh days, inclusive (dashboard «العملاء الجدد» drill-down, SAL §13). */
+  createdFrom: riyadhDaySchema.optional(),
+  createdTo: riyadhDaySchema.optional(),
   sort: z.enum(['recent', 'name', 'followUp', 'lastContact']).default('recent'),
 });
 

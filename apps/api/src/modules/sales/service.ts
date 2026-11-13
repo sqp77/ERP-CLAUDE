@@ -17,6 +17,7 @@ import { claimAttachments } from '../../core/files/service';
 import { canonicalTags } from '../../core/tags/service';
 import type { UserDoc } from '../../core/auth/model';
 import { withTransaction } from '../../db';
+import { riyadhDayRange } from '../../core/dates/businessDays';
 import {
   assertSalesTarget,
   canAccessCustomer,
@@ -158,11 +159,21 @@ export interface ListOpportunitiesQuery {
   tag?: string;
   followUpDue?: boolean;
   q?: string;
+  createdFrom?: string;
+  createdTo?: string;
+  closedFrom?: string;
+  closedTo?: string;
 }
-export async function listOpportunities(req: AuthedRequest, q: ListOpportunitiesQuery) {
+/** The opportunity list filter, shared by the list and the Sales dashboard (one number, one list — SAL §13). */
+export function opportunityListFilter(
+  user: UserDoc,
+  authz: Authz,
+  q: Partial<ListOpportunitiesQuery>,
+  now = new Date(),
+): FilterQuery<unknown> {
   const filter: FilterQuery<unknown> = {
     deletedAt: null,
-    ...opportunityScopeFilter(req.auth.user, req.authz!),
+    ...opportunityScopeFilter(user, authz),
   };
   if (q.stage) filter.stage = q.stage;
   if (q.open) filter.stage = { $in: OPEN_OPPORTUNITY_STAGES };
@@ -171,10 +182,24 @@ export async function listOpportunities(req: AuthedRequest, q: ListOpportunities
   if (q.serviceType) filter.serviceType = q.serviceType;
   if (q.tag) filter.tags = q.tag;
   if (q.followUpDue) {
-    filter.nextFollowUpAt = { $lt: new Date() };
+    filter.nextFollowUpAt = { $lt: now };
     filter.stage = { $in: OPEN_OPPORTUNITY_STAGES };
   }
   if (q.q) filter.$or = [{ title: arabicSearchRegex(q.q) }, { number: q.q.toUpperCase() }];
+  const created = riyadhDayRange(q.createdFrom, q.createdTo);
+  if (created) filter.createdAt = created;
+  // Won / lost in a window: the date the deal closed (wonAt / lostAt), whatever the stage filter says.
+  const closed = riyadhDayRange(q.closedFrom, q.closedTo);
+  if (closed)
+    filter.$and = [
+      ...((filter.$and as FilterQuery<unknown>[] | undefined) ?? []),
+      { $or: [{ wonAt: closed }, { lostAt: closed }] },
+    ];
+  return filter;
+}
+
+export async function listOpportunities(req: AuthedRequest, q: ListOpportunitiesQuery) {
+  const filter = opportunityListFilter(req.auth.user, req.authz!, q);
   const [rows, total] = await Promise.all([
     Opportunity.find(filter)
       .sort({ updatedAt: -1 })

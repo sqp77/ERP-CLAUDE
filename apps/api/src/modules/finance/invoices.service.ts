@@ -14,7 +14,12 @@ import { Party } from '../../core/parties/model';
 import { withTransaction } from '../../db';
 import { customerLabels, permissionOn, salesManagerUserIds, userNames } from '../crm/service';
 import { customerPartyId } from '../crm/service';
-import { orderForInvoicing, attachInvoiceToOrder, markOrderClosed } from '../sales/orders.service';
+import {
+  orderForInvoicing,
+  attachInvoiceToOrder,
+  markOrderClosed,
+  serviceTypeOfSource,
+} from '../sales/orders.service';
 import { contractForInvoicing, claimScheduleEntries } from '../sales/contracts.service';
 import { Invoice, type InvoiceDoc } from './invoices.model';
 
@@ -340,6 +345,10 @@ export async function registerInvoice(
         byUserId: req.auth.user._id,
       }
     : undefined;
+  const serviceType = await serviceTypeOfSource({
+    salesOrderId: pre.salesOrderId,
+    contractId: pre.contractId,
+  });
   const inv = await withTransaction(async (session) => {
     const number = await nextNumber('invoice', session);
     const sequence = Number(number.split('-').pop());
@@ -360,6 +369,7 @@ export async function registerInvoice(
           partyId: party?._id,
           salesOwnerUserId: pre.ownerUserId,
           salesDepartmentId: pre.departmentId,
+          serviceType,
           issueDateTime,
           dueDate,
           customer: {
@@ -558,17 +568,92 @@ export interface ListInvoicesQuery {
   collectionState?: string;
   overdue?: boolean;
   q?: string;
+  issuedFrom?: string;
+  issuedTo?: string;
+  unpaid?: boolean;
+  ownerUserId?: string;
+  serviceType?: string;
 }
-export async function listInvoices(req: AuthedRequest, query: ListInvoicesQuery) {
-  const eff = await permissionOn(req, 'finance.invoices', 'view');
-  if (!eff) throw forbidden();
+/**
+ * The invoice list filter, shared by the list and the Sales dashboard so a card's number is exactly the list it opens
+ * (SAL §13 «إمكانية الضغط على أي مؤشر لعرض التفاصيل»).
+ */
+export function invoiceListFilter(
+  req: AuthedRequest,
+  eff: { scope: string; departmentIds: string[] },
+  query: Partial<ListInvoicesQuery>,
+  now = new Date(),
+): FilterQuery<unknown> {
   const filter: FilterQuery<unknown> = { deletedAt: null, ...scopeFilter(req, eff) };
   if (query.customerId) filter.customerId = query.customerId;
   if (query.salesOrderId) filter.salesOrderId = query.salesOrderId;
   if (query.contractId) filter.contractId = query.contractId;
   if (query.collectionState) filter.collectionState = query.collectionState;
-  if (query.overdue) Object.assign(filter, { remainingHalalas: { $gt: 0 }, dueDate: { $lt: new Date() } });
+  if (query.ownerUserId) filter.salesOwnerUserId = new Types.ObjectId(query.ownerUserId);
+  if (query.unpaid) filter.remainingHalalas = { $gt: 0 };
+  if (query.overdue) Object.assign(filter, { remainingHalalas: { $gt: 0 }, dueDate: { $lt: now } });
+  if (query.issuedFrom || query.issuedTo)
+    filter.issueDateTime = {
+      ...(query.issuedFrom ? { $gte: riyadhDayStart(query.issuedFrom) } : {}),
+      ...(query.issuedTo ? { $lte: riyadhDayEnd(query.issuedTo) } : {}),
+    };
+  if (query.serviceType) filter.serviceType = query.serviceType;
   if (query.q) filter.$or = [{ number: query.q.toUpperCase() }, { externalNumber: query.q }];
+  return filter;
+}
+
+/** Whether Finance has registered any invoice yet; before that, Sales KPIs show «لا توجد بيانات» [SAL §8.3]. */
+export async function anyInvoices(): Promise<boolean> {
+  return !!(await Invoice.exists({ deletedAt: null }));
+}
+
+/**
+ * Invoice facts for Sales KPIs and dashboards (read-only, golden rule 5): Finance owns the data, Sales reads it
+ * through this function. `eff` is the caller's `finance.invoices` view permission.
+ */
+export async function invoiceFacts(
+  req: AuthedRequest,
+  eff: { scope: string; departmentIds: string[] },
+  query: Partial<ListInvoicesQuery>,
+) {
+  const filter = invoiceListFilter(req, eff, query);
+  return Invoice.find(filter)
+    .select(
+      'number issueDateTime dueDate subtotalHalalas totalHalalas collectedHalalas remainingHalalas collectionState lines payments salesOwnerUserId serviceType',
+    )
+    .lean();
+}
+
+/** Invoices fully collected whose last payment falls in [from, to): for «متوسط مدة التحصيل» [SAL §11]. */
+export async function collectedInvoiceFacts(
+  req: AuthedRequest,
+  eff: { scope: string; departmentIds: string[] },
+  from: Date,
+  to: Date,
+  query: { ownerUserId?: string; serviceType?: string } = {},
+) {
+  const filter: FilterQuery<unknown> = {
+    ...invoiceListFilter(req, eff, { ownerUserId: query.ownerUserId, collectionState: 'collected' }),
+    'payments.paidAt': { $gte: from, $lt: to },
+  };
+  if (query.serviceType) filter.serviceType = query.serviceType;
+  const rows = await Invoice.find(filter).select('issueDateTime payments salesOwnerUserId').lean();
+  return rows
+    .map((r) => {
+      const last = Math.max(...r.payments.map((p) => new Date(p.paidAt).getTime()));
+      return {
+        issueDateTime: r.issueDateTime,
+        lastPaidAt: new Date(last),
+        salesOwnerUserId: r.salesOwnerUserId,
+      };
+    })
+    .filter((r) => r.lastPaidAt >= from && r.lastPaidAt < to);
+}
+
+export async function listInvoices(req: AuthedRequest, query: ListInvoicesQuery) {
+  const eff = await permissionOn(req, 'finance.invoices', 'view');
+  if (!eff) throw forbidden();
+  const filter = invoiceListFilter(req, eff, query);
   const [rows, total] = await Promise.all([
     Invoice.find(filter)
       .sort({ issueDateTime: -1 })

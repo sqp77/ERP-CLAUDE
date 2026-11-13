@@ -65,6 +65,12 @@ export const NOTIFICATION_TYPES = [
   'finance.invoice.overdue', // 12 تأخر سداد الفاتورة
   'sales.contract.expiring', // 13 اقتراب انتهاء عقد
   'sales.contract.renewal_due', // 14 اقتراب موعد تجديد التعاون
+  // S4 [SAL §9, §10.3, §11.1, §14 (15)]
+  'discussion.opened', // 15 وجود مشكلة أو استفسار من قسم آخر
+  'discussion.replied',
+  'discussion.state_changed',
+  'sales.marketing_notice', // §9 فعالية تحتاج دعم التسويق
+  'sales.target.changed',
   'generic',
 ] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
@@ -129,5 +135,10 @@ export const NOTIFICATION_TITLES_AR: Record<NotificationType, string> = {
   'finance.invoice.overdue': 'تأخر سداد الفاتورة',
   'sales.contract.expiring': 'اقتراب انتهاء عقد',
   'sales.contract.renewal_due': 'اقتراب موعد تجديد التعاون',
+  'discussion.opened': 'وجود مشكلة أو استفسار من قسم آخر',
+  'discussion.replied': 'رد جديد في نقاش بين الأقسام',
+  'discussion.state_changed': 'تحديث حالة نقاش بين الأقسام',
+  'sales.marketing_notice': 'فعالية تحتاج دعم قسم التسويق',
+  'sales.target.changed': 'تحديث مستهدفك الشهري',
   generic: 'إشعار',
 };

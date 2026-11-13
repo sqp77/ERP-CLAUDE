@@ -33,6 +33,7 @@ import { salesRequestsRouter } from './modules/sales/requests.routes';
 import { pricingRouter } from './modules/sales/pricing.routes';
 import { quotesRouter } from './modules/sales/quotes.routes';
 import { contractsRouter } from './modules/sales/contracts.routes';
+import { salesManagementRouter } from './modules/sales/management.routes';
 import { invoicesRouter } from './modules/finance/invoices.routes';
 import { hrRouter } from './modules/hr/routes';
 import { portalRouter, profileChangesRouter } from './modules/hr/portalRoutes';
@@ -98,6 +99,7 @@ export function createApp(): Express {
   v1.use('/sales/pricelist', pricingRouter);
   v1.use('/sales/quotes', quotesRouter);
   v1.use('/sales/contracts', contractsRouter);
+  v1.use('/sales/management', salesManagementRouter);
   v1.use('/finance/invoices', invoicesRouter);
   v1.use('/sales', salesRouter);
   app.use('/api/v1', v1);

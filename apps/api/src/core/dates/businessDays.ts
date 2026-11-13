@@ -82,3 +82,15 @@ export function startOfRiyadhWeek(d: Date): Date {
   const dayStart = startOfRiyadhDay(d);
   return new Date(dayStart.getTime() - riyadhWeekday(d) * 86_400_000);
 }
+
+/** First and last instant of a Riyadh calendar day given as `YYYY-MM-DD` (list date filters). */
+export const riyadhDayStartOf = (day: string): Date => new Date(`${day}T00:00:00+03:00`);
+export const riyadhDayEndOf = (day: string): Date => new Date(`${day}T23:59:59.999+03:00`);
+/** `{ $gte, $lte }` for an inclusive window of Riyadh days, or undefined when neither end is given. */
+export function riyadhDayRange(from?: string, to?: string): { $gte?: Date; $lte?: Date } | undefined {
+  if (!from && !to) return undefined;
+  return {
+    ...(from ? { $gte: riyadhDayStartOf(from) } : {}),
+    ...(to ? { $lte: riyadhDayEndOf(to) } : {}),
+  };
+}

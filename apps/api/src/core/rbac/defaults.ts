@@ -231,6 +231,11 @@ export const CORE_ROLES: RoleDefinition[] = [
       { resource: 'sales.pricelist', actions: ['view'], scope: 'all' },
       { resource: 'finance.invoices', actions: ['view'], scope: 'all' },
       { resource: 'tags', actions: ['view'], scope: 'all' },
+      // Sales S4, read-only [SAL §11, §13, §15 «الاطلاع على التقارير ومؤشرات الأداء»]
+      { resource: 'sales.targets', actions: ['view'], scope: 'all' },
+      { resource: 'sales.kpi', actions: ['view'], scope: 'all' },
+      { resource: 'sales.dashboard', actions: ['view'], scope: 'all' },
+      { resource: 'sales.library', actions: ['view'], scope: 'all' },
     ],
     fieldRules: [HIDE_SENSITIVE],
   },

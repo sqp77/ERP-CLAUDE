@@ -27,6 +27,8 @@ const invoiceSchema = new Schema(
     customerId: { type: Schema.Types.ObjectId, ref: 'Customer', required: true, index: true },
     partyId: { type: Schema.Types.ObjectId, ref: 'Party' },
     salesOwnerUserId: { type: Schema.Types.ObjectId, ref: 'User', index: true },
+    /** The Sales service the invoice belongs to, snapshot at registration (KPI filter «نوع الخدمة», SAL §11.2). */
+    serviceType: { type: String, index: true },
     salesDepartmentId: { type: Schema.Types.ObjectId, ref: 'Department' },
     issueDateTime: { type: Date, required: true, index: true },
     dueDate: { type: Date, required: true, index: true },
@@ -42,6 +44,8 @@ const invoiceSchema = new Schema(
       type: [
         new Schema(
           {
+            /** Price-list item, kept so KPIs group tons and price per material (SAL §11, DECISIONS §20 change 6). */
+            itemId: Schema.Types.ObjectId,
             descriptionAr: String,
             unit: String,
             quantity: Number,
