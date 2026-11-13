@@ -18,6 +18,11 @@ export const createEventSchema = z
     departmentIds: z.array(objectIdSchema).default([]),
     reminderMinutes: z.array(z.number().int().min(0)).default([60]),
     link: z.object({ type: z.string(), id: z.string(), label: z.string().optional() }).optional(),
+    /** «نوع الاجتماع» [SAL §9] from `sales.lists.meetingTypes` (free text while the list is empty, Q7). */
+    meetingType: z.string().trim().max(120).optional(),
+    /** Events that need Marketing [SAL §9 «إشعار قسم التسويق»]: name = title, date = startAt, location, organizer. */
+    organizer: z.string().trim().max(200).optional(),
+    needsMarketing: z.boolean().default(false),
   })
   .refine((e) => e.endAt >= e.startAt, { message: 'وقت النهاية قبل وقت البداية', path: ['endAt'] });
 export const updateEventSchema = z.object({
@@ -36,6 +41,9 @@ export const updateEventSchema = z.object({
   status: z.enum(EVENT_STATUSES).optional(),
   outcome: z.string().trim().max(5000).optional(),
   nextFollowUpAt: z.coerce.date().nullable().optional(),
+  meetingType: z.string().trim().max(120).optional(),
+  organizer: z.string().trim().max(200).optional(),
+  needsMarketing: z.boolean().optional(),
 });
 export const listEventsQuerySchema = z.object({
   from: z.coerce.date(),

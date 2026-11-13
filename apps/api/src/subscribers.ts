@@ -1,5 +1,6 @@
 import { registerHrSubscribers } from './modules/hr/events';
 import { registerTicketSubscribers } from './modules/tickets';
+import { registerCrmSubscribers } from './modules/crm/events';
 
 let registered = false;
 /**
@@ -12,4 +13,5 @@ export function registerSubscribers(): void {
   registered = true;
   registerHrSubscribers();
   registerTicketSubscribers();
+  registerCrmSubscribers();
 }

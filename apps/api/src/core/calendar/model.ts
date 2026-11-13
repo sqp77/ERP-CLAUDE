@@ -23,6 +23,13 @@ const eventSchema = new Schema(
     reminderMinutes: { type: [Number], default: [60] },
     remindersSent: { type: [Number], default: [] },
     link: { type: { type: String }, id: { type: String }, label: { type: String } },
+    /** «نوع الاجتماع» [SAL §9]: a value of `sales.lists.meetingTypes`, free text while the list is empty (Q7). */
+    meetingType: { type: String },
+    /** «الجهة المنظمة» of an exhibition, conference or event that needs Marketing [SAL §9 الربط مع قسم التسويق]. */
+    organizer: { type: String },
+    needsMarketing: { type: Boolean, default: false },
+    /** Set once when Marketing was told; a later edit never sends the notice again. */
+    marketingNotifiedAt: { type: Date, default: null },
     deletedAt: { type: Date },
   },
   { timestamps: true },

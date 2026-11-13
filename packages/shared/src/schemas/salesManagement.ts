@@ -147,6 +147,9 @@ export const discussionStateSchema = z.object({
   state: z.enum(DISCUSSION_STATES),
   note: z.string().trim().max(2000).optional(),
 });
+export const discussionParticipantsSchema = z.object({
+  userIds: z.array(objectIdSchema).min(1).max(20),
+});
 export const listDiscussionsQuerySchema = paginationSchema.extend({
   /** mine = opened by me or I take part; department = to or from my department. */
   view: z.enum(['mine', 'department']).default('mine'),

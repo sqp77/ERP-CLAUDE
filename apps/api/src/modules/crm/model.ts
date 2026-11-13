@@ -122,10 +122,17 @@ const communicationLogSchema = new Schema(
     nextStep: { type: String },
     nextFollowUpAt: { type: Date },
     attachmentIds: { type: [Schema.Types.ObjectId], default: [] },
+    /** Entries written by the system from another record (a calendar meeting's outcome); unique so a retry never doubles. */
+    sourceKey: { type: String },
+    source: { type: { type: String }, id: { type: String }, label: { type: String } },
   },
   { versionKey: false },
 );
 communicationLogSchema.index({ customerId: 1, at: 1 });
+communicationLogSchema.index(
+  { sourceKey: 1 },
+  { unique: true, partialFilterExpression: { sourceKey: { $type: 'string' } } },
+);
 export const CommunicationLog = model('CommunicationLog', communicationLogSchema);
 
 /** Leads referred by Customer Service (or any channel) to Sales or Sustainability [SAL §3, §8.1; CS §6.8]. */

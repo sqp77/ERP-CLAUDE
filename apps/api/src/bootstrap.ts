@@ -5,6 +5,8 @@ import { purgeDeliveredEvents } from './core/outbox/service';
 import { registerJob } from './core/jobs/registry';
 import { runTaskReminders, runUnassignedTaskReminders } from './core/tasks/jobs';
 import { registerTaskAccess } from './core/tasks/service';
+import { registerRecordAccess } from './core/access/registry';
+import { canAccessDiscussion } from './core/discussions/service';
 import { runEventReminders } from './core/calendar/jobs';
 import { runDocumentExpiryAlerts } from './core/documents/service';
 import { registerExportResource } from './core/export/service';
@@ -35,6 +37,8 @@ export function registerModules(): void {
   registerJob('tasks.reminders', (now) => runTaskReminders(now), 'frequent');
   registerJob('tasks.unassigned', (now) => runUnassignedTaskReminders(now), 'daily');
   registerTaskAccess();
+  // Department discussions [SAL §10.3]: files on a discussion follow the discussion's circle.
+  registerRecordAccess('discussion', (req, id) => canAccessDiscussion(req, id));
   registerJob('calendar.reminders', (now) => runEventReminders(now), 'frequent');
   registerJob('documents.expiry', (now) => runDocumentExpiryAlerts(now), 'daily');
   registerJob('outbox.retention', (now) => purgeDeliveredEvents(now), 'daily'); // review G8

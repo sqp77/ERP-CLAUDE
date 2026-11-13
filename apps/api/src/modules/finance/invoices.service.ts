@@ -598,7 +598,8 @@ export function invoiceListFilter(
       ...(query.issuedTo ? { $lte: riyadhDayEnd(query.issuedTo) } : {}),
     };
   if (query.serviceType) filter.serviceType = query.serviceType;
-  if (query.q) filter.$or = [{ number: query.q.toUpperCase() }, { externalNumber: query.q }];
+  // $and, not $or: the department scope already uses $or and must not be replaced by the search.
+  if (query.q) filter.$and = [{ $or: [{ number: query.q.toUpperCase() }, { externalNumber: query.q }] }];
   return filter;
 }
 

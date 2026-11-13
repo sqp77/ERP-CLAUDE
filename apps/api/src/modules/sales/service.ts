@@ -185,7 +185,8 @@ export function opportunityListFilter(
     filter.nextFollowUpAt = { $lt: now };
     filter.stage = { $in: OPEN_OPPORTUNITY_STAGES };
   }
-  if (q.q) filter.$or = [{ title: arabicSearchRegex(q.q) }, { number: q.q.toUpperCase() }];
+  // $and, not $or: a manager's department scope is an $or and must survive the search.
+  if (q.q) filter.$and = [{ $or: [{ title: arabicSearchRegex(q.q) }, { number: q.q.toUpperCase() }] }];
   const created = riyadhDayRange(q.createdFrom, q.createdTo);
   if (created) filter.createdAt = created;
   // Won / lost in a window: the date the deal closed (wonAt / lostAt), whatever the stage filter says.
