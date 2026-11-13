@@ -14,7 +14,11 @@ import {
 } from './modules/crm/service';
 import { changeStage, createOpportunity } from './modules/sales/service';
 import { createRequest, transitionRequest } from './modules/sales/requests.service';
-import { createPriceItem } from './modules/sales/pricing.service';
+import { addMarketPrice, createPriceItem } from './modules/sales/pricing.service';
+import { setTarget } from './modules/sales/management.service';
+import { addMessage, openDiscussion } from './core/discussions/service';
+import { riyadhPeriod } from './core/kpi/service';
+import { registerModules } from './bootstrap';
 import {
   createQuote,
   respondQuote,
@@ -472,6 +476,89 @@ export async function seedSales(): Promise<{ customers: number; leads: number }>
     ],
   } as never);
   void plastic;
-  void cardboard;
+
+  // S4 [SAL §11, §11.1, §10.3]: a cardboard sale invoiced and fully collected this month (tons and collection days
+  // for the KPI board), a weekly market price, monthly targets (one changed with a reason → two versions), and a
+  // discussion with Finance on a customer. Record resolvers come from the module registry.
+  registerModules();
+  await addMarketPrice(mgrPrice, String(cardboard!._id), { priceHalalas: 57_500_00, source: 'سوق الدمام' });
+  const quoteC = await createQuote(reemQuotes, {
+    customerId: String(gulf._id),
+    lines: [{ itemId: String(cardboard!._id), quantity: 3 }],
+    attachmentIds: [],
+  } as never);
+  await submitQuote(reemQuotes, String(quoteC._id));
+  await sendQuote(reemQuotes, String(quoteC._id), {
+    to: ['procurement@gulfpack.example'],
+    cc: [],
+    attachmentIds: [],
+  });
+  const acceptedC = await respondQuote(reemQuotes, String(quoteC._id), { response: 'accepted' });
+  const issuedAt = new Date(Date.now() - 2 * 86_400_000);
+  const invC = await registerInvoice(financeReq, {
+    salesOrderId: String((acceptedC as { salesOrder?: { _id: unknown } }).salesOrder?._id),
+    kind: 'tax',
+    externalNumber: 'ERP-INV-2026-0123',
+    issueDateTime: issuedAt.toISOString(),
+    dueDate: inDays(28).slice(0, 10),
+  });
+  await recordPayment(financeReq, String(invC._id), {
+    amountHalalas: invC.totalHalalas,
+    method: 'bank_transfer',
+    reference: 'TRX-20488',
+  });
+  const period = riyadhPeriod();
+  const targetsReq = await reqOf(sultan, 'sales.targets', 'edit');
+  await setTarget(targetsReq, {
+    period,
+    scope: 'department',
+    dimension: 'none',
+    metric: 'revenue',
+    value: 400_000_00,
+  });
+  await setTarget(targetsReq, {
+    period,
+    scope: 'user',
+    userId: String(reem._id),
+    dimension: 'none',
+    metric: 'revenue',
+    value: 200_000_00,
+  });
+  await setTarget(targetsReq, {
+    period,
+    scope: 'user',
+    userId: String(reem._id),
+    dimension: 'none',
+    metric: 'revenue',
+    value: 250_000_00,
+    reason: 'إضافة عقد شركة الخليج للتغليف',
+  });
+  await setTarget(targetsReq, {
+    period,
+    scope: 'user',
+    userId: String(majed._id),
+    dimension: 'material',
+    dimensionKey: String(cardboard!._id),
+    metric: 'quantity',
+    value: 10_000,
+  });
+  const finance = await Department.findOne({ code: 'finance' }).lean();
+  if (finance) {
+    const disc = await openDiscussion(await reqOf(reem, 'discussions', 'create'), {
+      recordType: 'customer',
+      recordId: String(gulf._id),
+      title: 'نسخة من فاتورة الشهر الماضي للعميل',
+      details: 'العميل يطلب نسخة من الفاتورة ERP-INV-2026-0117 لاعتمادها لديه.',
+      targetDepartmentId: String(finance._id),
+      participantUserIds: [],
+      attachmentIds: [],
+    });
+    await addMessage(
+      await reqOf(abdulaziz, 'discussions', 'view'),
+      String(disc._id),
+      'تم، سنرسلها اليوم على البريد الرسمي للعميل.',
+      [],
+    );
+  }
   return { customers: await Customer.countDocuments(), leads: await Lead.countDocuments() };
 }

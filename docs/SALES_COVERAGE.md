@@ -87,10 +87,28 @@ Status legend: ✅ built · 🔜 planned slice · ⏸ waits for an owner answer 
 | §8.1 | استقبال العملاء المحتملين (Leads) من خدمة العملاء؛ توجيه العملاء وتوزيعهم على موظفي القسم | `LeadsPage` department view; `POST /crm/leads/:id/assign` (manager only, 403 for a rep) | `crm.test.ts` leads test | ✅ S1 |
 | §8.1 | تعديل حالة الطلب وفق الصلاحيات المعتمدة | request states | — | 🔜 S2 |
 | §8.1 | الاطلاع على جميع العملاء والفرص البيعية داخل القسم؛ الاطلاع على سجل متابعة الموظفين | department scope for `sales_manager` (implied for the Sales department manager, DECISIONS §20 change 3); logs readable per customer | `crm.test.ts` first test; `rbac-sales.test.ts` change 3 | ✅ S1 |
-| §8.2 | رفع ملفات وآليات العمل PDF، التعليمات، تقارير الموظفين، تقارير الانتداب والزيارات، مستندات العملاء | Sales documents library + EP §14 reports filtered to Sales | — | 🔜 S4 |
-| §8.3 | KPIs، المستهدفات، الإيرادات، المصروف، المتبقي (للعرض فقط من المالية) | KPI framework, targets, read-only Finance cards | — | 🔜 S4 (budget data waits for the Finance module) |
+| §8.2 | رفع ملفات وآليات العمل PDF، التعليمات | `/sales/library`: `SalesLibraryDoc` (PDF only, categories, versions kept, soft delete), manager writes, Sales and executive read, file through the row's access check | `sales-s4.test.ts` library | ✅ S4 |
+| §8.2 | تقارير الموظفين، تقارير الانتداب والزيارات، مستندات العملاء | linked from the library page to `/reports`, `/hr/secondments`, `/sales/tasks?view=visits`, `/sales/customers` | — | ✅ S4 (existing screens) |
+| §8.3 | KPIs، المستهدفات، نسبة التحقيق، إيرادات القسم | `core/kpi`, `/sales/kpi`, `/sales/targets`, dashboard budget card «إيرادات القسم» from invoices | `sales-s4.test.ts` KPIs, dashboard | ✅ S4 |
+| §8.3 | المبالغ المصروفة والمتبقية من الميزانية (للعرض فقط) | read-only cards, no write path; «لا توجد بيانات مالية بعد» until Finance budgets exist | `sales-s4.test.ts` dashboard (`budgetsAvailable: false`) | ✅ S4 (data waits for Finance phase 4) |
 
-## §9 التقويم — 🔜 S4 (core calendar already has the five statuses) · §10.1 البريد — 🔜 S3/S4 (Q5) · §10.3 الدردشة الداخلية — 🔜 S4
+## §9 التقويم
+
+| § | Bullet | Implementation | Test | Status |
+|---|---|---|---|---|
+| §9 | عنوان، العميل، الموظف المسؤول، التاريخ والوقت، نوع الاجتماع، الموقع، الرابط الإلكتروني، ملاحظات | core calendar + `meetingType` (`sales.lists.meetingTypes`, Q7), `locationUrl`, `meetingUrl`, link to customer / opportunity / request | `sales-s4.test.ts` calendar | ✅ S4 |
+| §9 | الحالات مجدول / تم / لم يتم / إعادة جدولة / ملغي؛ ألوان؛ شهري وأسبوعي ويومي؛ تذكير | `EVENT_STATUSES`, calendar views, `calendar.reminders` | core tests | ✅ core |
+| §9 | ربط الاجتماع بملف العميل؛ تسجيل النتائج؛ موعد المتابعة القادمة | «جدولة اجتماع» on the customer file; outcome + next follow-up → `calendar.meeting.outcome_recorded` → CRM log entry (idempotent) and customer follow-up | `sales-s4.test.ts` calendar | ✅ S4 |
+| §9 | إشعار قسم التسويق (اسم الفعالية وتاريخها وموقعها والجهة المنظمة) | `needsMarketing` + `organizer`; once (`marketingNotifiedAt`) to the `marketing` department's managers and members; cannot be withdrawn | `sales-s4.test.ts` calendar | ✅ S4 |
+
+## §10.1 البريد — 🔜 Q5 (mailbox adapter disabled; drafts in the customer file, S3)
+
+## §10.3 الدردشة الداخلية بين الأقسام
+
+| § | Bullet | Implementation | Test | Status |
+|---|---|---|---|---|
+| §10.3 | فتح محادثة مرتبطة بالعميل أو الطلب؛ تحديد القسم؛ إضافة الموظفين؛ التفاصيل؛ المرفقات | `core/discussions` (`DSC-…`), any resolvable record; panel on the customer file and the request page; participants at opening and later | `sales-s4.test.ts` discussions | ✅ S4 |
+| §10.3 | إشعار القسم المعني؛ تسجيل الردود والإجراءات؛ إظهار الحالة؛ السجل حتى الإغلاق | notification 15 to the target department; append-only entries; states جديدة / قيد المعالجة / بانتظار الرد / تم الحل / مغلقة with side rules; closed is read-only | same | ✅ S4 |
 
 ## §10.2 سجل المحادثات
 
@@ -107,7 +125,22 @@ Status legend: ✅ built · 🔜 planned slice · ⏸ waits for an owner answer 
 | §10.4 | الأمثلة #عميل_جديد #عميل_استراتيجي #عقد_سنوي #تأجير_حاويات #سكراب #مناقصة #متابعة_مالية #يحتاج_زيارة | `DEFAULT_SALES_TAGS` seeded by the baseline | same test (eight names) | ✅ S1 |
 | §10.4 | قابلة للإضافة والتعديل وفق صلاحيات مدير القسم | `POST/PATCH/DELETE /tags` need `tags:create/edit/delete` (sales_manager, department); reps pick existing tags only; rename rewrites records | same test (403 for rep, rename reflected) | ✅ S1 |
 
-## §11 KPIs — 🔜 S4 (change 6: tons from invoices) · §12 التقارير — 🔜 S5 · §13 لوحة التحكم — 🔜 S4 (the S1 landing already drills down: عملائي، متابعات مستحقة، فرص مفتوحة، فرص متأخرة، عملاء محتملون)
+## §11 مؤشرات الأداء
+
+| § | Bullet | Implementation | Test | Status |
+|---|---|---|---|---|
+| §11 | إجمالي الإيرادات، الكمية المباعة، نسبة تحويل العروض (40%)، متوسط سعر الطن (≥ السوق)، متوسط مدة التحصيل (≤ 45) | `salesKpis` from Finance invoices and quotes; targets from versions and `sales.kpiTargets`; status and pace (`core/kpi`) | `sales-s4.test.ts` KPIs; `core/kpi/service.test.ts` | ✅ S4 |
+| §11.1 | مستهدف القسم ولكل موظف؛ حسب الخدمة أو المادة؛ الإنجاز والنسبة وتحقق/لم يتحقق؛ السجل؛ التعديل أو السحب مع السبب؛ المقارنة بين الأشهر | `SalesTargetVersion` append-only; `/sales/targets` (compare months); rep notified | `sales-s4.test.ts` targets | ✅ S4 (annual reports S5) |
+| §11.2 | اللوحة (11 بندًا) حسب الموظف والقسم والخدمة والفترة | `/sales/kpi` board, every number links to its list | `sales-s4.test.ts` KPIs | ✅ S4 |
+
+## §12 التقارير — 🔜 S5
+
+## §13 لوحة التحكم
+
+| § | Bullet | Implementation | Test | Status |
+|---|---|---|---|---|
+| §13 | المبيعات، العملاء، الفرص، الموظفون، التحصيل؛ حسب الصلاحية | `salesDashboard`, `/sales/dashboard` (rep own, manager department, executive all) | `sales-s4.test.ts` dashboard | ✅ S4 |
+| §13 | الضغط على أي مؤشر لعرض التفاصيل | each card uses its list's filter builder and link; lists accept the windows and show a clear-filter banner | same (card value = list total for three roles) | ✅ S4 |
 
 ## §14 الإشعارات
 
@@ -127,7 +160,7 @@ Status legend: ✅ built · 🔜 planned slice · ⏸ waits for an owner answer 
 | 12 | تأخر سداد الفاتورة | `finance.invoice.overdue` | daily job → Sales owner, managers, Finance, once | same | ✅ S3 |
 | 13 | اقتراب انتهاء عقد | `sales.contract.expiring` | daily job, 90 days before, once → Sales | «contracts…» | ✅ S3 |
 | 14 | اقتراب موعد تجديد التعاون | `sales.contract.renewal_due` | same job → the owner | same | ✅ S3 |
-| 15 | وجود مشكلة أو استفسار من قسم آخر | — | S4 (discussions) | — | 🔜 |
+| 15 | وجود مشكلة أو استفسار من قسم آخر | `discussion.opened` (+ `discussion.replied`, `discussion.state_changed`) | `openDiscussion` → target department managers and members, participants | `sales-s4.test.ts` discussions | ✅ S4 |
 | 16 | تغيير الموظف المسؤول عن العميل أو الطلب | `crm.owner_changed`, `crm.customer.assigned` | transfer and reassignment → previous owner; a request created for another owner → that owner | `crm.test.ts` transfer; `sales-s1.test.ts` reassign | ✅ S1/S2 |
 
 ## §15 الصلاحيات
@@ -137,7 +170,7 @@ Status legend: ✅ built · 🔜 planned slice · ⏸ waits for an owner answer 
 | موظف المبيعات | إضافة العملاء والفرص؛ متابعة العملاء المسندين إليه؛ تسجيل المحادثات والاجتماعات؛ الاطلاع على بياناته | role `sales_rep` (own scope on `crm.customers`, `crm.leads`, `sales.opportunities`) | `crm.test.ts` first test (rep B sees nothing of rep A) | ✅ S1 (quotes, requests, targets: S2–S4) |
 | مدير المبيعات | جميع عملاء القسم؛ التوزيع؛ النقل؛ متابعة الأداء | role `sales_manager` (department), implied for the Sales department manager | `crm.test.ts`, `rbac-sales.test.ts` | ✅ S1 (quotes approval, targets: S3–S4) |
 | الإدارة التنفيذية | الاطلاع على المؤشرات والإيرادات والتقارير؛ اعتماد ما يتجاوز صلاحيات المدير | `executive` gets view-all on `crm.*`, `sales.opportunities`, `tags`; create → 403 | `crm.test.ts` first test | ✅ S1 (above-limit approvals S3) |
-| الأقسام المرتبطة | المشتريات، المالية، التشغيل، خدمة العملاء، التسويق | CS referral built; the three thin stages S2; Marketing notice S4 | `crm.test.ts` leads | ✅/🔜 |
+| الأقسام المرتبطة | المشتريات، المالية، التشغيل، خدمة العملاء، التسويق | CS referral; the three thin stages (S2); Marketing notice and department discussions (S4) | `crm.test.ts` leads; `sales-s4.test.ts` | ✅ |
 | | قابلة للتخصيص حسب طبيعة الوظيفة والمسؤولية | admin edits grants of `sales_rep`/`sales_manager` or clones them; admin edits survive restarts (change 1); nobody edits a role they hold (change 2) | `rbac-sales.test.ts` changes 1–2 | ✅ S1 |
 
 ## §16 المتطلبات التقنية
@@ -151,6 +184,6 @@ Status legend: ✅ built · 🔜 planned slice · ⏸ waits for an owner answer 
 | حماية بيانات العملاء والعقود والأسعار | scope rules, duplicate check without leakage; quote internals (list price, discounts, approvals, history) only for the owner, Sales management, Finance and the executive; invoice views audited as sensitive | ✅ |
 | النسخ الاحتياطية | Atlas backup note in DEPLOY.md | 🔜 S5 |
 
-## §18 المخرجات (20) — S1: 1, 2, 3, 4, 18; S2: 5 and the PRC/FIN/OPS part of 19; S3: 6 (quotes), 7 (price list), 8 (discount matrix view), 9 (periodic contracts), 10 (invoices and collection). Remaining: 11–17, 20 (S4–S5).
+## §18 المخرجات (20) — S1: 1, 2, 3, 4, 18; S2: 5 and the PRC/FIN/OPS part of 19; S3: 6 (quotes), 7 (price list), 8 (discount matrix view), 9 (periodic contracts), 10 (invoices and collection); S4: 11 (`/sales/tasks`), 12 (calendar meetings), 13 (`/discussions`), 14 (`/sales/dashboard`), 15 (`/sales/kpi`, `/sales/targets`), the Marketing part of 19. Remaining: 16, 17 (hygiene test), 20 (S5).
 
 ## §19 التوصيات — S1: ملف موحد ✅ · رقم مرجعي تلقائي ✅ · الاحتفاظ بالمحادثات عند تغيير الموظف ✅ · عدم تجاوز الصلاحيات ✅ · S2: كل الخدمات مرتبطة بملف العميل نفسه ✅ (`customerId` required) · مسارات اعتماد مرنة ✅ (workflow definitions) · الطلبات المحولة تظهر في حساب القسم المستلم مع إشعار فوري ✅ (`?view=incoming`, notifications 7/to_finance/to_operations) · سجل انتقال الطلب بين الأقسام واسم الموظف في كل مرحلة ✅ (stage log) · سبب تأخر الطلب والجهة المسؤولة ✅ (`delay-reason`) · البقية (ربط الإيرادات بالمالية، البريد، التقارير) S3–S5.
