@@ -178,7 +178,9 @@ const num = (n: number, digits = 0) =>
   n.toLocaleString('ar-SA-u-nu-latn', { maximumFractionDigits: digits, minimumFractionDigits: 0 });
 export const tons = (kg: number | null | undefined) =>
   typeof kg === 'number' ? `${num(kg / 1000, 3)} ${i18n.t('sales.kpi.tonUnit')}` : '—';
-export const pct = (bp: number | null | undefined) => (typeof bp === 'number' ? `${num(bp / 100, 1)}%` : '—');
+/** Percent isolated left-to-right so «40%» never shows as «%40» inside Arabic text. */
+export const pct = (bp: number | null | undefined) =>
+  typeof bp === 'number' ? `\u2066${num(bp / 100, 1)}%\u2069` : '—';
 export const days = (d: number | null | undefined) =>
   typeof d === 'number' ? `${num(d, 1)} ${i18n.t('sales.kpi.dayUnit')}` : '—';
 

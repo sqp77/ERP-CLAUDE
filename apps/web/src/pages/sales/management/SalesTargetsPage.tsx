@@ -159,12 +159,12 @@ export function SalesTargetsPage() {
                   const l = label(r);
                   return (
                     <tr key={r._id}>
-                      <Td className="tabular">{r.period}</Td>
+                      <Td className="tabular whitespace-nowrap">{r.period}</Td>
                       <Td className="font-medium">{l.who}</Td>
                       <Td>
                         {l.dim}
                         <span className="ms-1 text-xs text-slate-500">
-                          ({t(`sales.targets.metrics.${r.metric}`)})
+                          · {t(`sales.targets.metrics.${r.metric}`)}
                         </span>
                       </Td>
                       <Td className="tabular">
@@ -189,7 +189,7 @@ export function SalesTargetsPage() {
                         )}
                       </Td>
                       <Td>
-                        <div className="flex flex-wrap gap-1">
+                        <div className="flex gap-1 whitespace-nowrap">
                           <Button
                             variant="ghost"
                             className="min-h-9 px-2 py-1"

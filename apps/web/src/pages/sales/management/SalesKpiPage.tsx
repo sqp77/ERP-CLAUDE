@@ -96,9 +96,11 @@ export function SalesKpiPage() {
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
             {d.kpis.map((k) => (
               <div key={k.code} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                <div className="flex items-start justify-between gap-2">
+                <div className="flex flex-wrap items-start justify-between gap-1">
                   <span className="text-sm font-medium text-slate-700">{k.nameAr}</span>
-                  <Badge tone={kpiTone[k.status]}>{t(`sales.kpi.statuses.${k.status}`)}</Badge>
+                  <span className="shrink-0 whitespace-nowrap">
+                    <Badge tone={kpiTone[k.status]}>{t(`sales.kpi.statuses.${k.status}`)}</Badge>
+                  </span>
                 </div>
                 <div className="mt-2 text-2xl font-bold tabular">{formatKpi(k.unit, k.actual)}</div>
                 <div className="mt-1 text-xs text-slate-500 tabular">
@@ -199,8 +201,10 @@ export function SalesKpiPage() {
                           '—'
                         ) : (
                           <Badge tone={diff >= 0 ? 'green' : 'red'}>
-                            {diff >= 0 ? '+' : ''}
-                            {pct(diff)}
+                            <span dir="ltr">
+                              {diff >= 0 ? '+' : ''}
+                              {pct(diff)}
+                            </span>
                           </Badge>
                         )}
                       </Td>

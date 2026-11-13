@@ -229,7 +229,7 @@ function Stat({
       <div className="text-xs text-slate-600">{label}</div>
       <div
         className={cx(
-          'mt-1 text-xl font-bold tabular',
+          'mt-1 text-lg font-bold tabular sm:text-xl',
           tone === 'green' && 'text-emerald-700',
           tone === 'red' && 'text-red-700',
           tone === 'amber' && 'text-amber-700',
@@ -300,9 +300,11 @@ export function KpiStrip({ kpis }: { kpis: KpiValue[] }) {
           to="/sales/kpi"
           className="block rounded-xl border border-slate-200 bg-white p-3 shadow-sm hover:bg-slate-50"
         >
-          <div className="flex items-start justify-between gap-2">
+          <div className="flex flex-wrap items-start justify-between gap-1">
             <span className="text-xs text-slate-600">{k.nameAr}</span>
-            <Badge tone={kpiTone[k.status]}>{t(`sales.kpi.statuses.${k.status}`)}</Badge>
+            <span className="shrink-0 whitespace-nowrap">
+              <Badge tone={kpiTone[k.status]}>{t(`sales.kpi.statuses.${k.status}`)}</Badge>
+            </span>
           </div>
           <div className="mt-1 text-lg font-bold tabular">{formatKpi(k.unit, k.actual)}</div>
           <div className="text-xs text-slate-500 tabular">

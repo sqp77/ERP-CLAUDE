@@ -2197,7 +2197,7 @@
       },
       "empty": "لا توجد مستندات بعد",
       "uploadedBy": "رفعه {{name}} في {{date}}",
-      "versions": "{{n}} نسخ",
+      "versions": "سجل النسخ ({{n}})",
       "related": "متابعة أخرى للمدير",
       "employeeReports": "التقارير المرفوعة من الموظفين",
       "secondmentReports": "تقارير الانتداب",
