@@ -215,6 +215,28 @@ describe('Sales S5 — reports and the API document [SAL §12, §18 (16), §18 (
     expect(await AuditLog.countDocuments({ action: 'export', resource: 'sales.reports' })).toBe(11);
   });
 
+  it('discount matrix log: every approval event of the quotes the caller may see, with the level and who decided [SAL §7.2, §18 (8)]', async () => {
+    const ctx = await setup();
+    const { t } = ctx;
+    const { quote } = await soldAndInvoiced(ctx, { tons: 1, externalNumber: 'INV-S5-2' });
+    const mgr = await request(app()).get('/api/v1/sales/quotes/approvals-log').set(auth(t.mgr));
+    expect(mgr.status).toBe(200);
+    const ev = mgr.body.items.find((e: { quoteNumber: string }) => e.quoteNumber === quote.number);
+    expect(ev).toMatchObject({
+      type: 'auto_approved',
+      requiredLevel: 'none',
+      byName: 'reem',
+      customer: 'شركة الخليج للتغليف',
+    });
+    // majed sees nothing of reem's quotes; a bad date is refused.
+    const majed = await request(app()).get('/api/v1/sales/quotes/approvals-log').set(auth(t.majed));
+    expect(majed.body.items).toHaveLength(0);
+    expect(
+      (await request(app()).get('/api/v1/sales/quotes/approvals-log?from=14-11-2026').set(auth(t.mgr)))
+        .status,
+    ).toBe(400);
+  });
+
   it('API document: every Sales, CRM, invoice and discussion route is listed with its permission; admin and executive only', async () => {
     const { t } = await setup();
     await makeUser('it-admin@eayni.local', [{ role: 'employee' }, { role: 'system_admin' }]);

@@ -62,6 +62,7 @@ import { SalesTargetsPage } from './pages/sales/management/SalesTargetsPage';
 import { SalesLibraryPage } from './pages/sales/management/SalesLibraryPage';
 import { SalesTasksPage } from './pages/sales/management/SalesTasksPage';
 import { SalesReportsPage } from './pages/sales/management/SalesReportsPage';
+import { DiscountMatrixPage } from './pages/sales/pricing/DiscountMatrixPage';
 import { DiscussionPage, DiscussionsPage } from './pages/discussions/DiscussionsPage';
 
 export const router = createBrowserRouter([
@@ -172,7 +173,10 @@ export const router = createBrowserRouter([
               { path: '/incoming', element: <RequestsPage incoming /> },
               {
                 element: <RequirePermission resource="sales.pricelist" action="view" />,
-                children: [{ path: '/sales/pricelist', element: <PriceListPage /> }],
+                children: [
+                  { path: '/sales/pricelist', element: <PriceListPage /> },
+                  { path: '/sales/discount-matrix', element: <DiscountMatrixPage /> },
+                ],
               },
               {
                 element: <RequirePermission resource="sales.quotes" action="view" />,

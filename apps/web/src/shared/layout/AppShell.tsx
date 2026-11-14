@@ -37,6 +37,7 @@ import {
   MessagesSquare,
   FileBarChart,
   FileCode2,
+  Percent,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { usePrefs } from '@/lib/preferences';
@@ -118,6 +119,12 @@ export function AppShell() {
       label: t('nav.pricelist'),
       icon: HandCoins,
       show: can('sales.pricelist', 'view'),
+    },
+    {
+      to: '/sales/discount-matrix',
+      label: t('nav.salesDiscountMatrix'),
+      icon: Percent,
+      show: can('sales.quotes', 'approve'),
     },
     {
       to: '/sales/contracts',

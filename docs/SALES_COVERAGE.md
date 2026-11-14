@@ -17,9 +17,9 @@ Status legend: ✅ built · 🔜 planned slice · ⏸ waits for an owner answer 
 | §3 م2 | تحديد نوع الخدمة أو المادة؛ إعداد عرض السعر وفق قائمة الأسعار المعتمدة؛ مراعاة أسعار السوق الأسبوعية؛ تطبيق الخصومات وفق مصفوفة الصلاحيات؛ اعتماد العرض من مدير المبيعات ضمن حدود صلاحياته؛ تحويل ما يتجاوزها إلى المدير التنفيذي | `quotes` built from `priceItems` (effective price + weekly market price shown), `computeLines` + `approvalLevelFor` (settings `sales.discountLimitBp` / `sales.quoteApprovalMode`; limits unset → executive, quote marked «حدود الخصم غير محددة»), `submit` → `pending_approval` → `approve` by the level's holder only | `sales-s3.test.ts` «discount matrix: with the limits unset…», «with limits set…» | ✅ S3 (Q1 numbers pending) |
 | §3 م3 | إرسال عرض السعر للعميل من خلال النظام؛ إمكانية الإرسال من بريد الموظف؛ إرفاق المستندات والصور؛ متابعة العميل وتوثيق ردوده؛ تحديث حالة العرض (مقبول، مرفوض، قيد التفاوض)؛ تسجيل أسباب الرفض | `POST /sales/quotes/:id/send` (customer document generated and stored; mailbox adapter `core/email`, disabled per Q5 → draft + `mailto:`, «أُرسل خارج النظام»); `respond` with the three states, rejection reason from `sales.quoteRejectionReasons`; revisions as new versions | «discount matrix…» (send → draft_unsent + mailto, reject needs reason, revise v2) | ✅ S3 (sending from the system waits for Q5) |
 | §3 م4 | الحصول على موافقة العميل؛ توقيع العقد أو أمر البيع؛ إحالة إلى المشتريات عند الحاجة → المالية → مستندات الشراء | quote `accepted` → `salesOrders` (net lines snapshot, signed file) and `customer_approve` on the linked request; Procurement / Finance stages (S2) | «acceptance → sales order…»; S2 container-sale test | ✅ S2+S3 |
-| §3 م5 | التنفيذ والتسليم (التشغيل، الأوزان، محاضر الاستلام) | thin Operations stage with OPS §2.1 labels (DECISIONS §20 change 5) | — | 🔜 S2 |
+| §3 م5 | التنفيذ والتسليم (التشغيل، الأوزان، محاضر الاستلام) | thin Operations stage on the same request with OPS §2.1 labels (DECISIONS §20 change 5): `ops_schedule` → `ops_complete` (receipt / delivery report, weights), rental inspections, scrap collection | `sales-s2.test.ts` service routes, scrap and rental tests | ✅ S2 |
 | §3 م6 | إصدار الفاتورة الإلكترونية بناءً على أمر البيع والاعتمادات؛ إرسالها؛ متابعة التحصيل مع المالية؛ تسجيل حالة السداد والمبالغ المستحقة؛ إغلاق الصفقة | `modules/finance` invoice register (Q4 option A: Finance records the invoice issued in the current system against the order **or the periodic contract**; lines/customer prefilled from the source, actual figures entered by Finance, a difference needs a reason shown to Sales), several invoices per order (sum ≤ order total, conditional write), payments append-only, collection state مستحق / محصل جزئياً / محصل بالكامل / متأخر, order → مفوتر جزئياً → مفوتر → مغلق (all invoices collected); Sales reads only | «acceptance → sales order; Finance registers the issued invoice…», «S3 fix 1: several invoices per order…», «S3 fix 1: a periodic contract is invoiced per period…», «S3 fix 2: two Finance users…» | ✅ S3 (e-invoice issuance itself waits for Q4 / ZATCA) |
-| §3 ملاحظة | انتقال الطلب تلقائياً إلى القسم التالي مع إشعار للموظف المسؤول ومدير القسم | workflow definitions per service + hand-off events + notifications 7–10 | — | 🔜 S2 |
+| §3 ملاحظة | انتقال الطلب تلقائياً إلى القسم التالي مع إشعار للموظف المسؤول ومدير القسم | `modules/sales/workflows.ts` (one definition per service), `transitionRequest` moves the holder and publishes the hand-off; notifications 7–10 to the receiving department and back to Sales | `sales-s2.test.ts` (each route step by step) | ✅ S2 |
 
 ## §4 إدارة العملاء والفرص البيعية (CRM)
 
@@ -85,7 +85,7 @@ Status legend: ✅ built · 🔜 planned slice · ⏸ waits for an owner answer 
 | §8.1 | نقل العميل من موظف إلى موظف آخر | `POST /crm/customers/transfer` (one or many), reason mandatory, `customerEvents.owner_changed`, both reps notified, open opportunities follow | `crm.test.ts` log/transfer test | ✅ S1 |
 | §8.1 | إعادة توزيع العملاء والفرص البيعية | bulk selection on `CustomersPage`; `POST /sales/opportunities/reassign` | `sales-s1.test.ts` reassign test | ✅ S1 |
 | §8.1 | استقبال العملاء المحتملين (Leads) من خدمة العملاء؛ توجيه العملاء وتوزيعهم على موظفي القسم | `LeadsPage` department view; `POST /crm/leads/:id/assign` (manager only, 403 for a rep) | `crm.test.ts` leads test | ✅ S1 |
-| §8.1 | تعديل حالة الطلب وفق الصلاحيات المعتمدة | request states | — | 🔜 S2 |
+| §8.1 | تعديل حالة الطلب وفق الصلاحيات المعتمدة | `POST /sales/requests/:id/transition`: each transition names the department and role that may take it; the server refuses the rest (403/400) | `sales-s2.test.ts` «procurement actions refused for Sales users…» | ✅ S2 |
 | §8.1 | الاطلاع على جميع العملاء والفرص البيعية داخل القسم؛ الاطلاع على سجل متابعة الموظفين | department scope for `sales_manager` (implied for the Sales department manager, DECISIONS §20 change 3); logs readable per customer | `crm.test.ts` first test; `rbac-sales.test.ts` change 3 | ✅ S1 |
 | §8.2 | رفع ملفات وآليات العمل PDF، التعليمات | `/sales/library`: `SalesLibraryDoc` (PDF only, categories, versions kept, soft delete), manager writes, Sales and executive read, file through the row's access check | `sales-s4.test.ts` library | ✅ S4 |
 | §8.2 | تقارير الموظفين، تقارير الانتداب والزيارات، مستندات العملاء | linked from the library page to `/reports`, `/hr/secondments`, `/sales/tasks?view=visits`, `/sales/customers` | — | ✅ S4 (existing screens) |
@@ -101,7 +101,7 @@ Status legend: ✅ built · 🔜 planned slice · ⏸ waits for an owner answer 
 | §9 | ربط الاجتماع بملف العميل؛ تسجيل النتائج؛ موعد المتابعة القادمة | «جدولة اجتماع» on the customer file; outcome + next follow-up → `calendar.meeting.outcome_recorded` → CRM log entry (idempotent) and customer follow-up | `sales-s4.test.ts` calendar | ✅ S4 |
 | §9 | إشعار قسم التسويق (اسم الفعالية وتاريخها وموقعها والجهة المنظمة) | `needsMarketing` + `organizer`; once (`marketingNotifiedAt`) to the `marketing` department's managers and members; cannot be withdrawn | `sales-s4.test.ts` calendar | ✅ S4 |
 
-## §10.1 البريد — 🔜 Q5 (mailbox adapter disabled; drafts in the customer file, S3)
+## §10.1 البريد — ⏸ Q5: the mailbox adapter (`core/email`) is built and disabled until the owner picks the provider; meanwhile each message is saved on the customer file and the record, opened in the employee's mail app (`mailto:`) and marked «أُرسل خارج النظام» (S3). Turning the adapter on needs no change to the screens.
 
 ## §10.3 الدردشة الداخلية بين الأقسام
 
@@ -133,7 +133,16 @@ Status legend: ✅ built · 🔜 planned slice · ⏸ waits for an owner answer 
 | §11.1 | مستهدف القسم ولكل موظف؛ حسب الخدمة أو المادة؛ الإنجاز والنسبة وتحقق/لم يتحقق؛ السجل؛ التعديل أو السحب مع السبب؛ المقارنة بين الأشهر | `SalesTargetVersion` append-only; `/sales/targets` (compare months); rep notified | `sales-s4.test.ts` targets | ✅ S4 (annual reports S5) |
 | §11.2 | اللوحة (11 بندًا) حسب الموظف والقسم والخدمة والفترة | `/sales/kpi` board, every number links to its list | `sales-s4.test.ts` KPIs | ✅ S4 |
 
-## §12 التقارير — 🔜 S5
+## §12 التقارير
+
+| Group | Reports (verbatim) | Export resource `sales.report.*` | Test | Status |
+|---|---|---|---|---|
+| أولاً المبيعات | اليومي، الأسبوعي، الشهري؛ الإيرادات حسب المادة؛ حسب الخدمة؛ الكميات المباعة؛ متوسط أسعار البيع | `sales_by_period` (granularity day / week / month), `revenue_by_material`, `revenue_by_service`, `quantities`, `avg_prices` (vs the weekly market average) | `sales-s5.test.ts` reports | ✅ S5 |
+| ثانياً العملاء | قاعدة البيانات؛ الجدد؛ النشطون؛ غير المتعاونين؛ التصنيف (استراتيجي، منتظم، عرضي) | `customers` (segment all / new / active / not_cooperating = غير مهتم + متوقف عن التعامل), `customers_by_classification` | same | ✅ S5 |
+| ثالثاً الفرص | الجديدة؛ قيد المعالجة؛ العروض المرسلة / المقبولة / المرفوضة؛ الناجحة؛ الخاسرة؛ أسباب الخسارة | `opportunities` (new / in_progress / won / lost), `quotes` (sent / accepted / rejected, newest version per chain), `loss_reasons` | same | ✅ S5 |
+| رابعاً الموظفون | أداء كل موظف؛ العملاء المسجلون؛ الزيارات والاجتماعات؛ العروض المرسلة؛ المبيعات المحققة؛ نسبة تحقيق المستهدف؛ المهام المنجزة وغير المنجزة | `employees` (one row per Sales member) | same | ✅ S5 |
+| خامساً المالية | الفواتير الصادرة؛ المسددة؛ غير المسددة؛ المبالغ المستحقة؛ متوسط مدة التحصيل | `invoices` (all / paid / unpaid / overdue), `financial_summary` — Finance data, read-only | same | ✅ S5 |
+| متطلبات التصدير | الفترة؛ القسم أو الموظف؛ نوع الخدمة؛ الحقول؛ الفلاتر؛ المعاينة؛ Excel وPDF؛ مراعاة الصلاحيات | `/sales/reports` on the core export builder: period, employee, service, variant, field picker, preview, Excel, printable PDF; `sales.reports:export` (manager department, executive all, rep none) and each row through the caller's own list permission; every export audited | same (rep 403, Finance 403, bad filter 400, Excel, PDF, audit) | ✅ S5 |
 
 ## §13 لوحة التحكم
 
@@ -178,12 +187,51 @@ Status legend: ✅ built · 🔜 planned slice · ⏸ waits for an owner answer 
 | Bullet | Implementation | Status |
 |---|---|---|
 | ربط قسم المبيعات بنظام CRM؛ ربط بيانات العملاء بقسم خدمة العملاء | shared `crm` module, CS referral form | ✅ S1 |
-| APIs للتكامل | OpenAPI document | 🔜 S5 |
+| APIs للتكامل | `GET /api/v1/openapi.json` (OpenAPI 3.0.3 generated from the mounted routes, their zod schemas and `authorize()` permissions) + `GET /api/v1/docs` (script-free HTML, `?prefix=`); admin and executive | ✅ S5 (`sales-s5.test.ts`) |
 | سجل تدقيق لجميع الإجراءات | `recordAudit` on every write (customers, contacts, logs, leads, opportunities, tags, transfers) | ✅ S1 |
 | البحث والتصفية المتقدمة | Arabic-normalised search on name/city/activity, phone digits, number; filters by status/source/classification/tag/owner/follow-up | ✅ S1 |
 | حماية بيانات العملاء والعقود والأسعار | scope rules, duplicate check without leakage; quote internals (list price, discounts, approvals, history) only for the owner, Sales management, Finance and the executive; invoice views audited as sensitive | ✅ |
-| النسخ الاحتياطية | Atlas backup note in DEPLOY.md | 🔜 S5 |
+| النسخ الاحتياطية | `docs/DEPLOY.md` «Backups»: Atlas cloud + continuous backup, retention to confirm, compliance policy, quarterly restore drill, S3 versioning | ✅ S5 (configuration, not code) |
 
-## §18 المخرجات (20) — S1: 1, 2, 3, 4, 18; S2: 5 and the PRC/FIN/OPS part of 19; S3: 6 (quotes), 7 (price list), 8 (discount matrix view), 9 (periodic contracts), 10 (invoices and collection); S4: 11 (`/sales/tasks`), 12 (calendar meetings), 13 (`/discussions`), 14 (`/sales/dashboard`), 15 (`/sales/kpi`, `/sales/targets`), the Marketing part of 19. Remaining: 16, 17 (hygiene test), 20 (S5).
+## §18 المخرجات — acceptance walk (S5, 2026-11-14)
 
-## §19 التوصيات — S1: ملف موحد ✅ · رقم مرجعي تلقائي ✅ · الاحتفاظ بالمحادثات عند تغيير الموظف ✅ · عدم تجاوز الصلاحيات ✅ · S2: كل الخدمات مرتبطة بملف العميل نفسه ✅ (`customerId` required) · مسارات اعتماد مرنة ✅ (workflow definitions) · الطلبات المحولة تظهر في حساب القسم المستلم مع إشعار فوري ✅ (`?view=incoming`, notifications 7/to_finance/to_operations) · سجل انتقال الطلب بين الأقسام واسم الموظف في كل مرحلة ✅ (stage log) · سبب تأخر الطلب والجهة المسؤولة ✅ (`delay-reason`) · البقية (ربط الإيرادات بالمالية، البريد، التقارير) S3–S5.
+| # | Output (verbatim) | Screen / API | Test | Status |
+|---|---|---|---|---|
+| 1 | الواجهة الرئيسية لقسم المبيعات | `/sales` (the two buttons, the seven services, follow-ups due, open requests, targets) | `sales-s1.test.ts` | ✅ S1 |
+| 2 | واجهة إدارة العملاء والفرص البيعية (CRM) | `/sales/customers`, `/sales/pipeline` (Kanban and table) | `crm.test.ts`, `sales-s1.test.ts` | ✅ S1 |
+| 3 | واجهة ملف العميل وسجل التواصل | `/sales/customers/:id` (data, contacts ≤ 3, append-only log, opportunities, requests, contracts, invoices read-only, messages, discussions, history) | `crm.test.ts` | ✅ S1–S4 |
+| 4 | واجهة استقبال وتوزيع العملاء المحتملين | `/sales/leads`, `/cs/refer-lead` | `crm.test.ts` leads | ✅ S1 |
+| 5 | واجهات الخدمات والطلبات البيعية | `/sales/requests`, `/sales/requests/new/:type` (seven forms), `/sales/requests/:id` | `sales-s2.test.ts` | ✅ S2 |
+| 6 | واجهة إدارة عروض الأسعار | `/sales/quotes`, the builder, approval, send, response, customer document | `sales-s3.test.ts` | ✅ S3 |
+| 7 | واجهة قائمة الأسعار المركزية | `/sales/pricelist` (history, weekly market prices) | `sales-s3.test.ts` | ✅ S3 |
+| 8 | واجهة مصفوفة الخصومات والاعتمادات | `/sales/discount-matrix`: limits per level, approval mode, the approvals log (`GET /sales/quotes/approvals-log`) | `sales-s3.test.ts` matrix; `sales-s5.test.ts` log | ✅ S3 + S5 |
+| 9 | واجهة إدارة العقود الدورية | `/sales/contracts`, `/sales/contracts/:id` | `sales-s3.test.ts` contracts | ✅ S3 |
+| 10 | واجهة إصدار الفواتير ومتابعة التحصيل | `/sales/invoices` (Sales, read-only), Finance register and payments (`/incoming` for Finance) | `sales-s3.test.ts` | ✅ S3 (issuance in the system: Q4 / Finance phase 3) |
+| 11 | واجهة إدارة المهام والزيارات | `/sales/tasks` | — (core tasks and calendar tests) | ✅ S4 |
+| 12 | واجهة التقويم والاجتماعات | `/calendar` with the Sales fields and the Marketing notice | `sales-s4.test.ts` calendar | ✅ S4 |
+| 13 | واجهة التواصل الداخلي بين الأقسام | `/discussions`, `/discussions/:id`, the panel on the customer file and the request | `sales-s4.test.ts` discussions | ✅ S4 |
+| 14 | لوحة تحكم مدير المبيعات | `/sales/dashboard` | `sales-s4.test.ts` dashboard | ✅ S4 |
+| 15 | لوحة مؤشرات الأداء (KPIs) | `/sales/kpi`, `/sales/targets` | `sales-s4.test.ts` KPIs, targets; `core/kpi/service.test.ts` | ✅ S4 |
+| 16 | نظام التقارير والتصدير | `/sales/reports` (13 reports, five groups) | `sales-s5.test.ts` | ✅ S5 |
+| 17 | نظام الإشعارات | the sixteen §14 types in the notification center | `sal14-notifications.test.ts` + each flow's test | ✅ S1–S5 |
+| 18 | نظام الصلاحيات | `sales_rep` / `sales_manager` / executive, field rules, `/admin/roles` | `rbac-sales.test.ts`, every test's forbidden cases | ✅ S1 |
+| 19 | الربط مع الأقسام الأخرى داخل ERP | `/incoming` queues for المشتريات / المالية / التشغيل, CS referral, Marketing notice, discussions, outbox events | `sales-s2.test.ts`, `crm.test.ts`, `sales-s4.test.ts` | ✅ S2–S4 (thin stages until those modules — phase 4) |
+| 20 | توثيق واجهات الربط البرمجية (APIs) | `GET /api/v1/openapi.json`, `GET /api/v1/docs` (admin menu «توثيق واجهات الربط») | `sales-s5.test.ts` API document | ✅ S5 |
+
+## §19 التوصيات — acceptance walk (S5, 2026-11-14)
+
+| # | Recommendation (verbatim) | How it holds | Test | Status |
+|---|---|---|---|---|
+| 1 | لكل عميل ملف موحد، بحيث لا تتكرر بيانات العميل عند طلب أكثر من خدمة | one `customers` record (+ party FIN §8), duplicate check by number / phone / name without leaking another rep's file | `crm.test.ts` duplicate check | ✅ |
+| 2 | جميع الخدمات مرتبطة بملف العميل نفسه | `customerId` required on requests, quotes, orders, contracts, invoices, discussions | `sales-s2.test.ts` | ✅ |
+| 3 | لكل طلب رقم مرجعي تلقائي يسهل تتبعه بين الأقسام | `PREFIX-YYYY-#####` from an atomic counter (CUS, OPP, CSR, SRT, CLN, DST, RNT, SCR, ARO, QUO, SO, CNT, INV, DSC…); the same number in every department | `sales-s2.test.ts` | ✅ |
+| 4 | الاحتفاظ بجميع المحادثات والتحديثات السابقة دون حذفها عند تغيير الموظف المسؤول | communication log, stage log, quote events, discussion entries are append-only; transfers keep them | `crm.test.ts` transfer | ✅ |
+| 5 | مسارات الاعتماد مرنة وقابلة للتعديل حسب نوع الخدمة | one workflow definition per service (`workflows.ts`, stored, editable from `/admin/workflows`); discount matrix from settings | `sales-s2.test.ts` | ✅ |
+| 6 | ألا يتمكن أي موظف من تجاوز الصلاحيات المحددة له | every route `authorize()` or a service-level record check; scopes own / department / all; the UI only hides what the API refuses | forbidden cases in every Sales test | ✅ |
+| 7 | الطلبات المحولة للأقسام الأخرى تظهر في حساب القسم المستلم، مع إشعار فوري | `/incoming` (`?view=incoming`), notifications 7–10 | `sales-s2.test.ts` | ✅ |
+| 8 | سجل يوضح تاريخ انتقال الطلب بين الأقسام واسم الموظف المسؤول في كل مرحلة | request stage log (department, holder, time, actor) | `sales-s2.test.ts` | ✅ |
+| 9 | معرفة سبب تأخر الطلب والجهة المسؤولة عن معالجته | SLA in business days per stage, `delay-reason` on the late entry, the responsible department shown | `sales-s2.test.ts` SLA test | ✅ |
+| 10 | ربط الإيرادات والفواتير بالبيانات المالية المعتمدة، وليس بإدخال يدوي مستقل داخل قسم المبيعات | invoices registered by Finance only; every KPI, dashboard card and report reads them; Sales has no write path (403) | `sales-s3.test.ts`, `sales-s4.test.ts`, `sales-s5.test.ts` | ✅ |
+| 11 | إمكانية إرسال البريد الإلكتروني من داخل النظام مع حفظ المراسلات | messages saved on the record; the adapter sends once the provider is chosen | `sales-s3.test.ts` send | ⏸ Q5 (saved now; sending waits for the provider) |
+| 12 | التقارير قابلة للتصفية والتصدير حسب الحاجة | `/sales/reports` filters, fields, Excel, PDF; the lists export through the same builder | `sales-s5.test.ts` | ✅ |
+| 13 | النظام قابل للتطوير مستقبلاً دون التأثير على البيانات والعمليات الحالية | modular monolith (each module owns its collections), versioned API `/api/v1`, the API document, append-only history, the thin stages are taken over by the full modules on the same records (phase 4) | — (architecture) | ✅ |

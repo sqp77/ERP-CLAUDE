@@ -15,10 +15,13 @@ import {
 import { changeStage, createOpportunity } from './modules/sales/service';
 import { createRequest, transitionRequest } from './modules/sales/requests.service';
 import { addMarketPrice, createPriceItem } from './modules/sales/pricing.service';
-import { setTarget } from './modules/sales/management.service';
-import { addMessage, openDiscussion } from './core/discussions/service';
+import { setTarget, withdrawTarget } from './modules/sales/management.service';
+import { addMessage, openDiscussion, setState as setDiscussionState } from './core/discussions/service';
+import { CalendarEvent } from './core/calendar/model';
+import { nextNumber } from './core/numbering/service';
 import { riyadhPeriod } from './core/kpi/service';
 import { registerModules } from './bootstrap';
+import { logger } from './logger';
 import {
   createQuote,
   respondQuote,
@@ -560,5 +563,243 @@ export async function seedSales(): Promise<{ customers: number; leads: number }>
       [],
     );
   }
+  // The every-state sample runs last and never blocks the rest of the seed: a failure is logged, not thrown.
+  try {
+    // S5 [SAL §17 المرحلة الخامسة «بيانات لكل حالة»]: the states the earlier sample does not reach — a customer «غير مهتم»,
+    // opportunities «قيد المعالجة» and «تم التواصل», quotes draft / sent / rejected / negotiating, an overdue invoice,
+    // sorting and cleaning requests, discussions «بانتظار الرد» and «مغلقة», meetings in every calendar status (one that
+    // told Marketing), a withdrawn target and last month's department target for the month comparison.
+    await c(majed, {
+      nameAr: 'مؤسسة الريان التجارية',
+      country: 'السعودية',
+      region: 'المنطقة الشرقية',
+      city: 'الخبر',
+      activity: 'تجارة جملة',
+      organizationType: 'خاص',
+      facilitySize: 'صغيرة',
+      source: 'field_visits',
+      phone: '0533334444',
+      status: 'not_interested',
+    });
+    const oppIn = await createOpportunity(await reqOf(majed, 'sales.opportunities', 'create'), {
+      customerId: String(steel._id),
+      title: 'توريد بلاستيك PET شهري',
+      serviceType: 'scrap',
+      expectedValueHalalas: 5_500_000,
+      attachmentIds: [],
+      tags: [],
+    });
+    await changeStage(await reqOf(majed, 'sales.opportunities', 'edit'), String(oppIn._id), {
+      stage: 'in_progress',
+    });
+    const oppContacted = await createOpportunity(await reqOf(reem, 'sales.opportunities', 'create'), {
+      customerId: String(school._id),
+      title: 'فرز نفايات المدارس',
+      serviceType: 'sortingContract',
+      expectedValueHalalas: 2_400_000,
+      attachmentIds: [],
+      tags: [],
+    });
+    await changeStage(await reqOf(reem, 'sales.opportunities', 'edit'), String(oppContacted._id), {
+      stage: 'contacted',
+    });
+
+    const quote = (customerId: unknown, itemId: unknown, quantity: number) =>
+      createQuote(reemQuotes, {
+        customerId: String(customerId),
+        lines: [{ itemId: String(itemId), quantity }],
+        attachmentIds: [],
+      } as never);
+    const sendIt = async (id: unknown) => {
+      await submitQuote(reemQuotes, String(id));
+      await sendQuote(reemQuotes, String(id), { to: ['purchasing@example.com'], cc: [], attachmentIds: [] });
+    };
+    await quote(gulf._id, plastic!._id, 2); // مسودة
+    const qSent = await quote(municipality._id, visitSvc!._id, 12);
+    await sendIt(qSent._id); // مرسل
+    const qRejected = await quote(school._id, cardboard!._id, 1);
+    await sendIt(qRejected._id);
+    await respondQuote(reemQuotes, String(qRejected._id), {
+      response: 'rejected',
+      reason: 'السعر أعلى من المنافس',
+    });
+    const qNegotiating = await quote(gulf._id, visitSvc!._id, 24);
+    await sendIt(qNegotiating._id);
+    await respondQuote(reemQuotes, String(qNegotiating._id), {
+      response: 'negotiating',
+      note: 'العميل يطلب خصمًا على عدد الزيارات',
+    });
+
+    // An overdue invoice: majed's plastic sale, issued 40 days ago and due 10 days ago, nothing paid [SAL §14 (12)].
+    const majedQuotes = await reqOf(majed, 'sales.quotes', 'create');
+    const qSteel = await createQuote(majedQuotes, {
+      customerId: String(steel._id),
+      lines: [{ itemId: String(plastic!._id), quantity: 1 }],
+      attachmentIds: [],
+    } as never);
+    await submitQuote(majedQuotes, String(qSteel._id));
+    await sendQuote(majedQuotes, String(qSteel._id), {
+      to: ['buy@steel.example'],
+      cc: [],
+      attachmentIds: [],
+    });
+    const acceptedSteel = await respondQuote(majedQuotes, String(qSteel._id), { response: 'accepted' });
+    await registerInvoice(financeReq, {
+      salesOrderId: String((acceptedSteel as { salesOrder?: { _id: unknown } }).salesOrder?._id),
+      kind: 'tax',
+      externalNumber: 'ERP-INV-2026-0098',
+      issueDateTime: new Date(Date.now() - 40 * 86_400_000).toISOString(),
+      dueDate: inDays(-10).slice(0, 10),
+    });
+
+    await createRequest(salesReq, {
+      type: 'sortingContract',
+      customerId: String(school._id),
+      opportunityId: String(oppContacted._id),
+      details: {
+        contractType: 'فرز شهري',
+        materialTypes: ['ورق', 'بلاستيك'],
+        expectedQuantityKg: 4000,
+        contractDurationMonths: 12,
+      },
+      attachmentIds: [],
+      photoIds: [],
+      tags: [],
+    } as never);
+    await createRequest(salesReq, {
+      type: 'cleaningContract',
+      customerId: String(gulf._id),
+      details: { mode: 'provide_container', containerCount: 4, visitCount: 8, contractDurationMonths: 6 },
+      attachmentIds: [],
+      photoIds: [],
+      tags: [],
+    } as never);
+
+    const ops = await Department.findOne({ code: 'ops' }).lean();
+    if (ops) {
+      const d2 = await openDiscussion(await reqOf(reem, 'discussions', 'create'), {
+        recordType: 'sales_request',
+        recordId: String(rnt._id),
+        title: 'تأكيد عدد الحاويات قبل التسليم',
+        details: 'العميل قد يرفع العدد إلى 5 حاويات؛ هل يتوفر ذلك في المستودع؟',
+        targetDepartmentId: String(ops._id),
+        participantUserIds: [],
+        attachmentIds: [],
+      });
+      await setDiscussionState(await reqOf(khalid, 'discussions', 'view'), String(d2._id), 'awaiting_reply');
+      await addMessage(
+        await reqOf(khalid, 'discussions', 'view'),
+        String(d2._id),
+        'المتوفر 4 حاويات الآن؛ نحتاج تأكيد العدد النهائي من العميل.',
+        [],
+      );
+    }
+    if (finance) {
+      const d3 = await openDiscussion(await reqOf(majed, 'discussions', 'create'), {
+        recordType: 'customer',
+        recordId: String(steel._id),
+        title: 'تحديث الرقم الضريبي للعميل',
+        details: 'العميل أرسل شهادة ضريبية جديدة.',
+        targetDepartmentId: String(finance._id),
+        participantUserIds: [],
+        attachmentIds: [],
+      });
+      await setDiscussionState(
+        await reqOf(abdulaziz, 'discussions', 'view'),
+        String(d3._id),
+        'resolved',
+        'حُدّث الرقم في ملف الجهة',
+      );
+      await setDiscussionState(await reqOf(majed, 'discussions', 'view'), String(d3._id), 'closed');
+    }
+
+    // Meetings and visits in every SAL §9 status; one exhibition told Marketing.
+    const event = async (
+      owner: InstanceType<typeof User>,
+      body: Record<string, unknown> & { title: string; startAt: Date },
+    ) =>
+      CalendarEvent.create({
+        number: await nextNumber('event'),
+        type: 'meeting',
+        status: 'scheduled',
+        endAt: new Date(body.startAt.getTime() + 3_600_000),
+        ownerId: owner._id,
+        participantIds: [],
+        departmentIds: [sales._id],
+        ...body,
+      });
+    const at = (days: number, hour: number) => {
+      const d = new Date(`${inDays(days).slice(0, 10)}T00:00:00+03:00`);
+      return new Date(d.getTime() + hour * 3_600_000);
+    };
+    const linkOf = (cust: { _id: unknown; number?: string; nameAr?: string }) => ({
+      type: 'customer',
+      id: String(cust._id),
+      label: `${cust.number} — ${cust.nameAr}`,
+    });
+    await event(reem, {
+      title: 'اجتماع مراجعة عرض الحاويات',
+      startAt: at(1, 10),
+      meetingType: 'حضوري',
+      location: 'مقر شركة الخليج للتغليف',
+      link: linkOf(gulf),
+    });
+    await event(majed, {
+      title: 'زيارة معاينة السكراب',
+      type: 'visit',
+      status: 'done',
+      startAt: at(-2, 9),
+      outcome: 'الكمية أكبر من التقدير؛ يلزم شاحنتان',
+      link: linkOf(steel),
+    });
+    await event(reem, {
+      title: 'اجتماع إدارة المدارس',
+      status: 'not_done',
+      startAt: at(-1, 13),
+      outcome: 'اعتذر العميل لظرف طارئ',
+      link: linkOf(school),
+    });
+    await event(majed, {
+      title: 'زيارة مطابع النور',
+      type: 'visit',
+      status: 'cancelled',
+      startAt: at(3, 11),
+      link: linkOf(stopped),
+    });
+    await event(reem, {
+      title: 'معرض البيئة والاستدامة',
+      type: 'event',
+      status: 'rescheduled',
+      startAt: at(12, 9),
+      location: 'مركز الظهران للمعارض',
+      organizer: 'غرفة الشرقية',
+      needsMarketing: true,
+      marketingNotifiedAt: new Date(),
+    });
+
+    const withdrawReq = await reqOf(sultan, 'sales.targets', 'edit');
+    const temp = await setTarget(withdrawReq, {
+      period,
+      scope: 'user',
+      userId: String(majed._id),
+      dimension: 'service',
+      dimensionKey: 'assetReturn',
+      metric: 'revenue',
+      value: 50_000_00,
+    });
+    await withdrawTarget(withdrawReq, String(temp._id), 'المناقصة أُجّلت إلى الربع القادم');
+    const [py, pm] = period.split('-').map(Number);
+    const previous = pm === 1 ? `${py - 1}-12` : `${py}-${String(pm - 1).padStart(2, '0')}`;
+    await setTarget(withdrawReq, {
+      period: previous,
+      scope: 'department',
+      dimension: 'none',
+      metric: 'revenue',
+      value: 380_000_00,
+    });
+  } catch (err) {
+    logger.warn({ err }, 'seedSales: the S5 every-state sample was skipped');
+  }
+
   return { customers: await Customer.countDocuments(), leads: await Lead.countDocuments() };
 }

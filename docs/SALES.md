@@ -60,3 +60,14 @@ The seed adds a cardboard sale invoiced and fully collected this month, a weekly
 7. **Manager** → «الإجراءات والتعليمات» → «رفع مستند» (PDF only) → «رفع نسخة جديدة» keeps the old one in «سجل النسخ»; reem reads and downloads, cannot upload.
 8. **Manager** → «المهام والزيارات»: the department's open tasks and the next 30 days of meetings and visits, per employee.
 
+## S5 — الاختبار والتكامل [SAL §17 المرحلة الخامسة] (built 2026-11-14, branch `sales-s5`)
+
+1. **Manager (sultan)** → «التقارير»: the five groups. «تقرير المبيعات» → التجميع «شهري» → «معاينة»: one row per month with the invoices, the amount before VAT, the VAT, the total, the collected amount and the tons. Untick a field → it leaves the preview. «Excel» downloads the file (right-to-left sheet); «PDF (طباعة)» opens the printable page with the period under the title.
+2. **Manager** → «تقارير العملاء» → «العملاء غير المتعاونين»: مطابع النور and مؤسسة الريان التجارية. → «تصنيف العملاء حسب الأهمية»: counts per استراتيجي / منتظم / عرضي / غير مصنف with the period's revenue.
+3. **Manager** → «تقارير الموظفين»: one row per Sales member (customers registered, meetings and visits done, quotes sent, sales achieved, target, achievement, tasks done and open). Pick majed → only his row.
+4. **Manager** → «التقارير المالية» → «الفواتير المتأخرة»: ERP-INV-2026-0098 (due ten days ago, nothing paid). «الملخص المالي»: issued, paid, unpaid, outstanding, overdue and the average collection days.
+5. **Rep (reem)**: no «التقارير» in the menu; `/sales/reports` answers «غير مصرح». **Executive (abdullah)**: the same reports across all departments.
+6. **Manager** → «مصفوفة الخصومات والاعتمادات»: the limits per level (or the warning that they are unset — Q1) and the log: each approval request, approval, rejection and «ضمن حد الموظف» with the discount, the required level and who decided.
+7. **System admin** → «توثيق واجهات الربط (API)»: the API document grouped by screen, each route with its permission and its request fields; `openapi.json` for an integrator.
+8. Every state on screen: the pipeline shows the eight stages; quotes show draft / sent / rejected (with its reason) / negotiating; «النقاشات بين الأقسام» shows «بانتظار الرد» and «مغلقة»; the calendar shows a meeting in each status and the exhibition marked «أُشعر التسويق»; «المستهدفات» shows a withdrawn target and «مقارنة بين الأشهر» last month's.
+

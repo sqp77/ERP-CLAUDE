@@ -6,6 +6,7 @@ import {
   quoteDecisionSchema,
   quoteResponseSchema,
   quoteSendSchema,
+  riyadhDaySchema,
   updateQuoteSchema,
   type CreateQuoteInput,
 } from '@eayni/shared';
@@ -49,6 +50,23 @@ quotesRouter.post(
   asyncHandler(async (req: AuthedRequest, res) => {
     const computed = await svc.computeLines((req.body as { lines: CreateQuoteInput['lines'] }).lines);
     res.json({ ...computed, approval: await svc.approvalLevelFor(computed.maxDiscountBp) });
+  }),
+);
+/** «سجل الخصومات والاعتمادات» [SAL §7.2, §18 (8)] — before `/:id`. */
+quotesRouter.get(
+  '/approvals-log',
+  requireAuth(),
+  authorize('sales.quotes', 'view'),
+  validate(
+    z.object({
+      from: riyadhDaySchema.optional(),
+      to: riyadhDaySchema.optional(),
+      limit: z.coerce.number().int().min(1).max(500).optional(),
+    }),
+    'query',
+  ),
+  asyncHandler(async (req: AuthedRequest, res) => {
+    res.json(await svc.approvalsLog(req, req.query as { from?: string; to?: string; limit?: number }));
   }),
 );
 quotesRouter.get(

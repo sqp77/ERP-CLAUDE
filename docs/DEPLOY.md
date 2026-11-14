@@ -180,3 +180,27 @@ scripts/smoke-staging.sh https://<distribution> https://<id>.execute-api.<region
 
 Scheduled jobs: every 5 minutes (`cadence: frequent`) and daily at 06:00 Asia/Riyadh (`cadence: daily`),
 see DECISIONS §19.
+
+## Backups (SAL §16 «النسخ الاحتياطية», Sales S5) — configure before production data
+Nothing here is code; it is the checklist for the Atlas project and the AWS account (DECISIONS §1 «Pending before staging»). Checked against the MongoDB Atlas documentation on 2026-11-14: [Dedicated Cluster Backups](https://www.mongodb.com/docs/atlas/backup/cloud-backup/dedicated-cluster-backup/), [Backup scheduling and retention](https://www.mongodb.com/docs/atlas/backup/cloud-backup/scheduling/), [Backup Compliance Policy](https://mongodb.com/docs/atlas/backup/cloud-backup/backup-compliance-policy).
+
+**Database (MongoDB Atlas)**
+1. Use a dedicated cluster tier (M10 or above); cloud backup snapshots are a dedicated-cluster feature. Shared and free tiers are for development only.
+2. Turn on **Cloud Backup** and **Continuous Cloud Backup** for production. Continuous backup replays the oplog, so the cluster can be restored to any minute inside the window; on Atlas Core clusters it adds to the monthly cost, so staging can keep snapshots only.
+3. Proposed policy (owner to confirm the numbers): snapshots every 6 hours kept 2 days, daily kept 14 days, weekly kept 8 weeks, monthly kept 12 months; point-in-time window 7 days.
+4. Snapshots are stored in the cluster's own cloud region. Pick the region with the data-residency decision (open item: hosting region); do not add copies to another region without that decision.
+5. Consider a **Backup Compliance Policy** for production, so that nobody (an admin included) can delete snapshots or shorten retention.
+6. Restores need the Atlas role Project Backup Manager, Project Backup Recovery Operator or Project Owner. Give it to two named people, not to the application user.
+7. **Restore drill every quarter:** restore the latest snapshot into a new temporary cluster, point a staging stack at it, sign in, open a customer file, an invoice and the Sales dashboard, then delete the temporary cluster. Record the date and the time it took.
+
+**Files (S3)**
+1. Turn on **bucket versioning** on the files bucket, so an overwritten or deleted attachment can be recovered (signed contracts, invoices, procedures in the Sales library).
+2. Add a lifecycle rule that expires *noncurrent* versions after 90 days (owner to confirm); current files are never expired by the rule.
+3. Block public access; the app serves files only through presigned URLs (CLAUDE.md "Serverless rules").
+
+**Configuration**
+- The SSM parameters and secrets listed above are the configuration of record. Export their names (not their values) into the runbook after each change. The deploy pipeline and `serverless.yml` in git rebuild everything else.
+
+**What the application already guarantees**
+- History is append-only: communication logs, stage logs, price entries, target versions, discussion entries and audit. A restore to an earlier point never leaves a record without its history.
+- Business records use soft delete (`deletedAt`), so a mistaken delete is undone in the app without a restore.

@@ -21,7 +21,7 @@ import { escapeHtml, htmlDocument } from '../../core/templates/render';
 import { composeAndSend } from '../../core/email/service';
 import { User } from '../../core/auth/model';
 import { withTransaction } from '../../db';
-import { riyadhDayRange } from '../../core/dates/businessDays';
+import { riyadhDayEndOf, riyadhDayRange, riyadhDayStartOf } from '../../core/dates/businessDays';
 import {
   canAccessCustomer,
   customerLabels,
@@ -653,6 +653,57 @@ export async function decideQuote(
     data: { quoteId: id },
   });
   return getQuote(req, id);
+}
+
+/**
+ * «حفظ سجل جميع الخصومات والاعتمادات» [SAL §7.2, §18 (8)]: the approval events of the quotes the caller may see —
+ * requested, approved, rejected and auto-approved — with the discount, the required level and who decided.
+ */
+export async function approvalsLog(
+  req: AuthedRequest,
+  query: { from?: string; to?: string; limit?: number },
+) {
+  const eff = await permissionOn(req, 'sales.quotes', 'view');
+  if (!eff) throw forbidden();
+  const quotes = await Quote.find(quoteListFilter(req, eff, {}))
+    .select('number customerId ownerUserId maxDiscountBp totalHalalas approval state')
+    .lean();
+  const byId = new Map(quotes.map((q) => [String(q._id), q]));
+  const at: Record<string, Date> = {};
+  if (query.from) at.$gte = riyadhDayStartOf(query.from);
+  if (query.to) at.$lte = riyadhDayEndOf(query.to);
+  const events = await QuoteEvent.find({
+    quoteId: { $in: [...byId.keys()] },
+    type: { $in: ['approval_requested', 'approved', 'approval_rejected', 'auto_approved'] },
+    ...(Object.keys(at).length ? { at } : {}),
+  })
+    .sort({ at: -1 })
+    .limit(Math.min(query.limit ?? 200, 500))
+    .lean();
+  const [names, customers] = await Promise.all([
+    userNames(events.map((e) => e.byUserId)),
+    customerLabels(quotes.map((q) => q.customerId)),
+  ]);
+  return {
+    items: events.map((e) => {
+      const q = byId.get(String(e.quoteId))!;
+      const data = (e.data ?? {}) as { level?: string; approvedLevel?: string };
+      return {
+        _id: String(e._id),
+        at: e.at,
+        type: e.type,
+        quoteId: String(q._id),
+        quoteNumber: q.number,
+        customer: customers.get(String(q.customerId))?.nameAr ?? '',
+        maxDiscountBp: q.maxDiscountBp ?? 0,
+        totalHalalas: q.totalHalalas,
+        requiredLevel: data.level ?? q.approval?.requiredLevel ?? 'none',
+        approvedLevel: data.approvedLevel ?? null,
+        byName: names.get(String(e.byUserId)) ?? e.byEmail ?? '',
+        note: e.note ?? '',
+      };
+    }),
+  };
 }
 
 // ------------------------------------------------------------------------------------------------
