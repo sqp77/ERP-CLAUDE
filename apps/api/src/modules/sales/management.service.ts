@@ -307,7 +307,7 @@ export async function listTargets(
   };
 }
 
-async function revenueTarget(
+export async function revenueTarget(
   period: string,
   scope: { userId?: string; serviceType?: string },
   metric: 'revenue' | 'quantity' = 'revenue',
@@ -329,6 +329,11 @@ async function revenueTarget(
 // ------------------------------------------------------------------------------------------------
 async function marketAverageForPeriod(itemIds: string[], period: string) {
   const { from, to } = periodBounds(period);
+  return marketAverageBetween(itemIds, from, to);
+}
+
+/** Average weekly market price per ton of each material between two instants (reports use any window). */
+export async function marketAverageBetween(itemIds: string[], from: Date, to: Date) {
   // Weeks are Riyadh Sundays; a week that starts in the last six days of the previous month still covers this one.
   const fromWeek = riyadhDate(new Date(from.getTime() - 6 * 86_400_000));
   const toWeek = riyadhDate(new Date(to.getTime() - 1));

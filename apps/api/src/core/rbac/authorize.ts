@@ -9,7 +9,7 @@ import { effectivePermission } from './service';
  * so services can narrow their queries ('own' / 'team' / 'department' / 'all').
  */
 export function authorize(resource: string, action: Action): RequestHandler {
-  return (req, _res, next) => {
+  const handler: RequestHandler = (req, _res, next) => {
     const r = req as AuthedRequest;
     if (!r.auth) return next(forbidden('غير مصرّح', 'unauthorized'));
     const user = r.auth.user;
@@ -27,6 +27,8 @@ export function authorize(resource: string, action: Action): RequestHandler {
       })
       .catch(next);
   };
+  // Read by the OpenAPI generator (core/openapi): `x-permission` shows the enforced resource × action.
+  return Object.assign(handler, { permission: { resource, action } });
 }
 
 /** Quick check for use inside services (no middleware). */

@@ -16,6 +16,7 @@ import { Quote } from './quotes.model';
 import { canAccessContract, runContractAlerts } from './contracts.service';
 import { SalesContract } from './contracts.model';
 import { canAccessLibraryDoc } from './management.service';
+import { registerSalesReports } from './reports';
 import {
   canAccessOpportunity,
   createOpportunityIn,
@@ -141,5 +142,7 @@ export function registerSalesModule(): void {
   registerJob('sales.contracts.alerts', (now) => runContractAlerts(now), 'daily');
   // Documents library [SAL §8.2]: the PDF hangs on its library row; old versions stay readable.
   registerRecordAccess('sales_library', (req, id) => canAccessLibraryDoc(req, id));
+  // Reports [SAL §12]: the five groups on the core export builder.
+  registerSalesReports();
   registerJob('sales.assetreturn.reminders', (now) => runAssetReturnReminders(now), 'frequent');
 }

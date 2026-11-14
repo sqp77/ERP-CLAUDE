@@ -78,6 +78,8 @@ export const SALES_ROLES: RoleDefinition[] = [
       { resource: 'sales.targets', actions: ['view', 'edit'], scope: 'department' },
       { resource: 'sales.kpi', actions: ['view'], scope: 'department' },
       { resource: 'sales.dashboard', actions: ['view'], scope: 'department' },
+      // S5 [SAL §12 «نظام تقارير يسمح لمدير المبيعات والإدارة التنفيذية»]
+      { resource: 'sales.reports', actions: ['view', 'export'], scope: 'department' },
       { resource: 'sales.library', actions: ['view', 'create', 'edit', 'delete'], scope: 'department' },
     ],
     fieldRules: [],

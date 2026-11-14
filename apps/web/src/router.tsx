@@ -61,6 +61,7 @@ import { SalesKpiPage } from './pages/sales/management/SalesKpiPage';
 import { SalesTargetsPage } from './pages/sales/management/SalesTargetsPage';
 import { SalesLibraryPage } from './pages/sales/management/SalesLibraryPage';
 import { SalesTasksPage } from './pages/sales/management/SalesTasksPage';
+import { SalesReportsPage } from './pages/sales/management/SalesReportsPage';
 import { DiscussionPage, DiscussionsPage } from './pages/discussions/DiscussionsPage';
 
 export const router = createBrowserRouter([
@@ -213,6 +214,10 @@ export const router = createBrowserRouter([
               {
                 element: <RequirePermission resource="sales.library" action="view" />,
                 children: [{ path: '/sales/library', element: <SalesLibraryPage /> }],
+              },
+              {
+                element: <RequirePermission resource="sales.reports" action="export" />,
+                children: [{ path: '/sales/reports', element: <SalesReportsPage /> }],
               },
               {
                 element: <RequirePermission resource="discussions" action="view" />,

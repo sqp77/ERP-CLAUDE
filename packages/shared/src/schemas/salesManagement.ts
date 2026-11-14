@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { objectIdSchema, paginationSchema } from './common';
+import { objectIdSchema, paginationSchema, riyadhDaySchema } from './common';
 import { SALES_SERVICE_TYPES } from './sales';
 
 /**
@@ -178,3 +178,49 @@ export const createLibraryDocSchema = z.object({
   replacesId: objectIdSchema.optional(),
 });
 export type CreateLibraryDocInput = z.infer<typeof createLibraryDocSchema>;
+
+// ------------------------------------------------------------------------------------------------
+// Reports [SAL §12]: five groups on the core export builder (field picker, preview, Excel, PDF)
+// ------------------------------------------------------------------------------------------------
+export const SALES_REPORT_GROUPS = ['sales', 'customers', 'opportunities', 'employees', 'financial'] as const;
+export type SalesReportGroup = (typeof SALES_REPORT_GROUPS)[number];
+export const SALES_REPORT_GROUP_AR: Record<SalesReportGroup, string> = {
+  sales: 'تقارير المبيعات',
+  customers: 'تقارير العملاء',
+  opportunities: 'تقارير الفرص البيعية',
+  employees: 'تقارير الموظفين',
+  financial: 'التقارير المالية',
+};
+/** Each report is an export resource `sales.report.<code>`; `segments` are the report's own variants. */
+export const SALES_REPORTS: {
+  code: string;
+  group: SalesReportGroup;
+  segments?: readonly string[];
+  granularity?: boolean;
+}[] = [
+  { code: 'sales_by_period', group: 'sales', granularity: true },
+  { code: 'revenue_by_material', group: 'sales' },
+  { code: 'revenue_by_service', group: 'sales' },
+  { code: 'quantities', group: 'sales' },
+  { code: 'avg_prices', group: 'sales' },
+  { code: 'customers', group: 'customers', segments: ['all', 'new', 'active', 'not_cooperating'] },
+  { code: 'customers_by_classification', group: 'customers' },
+  { code: 'opportunities', group: 'opportunities', segments: ['new', 'in_progress', 'won', 'lost'] },
+  { code: 'quotes', group: 'opportunities', segments: ['sent', 'accepted', 'rejected'] },
+  { code: 'loss_reasons', group: 'opportunities' },
+  { code: 'employees', group: 'employees' },
+  { code: 'invoices', group: 'financial', segments: ['all', 'paid', 'unpaid', 'overdue'] },
+  { code: 'financial_summary', group: 'financial' },
+];
+export const SALES_REPORT_GRANULARITIES = ['day', 'week', 'month'] as const;
+/** «تحديد الفترة الزمنية، اختيار القسم أو الموظف، اختيار نوع الخدمة، تطبيق الفلاتر» [SAL §12 متطلبات التصدير]. */
+export const salesReportFiltersSchema = z.object({
+  from: riyadhDaySchema.optional(),
+  to: riyadhDaySchema.optional(),
+  ownerUserId: objectIdSchema.optional(),
+  serviceType: z.enum(SALES_SERVICE_TYPES).optional(),
+  granularity: z.enum(SALES_REPORT_GRANULARITIES).optional(),
+  segment: z.string().trim().max(40).optional(),
+  classification: z.string().trim().max(40).optional(),
+});
+export type SalesReportFilters = z.infer<typeof salesReportFiltersSchema>;

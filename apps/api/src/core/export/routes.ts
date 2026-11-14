@@ -90,10 +90,23 @@ exportRouter.post(
       return res.send(buf);
     }
     // PDF: until the Chromium renderer is configured we return printable HTML (the browser prints it). Every value is escaped (review E10).
-    const cell = (v: unknown) =>
-      escapeHtml(v instanceof Date ? v.toISOString().slice(0, 10) : String(v ?? ''));
-    const table = `<h2>${escapeHtml(resource.labelAr)}</h2><table><thead><tr>${header.map((h) => `<th>${escapeHtml(h)}</th>`).join('')}</tr></thead><tbody>${data
-      .map((r) => `<tr>${r.map((v) => `<td>${cell(v)}</td>`).join('')}</tr>`)
+    // Dates in Riyadh time, money with two decimals (the value is already in riyals) — as the preview shows them.
+    const day = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Riyadh' });
+    const cell = (v: unknown, kind?: string) => {
+      if (v === null || v === undefined || v === '') return '';
+      const d = v instanceof Date ? v : kind === 'date' || kind === 'datetime' ? new Date(String(v)) : null;
+      if (d && !Number.isNaN(d.getTime())) return escapeHtml(day.format(d));
+      if (kind === 'money' && typeof v === 'number')
+        return escapeHtml(v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+      return escapeHtml(String(v));
+    };
+    const f = body.filters as { from?: unknown; to?: unknown };
+    const filterLine =
+      typeof f.from === 'string' || typeof f.to === 'string'
+        ? `الفترة: ${escapeHtml(String(f.from ?? '…'))} — ${escapeHtml(String(f.to ?? '…'))}`
+        : '';
+    const table = `<h2>${escapeHtml(resource.labelAr)}</h2>${filterLine ? `<p style="color:#555">${filterLine}</p>` : ''}<table><thead><tr>${header.map((h) => `<th>${escapeHtml(h)}</th>`).join('')}</tr></thead><tbody>${data
+      .map((r) => `<tr>${r.map((v, i) => `<td>${cell(v, columns[i]?.kind)}</td>`).join('')}</tr>`)
       .join('')}</tbody></table>`;
     sendHtml(res, htmlDocument(table, resource.labelAr));
   }),

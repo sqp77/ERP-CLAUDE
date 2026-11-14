@@ -34,7 +34,7 @@ const TEMP_PASSWORD_ALLOWED = [
 ];
 
 export function requireAuth(opts: RequireAuthOptions = {}): RequestHandler {
-  return (req, _res, next) => {
+  const handler: RequestHandler = (req, _res, next) => {
     const r = req as AuthedRequest;
     const token = extractToken(r);
     if (!token) return next(unauthorized('يلزم تسجيل الدخول'));
@@ -81,4 +81,5 @@ export function requireAuth(opts: RequireAuthOptions = {}): RequestHandler {
       next();
     })().catch(next);
   };
+  return Object.assign(handler, { authRequired: true });
 }

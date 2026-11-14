@@ -620,7 +620,7 @@ export async function invoiceFacts(
   const filter = invoiceListFilter(req, eff, query);
   return Invoice.find(filter)
     .select(
-      'number issueDateTime dueDate subtotalHalalas totalHalalas collectedHalalas remainingHalalas collectionState lines payments salesOwnerUserId serviceType',
+      'number externalNumber customerId customer.nameAr issueDateTime dueDate subtotalHalalas vatTotalHalalas totalHalalas collectedHalalas remainingHalalas collectionState lines payments salesOwnerUserId serviceType',
     )
     .lean();
 }

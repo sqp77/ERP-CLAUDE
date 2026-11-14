@@ -40,6 +40,8 @@ export const CORE_ROLES: RoleDefinition[] = [
       { resource: 'settings', actions: ALL_ACTIONS, scope: 'all' },
       { resource: 'audit', actions: ['view', 'export'], scope: 'all' },
       { resource: 'outbox', actions: ['view', 'edit'], scope: 'all' }, // go-live review G8: requeue failed events
+      // The API document /api/v1/openapi.json and /api/v1/docs [SAL §18 (20)].
+      { resource: 'api.docs', actions: ['view'], scope: 'all' },
       { resource: 'org.departments', actions: ALL_ACTIONS, scope: 'all' },
       { resource: 'org.units', actions: ALL_ACTIONS, scope: 'all' },
       { resource: 'org.branches', actions: ALL_ACTIONS, scope: 'all' },
@@ -240,6 +242,8 @@ export const CORE_ROLES: RoleDefinition[] = [
       { resource: 'sales.dashboard', actions: ['view'], scope: 'all' },
       { resource: 'sales.library', actions: ['view'], scope: 'all' },
       { resource: 'discussions', actions: ['view'], scope: 'all' },
+      { resource: 'sales.reports', actions: ['view', 'export'], scope: 'all' },
+      { resource: 'api.docs', actions: ['view'], scope: 'all' },
     ],
     fieldRules: [HIDE_SENSITIVE],
   },

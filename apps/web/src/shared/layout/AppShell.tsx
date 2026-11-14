@@ -35,6 +35,8 @@ import {
   ListChecks,
   Library,
   MessagesSquare,
+  FileBarChart,
+  FileCode2,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { usePrefs } from '@/lib/preferences';
@@ -139,6 +141,12 @@ export function AppShell() {
     },
     { to: '/sales/library', label: t('nav.salesLibrary'), icon: Library, show: can('sales.library', 'view') },
     {
+      to: '/sales/reports',
+      label: t('nav.salesReports'),
+      icon: FileBarChart,
+      show: can('sales.reports', 'export'),
+    },
+    {
       to: '/cs/refer-lead',
       label: t('nav.referLead'),
       icon: Send,
@@ -240,25 +248,39 @@ export function AppShell() {
     { to: '/admin/settings', label: t('nav.settings'), icon: Settings, show: can('settings', 'view') },
     { to: '/admin/audit', label: t('nav.audit'), icon: FileClock, show: can('audit', 'view') },
     { to: '/admin/outbox', label: t('nav.outbox'), icon: Send, show: can('outbox', 'view') },
+    // Server-rendered API document [SAL §18 (20)]; a plain link, not a client route.
+    { to: '/api/v1/docs', label: t('nav.apiDocs'), icon: FileCode2, show: can('api.docs', 'view') },
   ];
 
-  const link = (to: string, label: string, Icon: typeof Home) => (
-    <NavLink
-      key={to}
-      to={to}
-      end={to === '/'}
-      onClick={() => setOpen(false)}
-      className={({ isActive }) =>
-        cx(
-          'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition',
-          isActive ? 'bg-brand-50 text-brand-800' : 'text-slate-700 hover:bg-slate-100',
-        )
-      }
-    >
-      <Icon className="size-5 shrink-0" aria-hidden />
-      <span>{label}</span>
-    </NavLink>
-  );
+  const link = (to: string, label: string, Icon: typeof Home) =>
+    to.startsWith('/api/') ? (
+      <a
+        key={to}
+        href={to}
+        target="_blank"
+        rel="noreferrer"
+        className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-100"
+      >
+        <Icon className="size-5 shrink-0" aria-hidden />
+        <span>{label}</span>
+      </a>
+    ) : (
+      <NavLink
+        key={to}
+        to={to}
+        end={to === '/'}
+        onClick={() => setOpen(false)}
+        className={({ isActive }) =>
+          cx(
+            'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition',
+            isActive ? 'bg-brand-50 text-brand-800' : 'text-slate-700 hover:bg-slate-100',
+          )
+        }
+      >
+        <Icon className="size-5 shrink-0" aria-hidden />
+        <span>{label}</span>
+      </NavLink>
+    );
 
   const sidebar = (
     <nav className="flex h-full flex-col gap-1 p-3" aria-label={t('nav.mainMenu')}>

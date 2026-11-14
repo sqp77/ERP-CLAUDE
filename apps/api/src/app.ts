@@ -24,6 +24,7 @@ import { documentsRouter } from './core/documents/routes';
 import { draftsRouter } from './core/drafts/routes';
 import { commentsRouter } from './core/comments/routes';
 import { discussionsRouter } from './core/discussions/routes';
+import { openApiRouter } from './core/openapi/routes';
 import { exportRouter } from './core/export/routes';
 import { registerModules } from './bootstrap';
 import { tagsRouter } from './core/tags/routes';
@@ -85,6 +86,8 @@ export function createApp(): Express {
   v1.use('/drafts', draftsRouter);
   v1.use('/comments', commentsRouter);
   v1.use('/discussions', discussionsRouter);
+  // The API document of this app [SAL §18 (20)]; built from the mounted routes on first request.
+  v1.use(openApiRouter(app));
   v1.use('/export', exportRouter);
   v1.use('/hr', portalRouter);
   v1.use('/hr/profile-changes', profileChangesRouter);
