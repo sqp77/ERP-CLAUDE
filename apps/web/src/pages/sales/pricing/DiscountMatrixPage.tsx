@@ -99,7 +99,7 @@ export function DiscountMatrixPage() {
         </Card>
         <Card title={t('sales.matrix.logTitle')}>
           <div className="mb-3 grid max-w-md grid-cols-2 gap-2">
-            <Field label={t('sales.targets.from')}>
+            <Field label={t('sales.reports.from')}>
               <Input
                 type="date"
                 dir="ltr"
@@ -107,7 +107,7 @@ export function DiscountMatrixPage() {
                 onChange={(e) => setRange({ ...range, from: e.target.value })}
               />
             </Field>
-            <Field label={t('sales.targets.to')}>
+            <Field label={t('sales.reports.to')}>
               <Input
                 type="date"
                 dir="ltr"
@@ -123,45 +123,81 @@ export function DiscountMatrixPage() {
           ) : !log.data?.items.length ? (
             <EmptyState title={t('sales.matrix.empty')} />
           ) : (
-            <Table
-              head={[
-                t('common.date'),
-                t('sales.matrix.quote'),
-                t('sales.matrix.customer'),
-                t('sales.matrix.discount'),
-                t('sales.matrix.required'),
-                t('sales.matrix.event'),
-                t('sales.matrix.by'),
-                t('sales.matrix.note'),
-              ]}
-            >
-              {log.data.items.map((e) => (
-                <tr key={e._id}>
-                  <Td className="tabular whitespace-nowrap">
-                    {formatDate(e.at, { dateStyle: 'medium', timeStyle: 'short' })}
-                  </Td>
-                  <Td>
-                    <Link to={`/sales/quotes/${e.quoteId}`} className="text-brand-700 hover:underline">
-                      {e.quoteNumber}
-                    </Link>
-                    <div className="text-xs text-slate-500 tabular">{sar(e.totalHalalas)}</div>
-                  </Td>
-                  <Td>{e.customer}</Td>
-                  <Td className="tabular">{pct(e.maxDiscountBp)}</Td>
-                  <Td>{t(`sales.quotes.levels.${e.requiredLevel}`)}</Td>
-                  <Td>
-                    <Badge tone={tone[e.type]}>{t(`sales.matrix.events.${e.type}`)}</Badge>
-                    {e.approvedLevel && e.approvedLevel !== e.requiredLevel && (
-                      <div className="text-xs text-slate-500">
-                        {t('sales.matrix.actedAt', { level: t(`sales.quotes.levels.${e.approvedLevel}`) })}
-                      </div>
-                    )}
-                  </Td>
-                  <Td>{e.byName}</Td>
-                  <Td className="text-xs">{e.note || '—'}</Td>
-                </tr>
-              ))}
-            </Table>
+            <>
+              {/* Phones: one card per event; wider screens: the table [CLAUDE.md "Mobile-first"]. */}
+              <ul className="divide-y divide-slate-100 md:hidden">
+                {log.data.items.map((e) => (
+                  <li key={e._id} className="space-y-1 py-3 text-sm">
+                    <div className="flex items-center justify-between gap-2">
+                      <Link
+                        to={`/sales/quotes/${e.quoteId}`}
+                        className="font-medium whitespace-nowrap text-brand-700"
+                      >
+                        {e.quoteNumber}
+                      </Link>
+                      <Badge tone={tone[e.type]}>{t(`sales.matrix.events.${e.type}`)}</Badge>
+                    </div>
+                    <div className="text-slate-700">{e.customer}</div>
+                    <div className="text-xs text-slate-500 tabular">
+                      {t('sales.matrix.discount')}: {pct(e.maxDiscountBp)} · {t('sales.matrix.required')}:{' '}
+                      {t(`sales.quotes.levels.${e.requiredLevel}`)} · {sar(e.totalHalalas)}
+                    </div>
+                    <div className="text-xs text-slate-500">
+                      {e.byName} · {formatDate(e.at, { dateStyle: 'medium', timeStyle: 'short' })}
+                    </div>
+                    {e.note && <div className="text-xs text-slate-600">{e.note}</div>}
+                  </li>
+                ))}
+              </ul>
+              <div className="hidden md:block">
+                <Table
+                  head={[
+                    t('common.date'),
+                    t('sales.matrix.quote'),
+                    t('sales.matrix.customer'),
+                    t('sales.matrix.discount'),
+                    t('sales.matrix.required'),
+                    t('sales.matrix.event'),
+                    t('sales.matrix.by'),
+                    t('sales.matrix.note'),
+                  ]}
+                >
+                  {log.data.items.map((e) => (
+                    <tr key={e._id}>
+                      <Td className="tabular whitespace-nowrap">
+                        {formatDate(e.at, { dateStyle: 'medium', timeStyle: 'short' })}
+                      </Td>
+                      <Td>
+                        <Link
+                          to={`/sales/quotes/${e.quoteId}`}
+                          className="whitespace-nowrap text-brand-700 hover:underline"
+                        >
+                          {e.quoteNumber}
+                        </Link>
+                        <div className="whitespace-nowrap text-xs text-slate-500 tabular">
+                          {sar(e.totalHalalas)}
+                        </div>
+                      </Td>
+                      <Td>{e.customer}</Td>
+                      <Td className="tabular">{pct(e.maxDiscountBp)}</Td>
+                      <Td>{t(`sales.quotes.levels.${e.requiredLevel}`)}</Td>
+                      <Td>
+                        <Badge tone={tone[e.type]}>{t(`sales.matrix.events.${e.type}`)}</Badge>
+                        {e.approvedLevel && e.approvedLevel !== e.requiredLevel && (
+                          <div className="text-xs text-slate-500">
+                            {t('sales.matrix.actedAt', {
+                              level: t(`sales.quotes.levels.${e.approvedLevel}`),
+                            })}
+                          </div>
+                        )}
+                      </Td>
+                      <Td>{e.byName}</Td>
+                      <Td className="text-xs">{e.note || '—'}</Td>
+                    </tr>
+                  ))}
+                </Table>
+              </div>
+            </>
           )}
         </Card>
       </div>

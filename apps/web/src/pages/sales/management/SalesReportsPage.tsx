@@ -134,7 +134,7 @@ export function SalesReportsPage() {
       ) : !available.size ? (
         <Alert kind="info">{t('sales.reports.none')}</Alert>
       ) : (
-        <div className="grid gap-4 lg:grid-cols-[320px_1fr]">
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
           <div className="space-y-4">
             <Card title={t('sales.reports.choose')}>
               <div className="space-y-3">
@@ -171,7 +171,7 @@ export function SalesReportsPage() {
             <Card title={t('sales.reports.filters')}>
               <div className="space-y-2">
                 <div className="grid grid-cols-2 gap-2">
-                  <Field label={t('sales.targets.from')}>
+                  <Field label={t('sales.reports.from')}>
                     <Input
                       type="date"
                       dir="ltr"
@@ -179,7 +179,7 @@ export function SalesReportsPage() {
                       onChange={(e) => set('from', e.target.value)}
                     />
                   </Field>
-                  <Field label={t('sales.targets.to')}>
+                  <Field label={t('sales.reports.to')}>
                     <Input
                       type="date"
                       dir="ltr"
@@ -283,6 +283,7 @@ export function SalesReportsPage() {
             </div>
           </div>
           <Card
+            className="self-start"
             title={
               preview.data
                 ? t('export.previewOf', { shown: preview.data.rows.length, total: preview.data.total })
@@ -297,7 +298,7 @@ export function SalesReportsPage() {
                   {preview.data.rows.map((r, i) => (
                     <tr key={i}>
                       {r.map((v, j) => (
-                        <Td key={j} className="text-xs tabular">
+                        <Td key={j} className="whitespace-nowrap text-xs tabular">
                           {cell(v, preview.data!.columns[j]?.kind)}
                         </Td>
                       ))}
